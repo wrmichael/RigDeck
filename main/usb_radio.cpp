@@ -227,7 +227,7 @@ static void serialTask(void*) {
 }
 
 // ---------------------------------------------------------------------------- audio codec (UAC 1)
-struct AudioEv { uint8_t kind, addr, iface; uac_host_device_handle_t h; };   // kind: 0 rx connected, 1 tx connected, 2 gone
+struct AudioEv { uint8_t kind, addr, iface; uac_host_device_handle_t h; };   // kind: 0 rx connected, 1 tx connected, 2 gone, 3 transfer error
 static QueueHandle_t s_evq;
 static uac_host_device_handle_t s_mic = nullptr, s_spk = nullptr;
 static uac_host_stream_config_t s_micCfg, s_spkCfg;
@@ -241,6 +241,11 @@ static void uacDriverCb(uint8_t addr, uint8_t iface, const uac_host_driver_event
 static void uacDeviceCb(uac_host_device_handle_t h, const uac_host_device_event_t ev, void*) {
     if (ev == UAC_HOST_DRIVER_EVENT_DISCONNECTED) {
         AudioEv e = {2, 0, 0, h};
+        xQueueSend(s_evq, &e, 0);
+    } else if (ev == UAC_HOST_DEVICE_EVENT_TRANSFER_ERROR) {
+        // The UAC driver does not resubmit a failed transfer, so each error leaves the stream with one
+        // transfer fewer until it goes silent. The audio task restarts the stream instead.
+        AudioEv e = {3, 0, 0, h};
         xQueueSend(s_evq, &e, 0);
     }
 }
@@ -270,7 +275,20 @@ static bool pickFormat(uac_host_device_handle_t h, uac_host_stream_config_t& out
     return pickFormatBits(h, out, 16) || pickFormatBits(h, out, 24);
 }
 
+static int s_restarts = 0;
+static void restartStream(uac_host_device_handle_t h, const char* why) {
+    s_restarts++;
+    if (h == s_mic && s_micRun) { uac_host_device_stop(s_mic); s_micRun = false; }
+    if (h == s_spk && s_spkRun) { uac_host_device_stop(s_spk); s_spkRun = false; }
+    if (s_restarts <= 10 || s_restarts % 50 == 0)
+        ESP_LOGW(TAG, "audio %s: %s, restarting the stream (%d so far)", h == s_mic ? "from radio" : "to radio", why, s_restarts);
+}
+
 static void handleEvent(const AudioEv& e) {
+    if (e.kind == 3) {
+        if (e.h == s_mic || e.h == s_spk) restartStream(e.h, "USB transfer error");
+        return;
+    }
     if (e.kind == 2) {
         if (e.h == s_mic) { s_mic = nullptr; s_micRun = false; }
         if (e.h == s_spk) { s_spk = nullptr; s_spkRun = false; }
@@ -354,8 +372,17 @@ static void audioTask(void*) {
         }
         s_app->usbAudio = true;
         // 10 ms from the radio (the read paces this loop) ...
+        static int64_t lastRx = 0;
+        int64_t nowMs = esp_timer_get_time() / 1000;
+        if (lastRx == 0) lastRx = nowMs;
+        if (nowMs - lastRx > 1000) {                     // nothing from the radio for a second: the stream stalled
+            lastRx = nowMs;
+            restartStream(s_mic, "no audio for 1 s");
+            continue;
+        }
         uint32_t got = 0;
         if (uac_host_device_read(s_mic, raw, 480 * mch * mbps, &got, 40) == ESP_OK && got > 0) {
+            lastRx = nowMs;
             int frames = got / (mch * mbps);
             for (int i = 0; i < frames; i++) {           // left channel, top 16 bits
                 const uint8_t* in = raw + (size_t)i * mch * mbps + (mbps - 2);
@@ -373,7 +400,12 @@ static void audioTask(void*) {
             *o++ = (uint8_t)(txMono[i] & 0xFF);
             *o++ = (uint8_t)((uint16_t)txMono[i] >> 8);
         }
-        uac_host_device_write(s_spk, out, frames * sch * sbps, 20);
+        static int writeFails = 0;
+        if (uac_host_device_write(s_spk, out, frames * sch * sbps, 20) == ESP_OK) writeFails = 0;
+        else if (++writeFails >= 25) {                   // a quarter second the radio would not take: restart
+            writeFails = 0;
+            restartStream(s_spk, "transmit buffer stuck");
+        }
     }
 }
 
