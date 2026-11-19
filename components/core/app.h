@@ -2,6 +2,7 @@
 // logging and the web API together. Everything here is portable C++; the ESP-IDF glue lives in main/.
 #pragma once
 #include <string>
+#include <functional>
 #include <map>
 #include <deque>
 #include <set>
@@ -66,6 +67,8 @@ public:
         uint64_t freq = 0;
         uint32_t decId = 0;
         std::string clkSrc, band, txText, nextText, dx, grid, status, net, call, myGrid, model;
+        std::string staState, staIp, staReason;
+        int staRssi = 0;
     };
     struct UiDecode { uint32_t id; int64_t slotMs; int snr; float dt; int freq; std::string text; bool cq, toMe; };
     void uiState(UiState& s);
@@ -94,6 +97,11 @@ public:
     bool (*haveRam)(size_t bytes) = nullptr;         // platform check before the big decoder allocations
     std::atomic<bool> memFail{false};
     void setNetInfo(const std::string& s);
+    // Home-network (station) link, reported by the platform and controlled from Settings.
+    struct StaStatus { std::string state = "off", ssid, ip, reason; int rssi = 0; };
+    void setStaStatus(const StaStatus& s);
+    StaStatus staStatus();
+    std::function<void(bool connect)> wifiControl;    // set by the platform: (re)join with saved settings / leave
     int mode() const { return mode_.load(); }
 
 private:
@@ -168,6 +176,7 @@ private:
     void gpsTime(int64_t utcNow, int64_t mono, const char* src);
     uint32_t ppsUsed_ = 0;
     std::string status_, netInfo_;
+    StaStatus sta_;
     int64_t lastUiMono_ = 0, bandReqHz_ = 0;
     bool watchdogTripped_ = false, wasConn_ = false;
 };

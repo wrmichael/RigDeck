@@ -136,6 +136,14 @@ void App::setNetInfo(const std::string& s) {
     std::lock_guard<std::mutex> lk(mtx_);
     netInfo_ = s;
 }
+void App::setStaStatus(const StaStatus& s) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    sta_ = s;
+}
+App::StaStatus App::staStatus() {
+    std::lock_guard<std::mutex> lk(mtx_);
+    return sta_;
+}
 
 // ---- receive ------------------------------------------------------------------------------------
 void App::rxAudio48k(const int16_t* s, size_t n) {
@@ -506,6 +514,14 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         if (!clk::valid() || llabs(ms - clk::utcMs()) > 150) clk::setUtcMs(ms, "browser");
         return ok();
     }
+    if (c == "wifi") {                                               // home network: do=connect (saved settings) | disconnect
+        std::string d = arg(a, "do");
+        if (d != "connect" && d != "disconnect") return err("bad wifi action");
+        if (d == "connect" && cfg.staSsid.empty()) return err("Enter the home network name first");
+        if (!wifiControl) return err("not available");
+        wifiControl(d == "connect");
+        return ok();
+    }
     if (c == "ping") return ok();                                    // operator activity only (feeds the TX watchdog)
     if (c == "trim") { clk::trim(atoi(arg(a, "ms").c_str())); return ok(); }
     if (c == "mode") {
@@ -756,11 +772,14 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
             else if (kv.first.compare(0, 2, "ap") == 0 || kv.first.compare(0, 3, "sta") == 0) wifi = true;
         }
         if (!bad.empty()) return err("Invalid value for: " + bad);
-        bool wifiChanged = wifi && (n.apSsid != cfg.apSsid || n.apPass != cfg.apPass || n.staSsid != cfg.staSsid || n.staPass != cfg.staPass);
+        // The hotspot's own name/password need a restart; the home network is re-joined right away.
+        bool wifiChanged = wifi && (n.apSsid != cfg.apSsid || n.apPass != cfg.apPass);
+        bool staChanged = wifi && (n.staSsid != cfg.staSsid || n.staPass != cfg.staPass);
         cfg = n;
         radio.addr = (uint8_t)cfg.civAddr;
         syncSeq();
         if (!cfg.save(dir_ + "/settings.txt")) return err("Could not save settings");
+        if (staChanged && wifiControl) wifiControl(!cfg.staSsid.empty());
         return std::string("{\"ok\":true,\"restart\":") + jbool(wifiChanged) + "}";
     }
     if (c == "reboot") {
@@ -784,6 +803,7 @@ void App::uiState(UiState& u) {
     u.rmode = radio.mode; u.data = radio.dataMode;
     u.model = radio.connected() ? radio.modelName() : "";
     u.wpm = radio.keySpeed;
+    u.staState = sta_.state; u.staIp = sta_.ip; u.staReason = sta_.reason; u.staRssi = sta_.rssi;
     u.smeter = radio.smeter; u.po = radio.po; u.swr = radio.swr; u.alc = radio.alc;
     u.slotLen = (int)L; u.slotT = (int)(u.utc % L);
     u.txEn = seq.txEnabled; u.txOn = txState_ == ST_TX; u.tune = tuneReq_; u.wd = watchdogTripped_;
@@ -948,7 +968,9 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
         first = false;
     }
     o += "]}";
-    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion);
+    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) +
+         ",\"sta\":{\"state\":" + jstr(sta_.state) + ",\"ssid\":" + jstr(sta_.ssid) + ",\"ip\":" + jstr(sta_.ip) +
+         ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}";
     if (withCfg) o += ",\"cfg\":" + cfg.json();
     return o + "}";
 }

@@ -925,8 +925,8 @@ const SField kSet[] = {
     {"logPort", "Logger port", 4, SK_NUM, 5, nullptr, nullptr, "2237"},
     {"apSsid", "Hotspot name", 5, SK_TEXT, 32, nullptr, nullptr, ""},
     {"apPass", "Hotspot password", 5, SK_PASS, 63, nullptr, nullptr, "unchanged"},
-    {"staSsid", "Also join Wi-Fi network", 5, SK_TEXT, 32, nullptr, nullptr, "optional"},
-    {"staPass", "Its password", 5, SK_PASS, 63, nullptr, nullptr, "unchanged"},
+    {"staSsid", "Home network name", 5, SK_TEXT, 32, nullptr, nullptr, "optional, 2.4 GHz"},
+    {"staPass", "Home network password", 5, SK_PASS, 63, nullptr, nullptr, "unchanged"},
     {"gpsClock", "Clock from the radio's GPS", 6, SK_DROP, 0, "Off\nOn (Icom: GPS Out to USB)", "0|1", nullptr},
     {"gpsBaud", "Radio's GPS Out baud", 6, SK_DROP, 0, "4800\n9600", "4800|9600", nullptr},
     {"gpsDelayMs", "GPS sentence delay, ms", 6, SK_NUM, 4, nullptr, nullptr, "used without PPS"},
@@ -936,7 +936,7 @@ const SField kSet[] = {
     {"gpsPpsPin", "Module PPS to board GPIO", 6, SK_NUM, 2, nullptr, nullptr, "4, or -1 if not wired"},
 };
 constexpr int kSetN = sizeof kSet / sizeof kSet[0];
-lv_obj_t *scrSettings, *sTabs, *sKb, *sStatus, *sWidget[kSetN], *sMacroLbl[kSetN];
+lv_obj_t *scrSettings, *sTabs, *sKb, *sStatus, *sWifi, *sWidget[kSetN], *sMacroLbl[kSetN];
 std::map<std::string, std::string> sLoaded;
 const int SET_HEAD = 64, SET_KB = 270;
 
@@ -1010,13 +1010,30 @@ void onSettingsSave(lv_event_t*) {
             if (lb.empty()) lb = std::string("M") + f.key[5];
             v = lb + "|" + v;
         }
-        if ((f.kind == SK_PASS) || ((!strcmp(f.key, "apSsid") || !strcmp(f.key, "staSsid")) && v != sLoaded[f.key])) wifi = true;
+        if (!strcmp(f.key, "apPass") || (!strcmp(f.key, "apSsid") && v != sLoaded[f.key])) wifi = true;   // hotspot changes need a restart
         a[f.key] = v;
     }
     if (cmd("set", a)) {
-        note(wifi ? "Saved. Restart to apply the Wi-Fi changes." : "Settings saved");
+        note(wifi ? "Saved. Restart to apply the hotspot changes." : "Settings saved");
         settingsLoad();
     }
+}
+void onWifiConnect(lv_event_t* e) {
+    onSettingsSave(e);                                // a changed name/password is saved (and joined) first
+    cmd("wifi", {{"do", "connect"}});
+}
+void onWifiDisconnect(lv_event_t*) { cmd("wifi", {{"do", "disconnect"}}); }
+std::string staText(const App::UiState& s) {
+    if (s.staState == "off" || s.staState.empty()) return "Home network: not set up (enter its name above, then Connect)";
+    if (s.staState == "connected") {
+        const char* q = s.staRssi >= -60 ? "strong" : s.staRssi >= -70 ? "good" : s.staRssi >= -80 ? "fair" : "weak";
+        char b[64];
+        snprintf(b, sizeof b, ", signal %d dBm (%s)", s.staRssi, q);
+        return "Home network: connected, address " + s.staIp + (s.staRssi ? b : "");
+    }
+    std::string t = "Home network: " + s.staState;
+    if (!s.staReason.empty()) t += " - " + s.staReason;
+    return t;
 }
 void onSettingsRestart(lv_event_t*) {
     confirm("Restart", "Restart the controller now?\nAny transmission is stopped first.", "Restart", "reboot");
@@ -1150,7 +1167,12 @@ void buildSettingsScreen() {
     label(pages[2], 0, row[2] * 62 + 6, f16, DIM, "The radio is found automatically on USB; pick one only if the search settles on the wrong one.\nBaud rate changes take effect after a restart.");
     label(pages[6], 0, row[6] * 62 + 6, f16, DIM, "The clock is kept through restarts. A GPS module (e.g. u-blox NEO-6M/M8N) with PPS sets it to\nwithin a few ms anywhere, no internet needed. GPS changes take effect after a restart.");
     label(pages[3], 0, row[3] * 62 + 6, f16, DIM, "Label = button name. In the text: {CALL} callsign box, {RST} Sent box (599 is sent as 5NN),\n{MYCALL}, {GRID}, {REF}. The { } keys are on the 1# keyboard.");
-    label(pages[5], 0, row[5] * 62 + 6, f16, DIM, "Leave a password box empty to keep the current password.\nHotspot and Wi-Fi changes take effect after a restart.");
+    sWifi = label(pages[5], 0, row[5] * 62 + 8, f20, TXT, "");
+    lv_obj_set_width(sWifi, 800);
+    lv_label_set_long_mode(sWifi, LV_LABEL_LONG_MODE_WRAP);
+    button(pages[5], 0, row[5] * 62 + 64, 230, 52, LV_SYMBOL_WIFI " Save + connect", onWifiConnect, nullptr, 0x1f6b45);
+    button(pages[5], 244, row[5] * 62 + 64, 180, 52, "Disconnect", onWifiDisconnect);
+    label(pages[5], 0, row[5] * 62 + 130, f16, DIM, "Leave a password box empty to keep the current password. The home network must be 2.4 GHz.\nHotspot name/password changes take effect after a restart; the home network is joined right away.");
 
     sKb = lv_keyboard_create(scrSettings);
     lv_obj_set_size(sKb, W, SET_KB);
@@ -1171,6 +1193,8 @@ void refreshSettings(const App::UiState& s) {
     bool noteOn = !noteText.empty() && (int32_t)(noteUntil - lv_tick_get()) > 0;
     setText(sStatus, noteOn ? noteText : s.status);
     setTextColor(sStatus, noteOn ? AMB : DIM);
+    setText(sWifi, staText(s));
+    setTextColor(sWifi, s.staState == "connected" ? 0x3fcf8e : s.staState == "retrying" ? 0xff6b6b : TXT);
 }
 
 // ---- periodic refresh ---------------------------------------------------------------------------

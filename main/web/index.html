@@ -213,11 +213,12 @@ table.log th{color:var(--dim);font-weight:500}
       <label for="s_gpsPpsPin">Module PPS to board GPIO (-1 = not wired)</label><input id="s_gpsPpsPin" inputmode="numeric">
       <label for="s_apSsid">Hotspot name</label><input id="s_apSsid" maxlength="32">
       <label for="s_apPass">Hotspot password</label><input id="s_apPass" type="password" placeholder="unchanged" autocomplete="new-password">
-      <label for="s_staSsid">Also join Wi-Fi network</label><input id="s_staSsid" maxlength="32" placeholder="optional">
-      <label for="s_staPass">Its password</label><input id="s_staPass" type="password" placeholder="unchanged" autocomplete="new-password">
+      <label for="s_staSsid">Home network name</label><input id="s_staSsid" maxlength="32" placeholder="optional, 2.4 GHz">
+      <label for="s_staPass">Home network password</label><input id="s_staPass" type="password" placeholder="unchanged" autocomplete="new-password">
+      <div style="grid-column:1/-1"><span id="staInfo">Home network: …</span> <button type="button" id="staCon" class="on">Save + connect</button> <button type="button" id="staDis">Disconnect</button><br><span class="hint">The home network must be 2.4 GHz. It is joined right away; no restart needed.</span></div>
     </div>
     <div class="row" style="margin-top:12px"><button id="save" class="on">Save settings</button><button id="reboot">Restart device</button><span id="saveinfo" class="hint"></span></div>
-    <p class="hint">Hotspot and Wi-Fi changes take effect after a restart. CI-V baud and GPS baud changes too.</p>
+    <p class="hint">Hotspot name/password, CI-V baud and GPS changes take effect after a restart; the home network is joined right away.</p>
     <h3 style="margin-top:16px">Clock</h3>
     <div class="row"><span id="clkinfo"></span><button data-trim="-100">-0.1 s</button><button data-trim="-20">-20 ms</button><button data-trim="20">+20 ms</button><button data-trim="100">+0.1 s</button></div>
     <p class="hint">Without internet or GPS the clock follows this browser's clock each time the page is open. If most stations show the same DT offset, nudge the clock until DT is near zero. With GPS on, change "GPS sentence delay" instead: lower it if DT values are mostly negative, raise it if they are mostly positive.</p>
@@ -331,6 +332,9 @@ function render(){
   $("logrows").innerHTML=S.log.last.slice().reverse().map(l=>`<tr><td>${hhmmss(l.t)}</td><td>${esc(l.call)}</td><td>${esc(l.grid)}</td><td>${esc(l.band)}</td><td>${esc(l.mode)}</td><td>${esc(l.rs)}</td><td>${esc(l.rr)}</td></tr>`).join("");
   $("clkinfo").textContent=S.clk.ok?`Source: ${S.clk.src}, set ${S.clk.age} s ago`:"Clock not set";
   $("netinfo").textContent=S.net+(S.ver?"  ·  RigDeck "+S.ver:"");
+  if(S.sta){const t=S.sta, q=t.rssi>=-60?"strong":t.rssi>=-70?"good":t.rssi>=-80?"fair":"weak", el=$("staInfo");
+    el.textContent=t.state==="off"?"Home network: not set up":t.state==="connected"?`Home network: connected to "${t.ssid}", address ${t.ip}${t.rssi?`, signal ${t.rssi} dBm (${q})`:""}`:`Home network: ${t.state}${t.reason?" - "+t.reason:""}`;
+    el.style.color=t.state==="connected"?"var(--rx)":t.state==="retrying"?"var(--tx)":"";}
   if(S.msg&&S.msg!==render.lastMsg){render.lastMsg=S.msg;banner(S.msg);}
   if(tx.wd) banner("TX watchdog stopped automatic transmission. Press Enable TX to resume.");
   if(S.cfg&&!cfgLoaded){
@@ -458,11 +462,13 @@ $("qlLog").onclick=qlLog;
 ["qlCall","qlRs","qlRr","qlName","qlNote"].forEach(id=>$(id).onkeydown=e=>{if(e.key==="Enter")qlLog();});
 $("qlCall").oninput=()=>{const c=$("qlCall").value.trim().toUpperCase();$("qlDupe").textContent=c.length>2&&S&&S.log.last.some(l=>l.call===c&&l.band===S.radio.band)?"Worked before on this band (current log)":"";};
 $("reboot").onclick=()=>{if(confirm("Restart the device now?"))cmd("reboot");};
+$("staCon").onclick=async()=>{await $("save").onclick();cmd("wifi",{do:"connect"});};
+$("staDis").onclick=()=>cmd("wifi",{do:"disconnect"});
 $("save").onclick=async()=>{
   const a={};
   document.querySelectorAll("#form input,#form select").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=e.value;});
   const j=await cmd("set",a);
-  if(j.ok){$("saveinfo").textContent=j.restart?"Saved. Restart the device to apply the Wi-Fi changes.":"Saved.";cfgLoaded=false;render.call=undefined;}
+  if(j.ok){$("saveinfo").textContent=j.restart?"Saved. Restart the device to apply the hotspot changes.":"Saved.";cfgLoaded=false;render.call=undefined;}
 };
 
 function demoState(){

@@ -392,6 +392,13 @@ int main() {
     run(0.5);
     CHECK(app.cfg.serialize(true) == cfgBefore);
     app.command("set", {{"mySigInfo", "K-1234"}});
+    {
+        App::StaStatus st; st.state = "retrying"; st.ssid = "HomeNet"; st.reason = "wrong password?";
+        app.setStaStatus(st);
+    }
+    tap(85, 64 + 38 + 5 * 76);                        // Wi-Fi tab
+    run(0.5);
+    savePpm("test/out/ui/26_settings_wifi.ppm");
     tap(85, 64 + 38 + 6 * 76);                        // Clock tab
     run(0.3);
     savePpm("test/out/ui/25_settings_clock.ppm");

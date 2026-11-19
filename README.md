@@ -320,6 +320,14 @@ boards and similar, about $10-15) gives timing to within a few milliseconds.
 
 ## Wi-Fi tips
 
+- **Joining your home network** (for internet time and a logging PC on your LAN): Settings > Wi-Fi,
+  enter the home network name and password, press **Save + connect**. No restart is needed. The line
+  above the buttons shows the state: connecting, connected with its address and signal, or retrying
+  with the reason (network not found, wrong password, signal too weak...). **Disconnect** leaves the
+  network until you connect again or restart. The board's Wi-Fi is **2.4 GHz only**: a 5 GHz-only
+  network is "not found". While joined, the hotspot moves to the home network's channel; phones
+  connected to the hotspot may reconnect once.
+
 - Phones often leave a hotspot that has no internet. On Android, when it asks, choose **Keep
   Wi-Fi connection / Stay connected**, and turn off "Switch to mobile data" (or "Adaptive Wi-Fi")
   for the RigDeck network; on iPhone, turn off **Wi-Fi Assist**.
