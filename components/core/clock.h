@@ -5,11 +5,13 @@
 namespace clk {
 typedef int64_t (*MonoFn)();
 void init(MonoFn fn);              // platform supplies a monotonic millisecond counter
+typedef void (*SinkFn)(int64_t utcMs);
+void setSink(SinkFn fn);           // called after every set/trim (the ESP32 copies it into its RTC clock)
 int64_t monoMs();
 int64_t utcMs();                   // 0 offset (i.e. garbage) until valid()
 bool valid();
 void setUtcMs(int64_t utc, const char* source);
 void trim(int ms);                 // manual nudge
-const char* source();              // "none", "browser", "ntp"
+const char* source();              // "none", "browser", "ntp", "gps", "gps-pps", "rtc"
 int64_t ageMs();                   // ms since last sync
 }

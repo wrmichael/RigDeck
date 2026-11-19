@@ -895,7 +895,8 @@ void refreshLogger(const App::UiState& s) {
 // "set" command the web page uses, so the same checks apply.
 enum SKind { SK_TEXT, SK_UPPER, SK_NUM, SK_HEX, SK_PASS, SK_DROP, SK_MACRO };
 struct SField { const char* key; const char* label; int tab; SKind kind; int maxLen; const char* opts; const char* vals; const char* hint; };
-const char* kSetTabs[] = {"Station", "Operating", "Radio", "CW", "Logging", "Wi-Fi"};
+const char* kSetTabs[] = {"Station", "Operating", "Radio", "CW", "Logging", "Wi-Fi", "Clock"};
+constexpr int kSetTabN = sizeof kSetTabs / sizeof kSetTabs[0];
 const SField kSet[] = {
     {"call", "Callsign", 0, SK_UPPER, 11, nullptr, nullptr, ""},
     {"grid", "Grid locator", 0, SK_UPPER, 6, nullptr, nullptr, ""},
@@ -912,9 +913,6 @@ const SField kSet[] = {
     {"catBaud", "FTX-1 CAT-1 rate", 2, SK_DROP, 0, "4800\n9600\n19200\n38400\n115200", "4800|9600|19200|38400|115200", nullptr},
     {"civAddr", "CI-V address (hex)", 2, SK_HEX, 4, nullptr, nullptr, "88 IC-7100, A4 IC-705"},
     {"civBaud", "CI-V baud", 2, SK_DROP, 0, "4800\n9600\n19200\n38400\n57600\n115200", "4800|9600|19200|38400|57600|115200", nullptr},
-    {"gpsClock", "Clock from radio's GPS", 2, SK_DROP, 0, "Off\nOn (Icom: GPS Out to USB)", "0|1", nullptr},
-    {"gpsBaud", "GPS Out baud", 2, SK_DROP, 0, "4800\n9600", "4800|9600", nullptr},
-    {"gpsDelayMs", "GPS sentence delay, ms", 2, SK_NUM, 4, nullptr, nullptr, ""},
     {"keyWpm", "Keyer speed for logger, wpm", 3, SK_NUM, 2, nullptr, nullptr, "0 = leave the radio's"},
     {"macro1", "Macro 1", 3, SK_MACRO, 80, nullptr, nullptr, "text to send"},
     {"macro2", "Macro 2", 3, SK_MACRO, 80, nullptr, nullptr, "text to send"},
@@ -929,6 +927,13 @@ const SField kSet[] = {
     {"apPass", "Hotspot password", 5, SK_PASS, 63, nullptr, nullptr, "unchanged"},
     {"staSsid", "Also join Wi-Fi network", 5, SK_TEXT, 32, nullptr, nullptr, "optional"},
     {"staPass", "Its password", 5, SK_PASS, 63, nullptr, nullptr, "unchanged"},
+    {"gpsClock", "Clock from the radio's GPS", 6, SK_DROP, 0, "Off\nOn (Icom: GPS Out to USB)", "0|1", nullptr},
+    {"gpsBaud", "Radio's GPS Out baud", 6, SK_DROP, 0, "4800\n9600", "4800|9600", nullptr},
+    {"gpsDelayMs", "GPS sentence delay, ms", 6, SK_NUM, 4, nullptr, nullptr, "used without PPS"},
+    {"gpsModule", "GPS module on the header", 6, SK_DROP, 0, "Off\nOn", "0|1", nullptr},
+    {"gpsModBaud", "Module baud", 6, SK_DROP, 0, "4800\n9600\n38400\n115200", "4800|9600|38400|115200", nullptr},
+    {"gpsRxPin", "Module TX to board GPIO", 6, SK_NUM, 2, nullptr, nullptr, "3"},
+    {"gpsPpsPin", "Module PPS to board GPIO", 6, SK_NUM, 2, nullptr, nullptr, "4, or -1 if not wired"},
 };
 constexpr int kSetN = sizeof kSet / sizeof kSet[0];
 lv_obj_t *scrSettings, *sTabs, *sKb, *sStatus, *sWidget[kSetN], *sMacroLbl[kSetN];
@@ -1055,8 +1060,8 @@ void buildSettingsScreen() {
     lv_obj_set_style_bg_color(bar, C(PAN), 0);
     lv_obj_t* content = lv_tabview_get_content(sTabs);
     lv_obj_remove_flag(content, LV_OBJ_FLAG_SCROLLABLE);              // change tabs by tapping only
-    lv_obj_t* pages[6];
-    for (int t = 0; t < 6; t++) {
+    lv_obj_t* pages[kSetTabN];
+    for (int t = 0; t < kSetTabN; t++) {
         pages[t] = lv_tabview_add_tab(sTabs, kSetTabs[t]);
         lv_obj_set_style_bg_color(pages[t], C(BG), 0);
         lv_obj_set_style_bg_opa(pages[t], LV_OPA_COVER, 0);
@@ -1070,7 +1075,7 @@ void buildSettingsScreen() {
         lv_obj_set_style_border_width(tb, 0, LV_STATE_CHECKED);
         lv_obj_add_event_cb(tb, onSettingsTab, LV_EVENT_CLICKED, nullptr);
     }
-    int row[6] = {0, 0, 0, 0, 0, 0};
+    int row[kSetTabN] = {};
     for (int i = 0; i < kSetN; i++) {
         const SField& f = kSet[i];
         lv_obj_t* pg = pages[f.tab];
@@ -1142,7 +1147,8 @@ void buildSettingsScreen() {
             sWidget[i] = ta;
         }
     }
-    label(pages[2], 0, row[2] * 62 + 6, f16, DIM, "The radio is found automatically on USB; pick one only if the search settles on the wrong one.\nBaud rate and GPS changes take effect after a restart.");
+    label(pages[2], 0, row[2] * 62 + 6, f16, DIM, "The radio is found automatically on USB; pick one only if the search settles on the wrong one.\nBaud rate changes take effect after a restart.");
+    label(pages[6], 0, row[6] * 62 + 6, f16, DIM, "The clock is kept through restarts. A GPS module (e.g. u-blox NEO-6M/M8N) with PPS sets it to\nwithin a few ms anywhere, no internet needed. GPS changes take effect after a restart.");
     label(pages[3], 0, row[3] * 62 + 6, f16, DIM, "Label = button name. In the text: {CALL} callsign box, {RST} Sent box (599 is sent as 5NN),\n{MYCALL}, {GRID}, {REF}. The { } keys are on the 1# keyboard.");
     label(pages[5], 0, row[5] * 62 + 6, f16, DIM, "Leave a password box empty to keep the current password.\nHotspot and Wi-Fi changes take effect after a restart.");
 

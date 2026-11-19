@@ -44,6 +44,10 @@ struct Settings {
     int gpsClock = 0;                    // 1 = set the clock from GPS sentences on the radio's second USB serial port
     int gpsBaud = 4800;                  // must match the radio's "DVdat/GPS Out Baud"
     int gpsDelayMs = 150;                // how long after the second the receiver starts sending its sentence
+    int gpsModule = 0;                   // 1 = a GPS module wired to the board's header (UART, optional PPS)
+    int gpsModBaud = 9600;               // its NMEA baud rate (most u-blox / ATGM modules: 9600)
+    int gpsRxPin = 3;                    // board GPIO the module's TX goes to
+    int gpsPpsPin = 4;                   // board GPIO the module's PPS goes to, -1 = not wired
 
     bool set(const std::string& key, const std::string& value);   // false = unknown key / bad value
     std::string serialize(bool includeSecrets) const;             // key=value lines

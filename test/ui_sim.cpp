@@ -379,10 +379,10 @@ int main() {
     tap(871, 31);                                     // gear
     run(0.5);
     savePpm("test/out/ui/21_settings.ppm");
-    tap(85, 64 + 45 + 2 * 89);                        // Radio tab
+    tap(85, 64 + 38 + 2 * 76);                        // Radio tab
     run(0.5);
     savePpm("test/out/ui/22_settings_radio.ppm");
-    tap(85, 64 + 45 + 3 * 89);                        // CW tab
+    tap(85, 64 + 38 + 3 * 76);                        // CW tab
     run(0.3);
     tap(170 + 16 + 270 + 200, 64 + 16 + 62 + 26);     // macro 1 text box: keyboard comes up
     run(0.5);
@@ -392,7 +392,10 @@ int main() {
     run(0.5);
     CHECK(app.cfg.serialize(true) == cfgBefore);
     app.command("set", {{"mySigInfo", "K-1234"}});
-    tap(85, 64 + 45);                                 // Station tab
+    tap(85, 64 + 38 + 6 * 76);                        // Clock tab
+    run(0.3);
+    savePpm("test/out/ui/25_settings_clock.ppm");
+    tap(85, 64 + 38);                                 // Station tab
     tap(60, 32);                                      // Back ...
     run(0.3);
     tap(871, 31);                                     // ... and in again: shows the new value

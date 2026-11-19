@@ -238,6 +238,52 @@ int main() {
         Settings s2; s2.load(std::string(dir) + "/settings.txt");
         CHECK(s2.macro[1] == "Park|{CALL} {REF} {GRID}" && s2.keyWpm == 25);
     }
+    {   // ---------------- GPS module: PPS pins the second, NMEA names it
+        const char* dir = "test/out/gps";
+        mkdir(dir, 0755);
+        remove("test/out/gps/settings.txt");
+        App app;
+        app.begin(dir);
+        app.command("set", {{"gpsModule", "1"}, {"gpsPpsPin", "4"}, {"gpsDelayMs", "150"}});
+        auto rmc = [](int hh, int mm, int ss) {
+            char body[96], s[110];
+            snprintf(body, sizeof body, "GPRMC,%02d%02d%02d.00,A,4000.000,N,08600.000,W,0.0,0.0,191126,,,A", hh, mm, ss);
+            unsigned ck = 0;
+            for (const char* p = body; *p; p++) ck ^= (unsigned char)*p;
+            snprintf(s, sizeof s, "$%s*%02X\r\n", body, ck);
+            return std::string(s);
+        };
+        const int64_t t0 = 1795046400000LL;            // 2026-11-19 00:00:00 UTC
+        auto utcOf = [&](int hh, int mm, int ss) { return t0 + ((hh * 60 + mm) * 60 + ss) * 1000LL; };
+        // PPS at mono M, sentence starts 380 ms later (this module is slow to talk)
+        simMs = 5000000;
+        app.ppsMono32 = (uint32_t)simMs; app.ppsCount++;
+        simMs += 380;
+        std::string s = rmc(18, 30, 5);
+        app.gpsModuleRx((const uint8_t*)s.data(), s.size());
+        CHECK(clk::valid() && !strcmp(clk::source(), "gps-pps"));
+        CHECK(llabs(clk::utcMs() - (utcOf(18, 30, 5) + 380)) <= 1);   // 380 ms after the second, not 150
+        // a second sentence without a new pulse is not trusted for PPS timing
+        simMs += 1000;
+        s = rmc(18, 30, 6);
+        app.gpsModuleRx((const uint8_t*)s.data(), s.size());
+        CHECK(llabs(clk::utcMs() - (utcOf(18, 30, 6) + 380)) <= 1);
+        // no PPS wired: the sentence delay setting is used
+        app.command("set", {{"gpsPpsPin", "-1"}});
+        simMs += 1000;
+        s = rmc(18, 30, 7);
+        app.gpsModuleRx((const uint8_t*)s.data(), s.size());
+        CHECK(!strcmp(clk::source(), "gps-nmea"));
+        CHECK(llabs(clk::utcMs() - (utcOf(18, 30, 7) + 150)) <= 1);
+        // the clock sink sees every change (the ESP32 copies it into its own clock)
+        static int64_t sunk = 0;
+        clk::setSink([](int64_t u) { sunk = u; });
+        clk::setUtcMs(utcOf(1, 2, 3), "test");
+        CHECK(sunk == utcOf(1, 2, 3));
+        clk::trim(40);
+        CHECK(llabs(sunk - (utcOf(1, 2, 3) + 40)) <= 1);
+        clk::setSink(nullptr);
+    }
     printf("t_cat: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

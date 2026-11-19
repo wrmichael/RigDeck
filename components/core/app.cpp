@@ -838,10 +838,42 @@ void App::gpsRx(const uint8_t* data, size_t n) {
     int64_t mono = clk::monoMs();
     if (!nmea_.feed(data, n, mono)) return;
     if (!cfg.gpsClock || txOn_) return;
-    int64_t utcNow = nmea_.utcMs() + cfg.gpsDelayMs + (mono - nmea_.sentenceStartMono());
+    if (cfg.gpsModule && mono - gpsLastMono.load() < 5000 && !strncmp(clk::source(), "gps-", 4)) return;   // the module's PPS is better
+    gpsTime(nmea_.utcMs() + cfg.gpsDelayMs + (mono - nmea_.sentenceStartMono()), mono, "gps");
+}
+
+// GPS module on the header. With PPS wired, the pulse marks the start of the second the next
+// sentence names (u-blox, ATGM and most others), which pins the clock to within a millisecond or two.
+// Without PPS it is handled like the radio's GPS (sentence arrival + cfg.gpsDelayMs).
+void App::gpsModuleRx(const uint8_t* data, size_t n) {
+    int64_t mono = clk::monoMs();
+    if (!nmeaMod_.feed(data, n, mono)) return;
+    if (!cfg.gpsModule || txOn_) return;
+    uint32_t pc = ppsCount.load();
+    int64_t sentence = nmeaMod_.sentenceStartMono();
+    int32_t sincePps = (int32_t)((uint32_t)sentence - ppsMono32.load());
+    if (cfg.gpsPpsPin >= 0 && pc != ppsUsed_ && sincePps >= 0 && sincePps < 950) {
+        ppsUsed_ = pc;
+        int64_t ppsMono = sentence - sincePps;
+        int64_t utcNow = nmeaMod_.utcMs() + (mono - ppsMono);
+        int64_t diff = utcNow - clk::utcMs();
+        if (!clk::valid() || strcmp(clk::source(), "gps-pps") != 0 || llabs(diff) > 2) clk::setUtcMs(utcNow, "gps-pps");
+        gpsLastMono = mono;
+        return;
+    }
+    // Pulses seen in the last 3 s but none for this sentence: keep the PPS time rather than step
+    // to the rougher sentence timing. Only when the pulses stop does the sentence timing take over.
+    if (cfg.gpsPpsPin >= 0 && pc != 0 && (int32_t)((uint32_t)mono - ppsMono32.load()) < 3000 && !strcmp(clk::source(), "gps-pps")) {
+        gpsLastMono = mono;
+        return;
+    }
+    gpsTime(nmeaMod_.utcMs() + cfg.gpsDelayMs + (mono - sentence), mono, "gps-nmea");
+}
+
+void App::gpsTime(int64_t utcNow, int64_t mono, const char* src) {
     int64_t diff = utcNow - clk::utcMs();
-    if (!clk::valid() || llabs(diff) > 1000 || strcmp(clk::source(), "gps") != 0) {
-        clk::setUtcMs(utcNow, "gps");
+    if (!clk::valid() || llabs(diff) > 1000 || strcmp(clk::source(), src) != 0) {
+        clk::setUtcMs(utcNow, src);
         gpsErr_ = 0;
     } else {
         gpsErr_ = 0.8f * gpsErr_ + 0.2f * (float)diff;         // average out arrival-time jitter

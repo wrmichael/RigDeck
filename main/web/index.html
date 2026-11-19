@@ -206,7 +206,11 @@ table.log th{color:var(--dim);font-weight:500}
       <label for="s_cwWpm">FT-CW speed, wpm (same at both stations)</label><input id="s_cwWpm" inputmode="numeric">
       <label for="s_gpsClock">Clock from radio's GPS</label><select id="s_gpsClock"><option value="0">Off</option><option value="1">On (GPS on DATA1, GPS Out to USB2)</option></select>
       <label for="s_gpsBaud">GPS Out baud</label><select id="s_gpsBaud"><option>4800</option><option>9600</option></select>
-      <label for="s_gpsDelayMs">GPS sentence delay, ms</label><input id="s_gpsDelayMs" inputmode="numeric">
+      <label for="s_gpsDelayMs">GPS sentence delay, ms (used without PPS)</label><input id="s_gpsDelayMs" inputmode="numeric">
+      <label for="s_gpsModule">GPS module on the board header</label><select id="s_gpsModule"><option value="0">Off</option><option value="1">On</option></select>
+      <label for="s_gpsModBaud">GPS module baud</label><select id="s_gpsModBaud"><option>4800</option><option>9600</option><option>38400</option><option>115200</option></select>
+      <label for="s_gpsRxPin">Module TX to board GPIO</label><input id="s_gpsRxPin" inputmode="numeric">
+      <label for="s_gpsPpsPin">Module PPS to board GPIO (-1 = not wired)</label><input id="s_gpsPpsPin" inputmode="numeric">
       <label for="s_apSsid">Hotspot name</label><input id="s_apSsid" maxlength="32">
       <label for="s_apPass">Hotspot password</label><input id="s_apPass" type="password" placeholder="unchanged" autocomplete="new-password">
       <label for="s_staSsid">Also join Wi-Fi network</label><input id="s_staSsid" maxlength="32" placeholder="optional">

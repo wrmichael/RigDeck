@@ -80,6 +80,11 @@ public:
     // Bytes from the radio's second USB serial port (NMEA passed through from a GPS on DATA1).
     void gpsRx(const uint8_t* data, size_t n);
     std::atomic<int64_t> gpsLastMono{-1000000};      // when the clock was last set from GPS
+    // A GPS module on the board's header: NMEA bytes, and the PPS edge (low 32 bits of monoMs, written
+    // from an interrupt, so 32-bit to stay lock-free on the ESP32).
+    void gpsModuleRx(const uint8_t* data, size_t n);
+    std::atomic<uint32_t> ppsMono32{0};
+    std::atomic<uint32_t> ppsCount{0};
 
     // --- platform status / requests -----------------------------------------------------------
     std::atomic<bool> usbSerial{false}, usbAudio{false};
@@ -158,8 +163,10 @@ private:
     std::deque<std::string> netQ_;
     std::atomic<int> netOk_{0}, netFail_{0};
 
-    NmeaTime nmea_;
+    NmeaTime nmea_, nmeaMod_;
     float gpsErr_ = 0;
+    void gpsTime(int64_t utcNow, int64_t mono, const char* src);
+    uint32_t ppsUsed_ = 0;
     std::string status_, netInfo_;
     int64_t lastUiMono_ = 0, bandReqHz_ = 0;
     bool watchdogTripped_ = false, wasConn_ = false;

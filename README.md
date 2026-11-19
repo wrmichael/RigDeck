@@ -95,8 +95,11 @@ Settings when you swap radios. **Not yet tried on a real IC-705.**
   Leave USB SEND/Keying OFF and the CI-V address at A4h.
 - GPS clock: the IC-705 has its own GPS. SET > Connectors > USB (B) Function >
   **GPS Out: DATA -> USB (B)**, then on the web page turn on "Clock from radio's GPS".
-- Run the radio from its battery or a supply as usual; if the board should not charge or power
-  the radio over USB, check the radio's USB power input setting.
+- **Stop the 705 drawing power from RigDeck's USB port** (otherwise it starts charging, the board's
+  5 V sags and the screen dims): SET > Function > **Charging (Power ON): OFF** and
+  **USB Power Input (Phone, Tablet, PC): OFF**. Run the radio from its battery or a DC supply.
+  Powering the board from a 5 V 2-3 A charger instead of a PC port also gives more headroom; a
+  powered USB 2.0 hub between board and radio works too.
 
 ## Yaesu FTX-1
 
@@ -165,7 +168,8 @@ baud-rate and GPS changes). CW macros have a label box (the button name) and a t
 Settings > Radio is **Find automatically** by default: every serial port on the USB bus is tried as
 Icom CI-V (configured address, 88h, A4h), as Yaesu CAT and as QMX CAT, and the first that answers
 is used. You can swap radios without changing anything. Pick a specific radio there only if the
-search ever settles on the wrong one. The GPS clock option works with the Icoms only.
+search ever settles on the wrong one. The radio-GPS clock option works with the Icoms only (any radio
+works with a GPS module on the board, see below).
 
 ## Radio settings (SET > Connectors)
 
@@ -284,6 +288,44 @@ The values are read back from the radio, so the screen follows the radio's own k
 shows "--" or stays grey if the radio does not report it. Changing mode here switches automatic
 transmitting off; tapping a band on the operating screen puts the radio back in USB-D. The same
 commands serve the IC-7100 and IC-705 (the attenuator is 12 dB on one and 20 dB on the other).
+
+## Keeping the time
+
+FT8 needs the clock within about a second. RigDeck sets it from, best first: a GPS module with PPS,
+the radio's GPS, NTP (when it has joined a Wi-Fi network with internet), or the browser of the
+phone/PC showing the web page. The Clock dot on the web page shows which one it is using.
+
+- **Restarts keep the time.** Every time the clock is set it is also written into the chip's own
+  clock, and read back at the next boot (source "rtc"). A restart, a firmware update over USB or a
+  crash recovery therefore starts with the right time. It is replaced as soon as a better source
+  shows up.
+- **Power off loses it** unless the chip's backup supply keeps running. The board has a holder for a
+  rechargeable ML1220 cell (Waveshare: rechargeable 3 V cells only) wired to the chip's VBAT pin, but
+  ESP-IDF's support for running the clock from it is still experimental, so treat that as untested.
+  A GPS module is the dependable answer for portable use.
+
+## GPS module on the board (best timing, no internet)
+
+Any 3.3 V-logic NMEA GPS module works; one with a **PPS** output (u-blox NEO-6M / NEO-M8N, ATGM336H
+boards and similar, about $10-15) gives timing to within a few milliseconds.
+
+- Wiring to the board's GPIO header: module **TX → GPIO3**, **PPS → GPIO4**, **GND → GND**,
+  **VCC → 3.3 V or 5 V** as the module requires. The module's RX is not needed. Other free GPIOs
+  can be chosen in Settings; 0/1, 7/8, 14-19, 37/38 and 54 are taken by the board.
+- Settings > Clock (touch screen) or the web Settings tab: **GPS module on the header: On**, baud
+  (most modules ship at 9600), the two GPIO numbers (PPS -1 if not wired). Save and restart.
+- The monitor log shows once a minute whether the module sends time and how many PPS pulses it
+  saw. The module needs a sky view for its first fix; after that the Clock dot shows "gps-pps".
+- Without PPS the sentence arrival time is used, adjusted by "GPS sentence delay" (see below).
+
+## Wi-Fi tips
+
+- Phones often leave a hotspot that has no internet. On Android, when it asks, choose **Keep
+  Wi-Fi connection / Stay connected**, and turn off "Switch to mobile data" (or "Adaptive Wi-Fi")
+  for the RigDeck network; on iPhone, turn off **Wi-Fi Assist**.
+- Keep the board within a few metres of the phone or laptop; the antenna is on the board's edge.
+- If the hotspot itself disappears (the network is gone from the list), send the monitor log: the
+  Wi-Fi chip on these boards runs older firmware, and the log shows whether that is the cause.
 
 ## Clock from a GPS on the radio
 
