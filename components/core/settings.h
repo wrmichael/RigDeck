@@ -28,6 +28,7 @@ struct Settings {
     int maxRetries = 5;                  // unanswered repeats before a QSO attempt is abandoned
     int watchdogMin = 6;                 // stop auto TX after this long with no browser connected (0 = off)
     int rfPower = -1;                    // -1 = leave the radio's setting alone, else 0..100 %
+    int autoAlc = 1;                     // 1 = lower the TX audio level automatically while the radio shows ALC
     int logProto = LOG_NONE;
     std::string logHost;
     int logPort = 2237;

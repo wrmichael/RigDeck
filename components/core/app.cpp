@@ -266,12 +266,62 @@ void App::startTx(int gen) {
     genDone_ = false;
     haltReq_ = false;
     pttOnMono_ = clk::monoMs();
+    alcStartTx();
     radio.ptt(true);
     txState_ = ST_TX;
     txOn_ = true;                                   // audio thread switches to the transmit stream
 }
 
+// ---- automatic TX audio level from the radio's ALC meter ----------------------------------------
+// FT8 and the other digital modes want no ALC action: ALC compresses the audio, which widens the
+// signal and buries the tones in splatter. While transmitting, every ALC reading (about every 0.4 s)
+// above "barely moving" turns the audio down; a transmission with no ALC at all lets it creep back
+// up, but never past the Settings level or just below the last level that caused ALC. The level
+// found is remembered per band. Icom and Yaesu ALC meters read 0..255 with 120 = top of the ALC zone.
+float App::txLevelNow() const {
+    if (radio.proto.load() == RP_QMX) return 100.0f;              // see txAudio48k
+    return cfg.autoAlc ? txGain_.load() : (float)cfg.txLevel;
+}
+
+void App::alcStartTx() {
+    alcBand_ = bandName(radio.freq.load());
+    auto it = alcLevel_.find(alcBand_);
+    float g = it != alcLevel_.end() ? it->second.level : (float)cfg.txLevel;
+    txGain_ = std::min(g, (float)cfg.txLevel);
+    alcSeen_ = radio.alcSeq.load();
+    alcMax_ = 0;
+    alcCut_ = false;
+}
+
+void App::alcTick(int64_t mono) {
+    if (!cfg.autoAlc || !txOn_ || radio.proto.load() == RP_QMX || mono - pttOnMono_ < 800) return;
+    uint32_t seq = radio.alcSeq.load();
+    if (seq == alcSeen_) return;
+    alcSeen_ = seq;
+    if (!genStarted_) return;                                      // no audio yet: ALC says nothing
+    int a = radio.alc.load();
+    alcMax_ = std::max(alcMax_, a);
+    float g = txGain_.load(), f = a > 72 ? 0.75f : a > 30 ? 0.88f : a > 10 ? 0.96f : 1.0f;
+    if (f < 1.0f) {
+        auto& L = alcLevel_[alcBand_];
+        L.ceiling = g * 0.97f;
+        txGain_ = std::max(1.0f, g * f);
+        alcCut_ = true;
+    }
+}
+
+void App::alcEndTx() {
+    if (!cfg.autoAlc || radio.proto.load() == RP_QMX || alcBand_.empty()) return;
+    auto& L = alcLevel_[alcBand_];
+    if (L.ceiling <= 0) L.ceiling = (float)cfg.txLevel;
+    float g = txGain_.load();
+    if (!alcCut_ && alcMax_ <= 4 && genStarted_) g = std::min({g * 1.06f, L.ceiling, (float)cfg.txLevel});
+    L.level = g;
+    if (alcCut_) status("TX audio lowered to " + std::to_string((int)lroundf(g)) + " % to keep the radio's ALC low");
+}
+
 void App::stopTx(const char* why) {
+    if (txOn_) alcEndTx();
     txOn_ = false;
     radio.ptt(false);
     pttOffRepeat_ = clk::monoMs() + 300;            // belt and braces: send "receive" a second time
@@ -284,7 +334,7 @@ void App::txAudio48k(int16_t* out, size_t n) {
     // 100 % = just under full scale. The QMX makes RF from the audio's frequency, not its level, and
     // only keys up when the audio is above ~80 % of full scale (its "Rise threshold"), so it always
     // gets full level; its power is set on the QMX itself.
-    const float amp = (radio.proto.load() == RP_QMX ? 100 : cfg.txLevel) * 320.0f;
+    const float amp = txLevelNow() * 320.0f;
     if (gen_ == GEN_FTX) {
         if (!genStarted_.exchange(true)) {
             // Align to the clock: negative = wait for the nominal start (slot + 0.5 s),
@@ -318,6 +368,7 @@ void App::tick() {
     std::lock_guard<std::mutex> lk(mtx_);
 
     if (pttOffRepeat_ && mono >= pttOffRepeat_ && txState_ == ST_IDLE) { pttOffRepeat_ = 0; radio.ptt(false); }
+    alcTick(mono);
     bool conn = radio.connected();
     if (conn && !wasConn_ && cfg.keyWpm > 0) radio.setKeySpeed(cfg.keyWpm);
     wasConn_ = conn;
@@ -775,6 +826,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         // The hotspot's own name/password need a restart; the home network is re-joined right away.
         bool wifiChanged = wifi && (n.apSsid != cfg.apSsid || n.apPass != cfg.apPass);
         bool staChanged = wifi && (n.staSsid != cfg.staSsid || n.staPass != cfg.staPass);
+        if (n.txLevel != cfg.txLevel || n.autoAlc != cfg.autoAlc) alcLevel_.clear();   // start again from the new level
         cfg = n;
         radio.addr = (uint8_t)cfg.civAddr;
         syncSeq();
@@ -803,6 +855,7 @@ void App::uiState(UiState& u) {
     u.rmode = radio.mode; u.data = radio.dataMode;
     u.model = radio.connected() ? radio.modelName() : "";
     u.wpm = radio.keySpeed;
+    u.txLvl = (int)lroundf(txLevelNow());
     u.staState = sta_.state; u.staIp = sta_.ip; u.staReason = sta_.reason; u.staRssi = sta_.rssi;
     u.smeter = radio.smeter; u.po = radio.po; u.swr = radio.swr; u.alc = radio.alc;
     u.slotLen = (int)L; u.slotT = (int)(u.utc % L);
@@ -942,7 +995,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     o += ",\"slot\":{\"len\":" + jnum(L) + ",\"t\":" + jnum(now % L) + ",\"par\":" + jnum((now / L) & 1) + "}";
     o += std::string(",\"tx\":{\"en\":") + jbool(seq.txEnabled) + ",\"on\":" + jbool(txState_ == ST_TX) + ",\"msg\":" + jnum(seq.txMsg) + ",\"par\":" + jnum(seq.txParity);
     o += ",\"text\":" + jstr(txState_ == ST_TX ? (gen_ == GEN_TUNE ? "TUNE" : (gen_ == GEN_PSK ? "PSK31" : txText_)) : "") + ",\"last\":" + jstr(lastTx_);
-    o += ",\"freq\":" + jnum(cfg.txFreq) + ",\"lvl\":" + jnum(cfg.txLevel) + std::string(",\"tune\":") + jbool(tuneReq_) + std::string(",\"wd\":") + jbool(watchdogTripped_) + "}";
+    o += ",\"freq\":" + jnum(cfg.txFreq) + ",\"lvl\":" + jnum(cfg.txLevel) + ",\"txLvl\":" + jnum((int)lroundf(txLevelNow())) + std::string(",\"tune\":") + jbool(tuneReq_) + std::string(",\"wd\":") + jbool(watchdogTripped_) + "}";
     o += ",\"qso\":{\"dx\":" + jstr(seq.dxCall) + ",\"grid\":" + jstr(seq.dxGrid) + ",\"rs\":" + jnum(seq.rptSent) + ",\"rr\":" + jnum(seq.rptRcvd) + ",\"try\":" + jnum(seq.retries) + ",\"m\":[";
     for (int i = 1; i <= 7; i++) o += (i > 1 ? "," : "") + jstr(seq.compose(i));
     o += "]}";

@@ -582,7 +582,7 @@ void refreshRadioScreen(const App::UiState& s) {
     bool tx = s.txOn || s.ptt;
     lv_bar_set_value(rBarS, tx ? std::min(100, s.po * 100 / 213) : std::min(100, s.smeter * 100 / 241), LV_ANIM_OFF);
     setBg(rBarS, tx ? TXC : RXC, LV_PART_INDICATOR);
-    if (tx) snprintf(b, sizeof b, "TX  Po %d%%  ALC %d%%", std::min(100, s.po * 100 / 213), std::min(100, s.alc * 100 / 120));
+    if (tx) snprintf(b, sizeof b, "TX  Po %d%%  ALC %d%%  audio %d%%", std::min(100, s.po * 100 / 213), std::min(100, s.alc * 100 / 120), s.txLvl);
     else if (s.smeter <= 120) snprintf(b, sizeof b, "S%d", (s.smeter * 9 + 60) / 120);
     else snprintf(b, sizeof b, "S9+%d dB", (s.smeter - 120) / 2);
     setText(rMeter, b);
@@ -903,7 +903,8 @@ const SField kSet[] = {
     {"op", "Operator (ADIF OPERATOR)", 0, SK_UPPER, 11, nullptr, nullptr, "optional"},
     {"mySigInfo", "Reference (MY_SIG_INFO)", 0, SK_UPPER, 40, nullptr, nullptr, "e.g. US-1234, empty = none"},
     {"mySig", "Programme (MY_SIG)", 0, SK_UPPER, 12, nullptr, nullptr, "optional, e.g. WWFF"},
-    {"txLevel", "TX audio level %", 1, SK_NUM, 3, nullptr, nullptr, "1 - 100"},
+    {"txLevel", "TX audio level % (maximum)", 1, SK_NUM, 3, nullptr, nullptr, "1 - 100"},
+    {"autoAlc", "Lower audio when ALC shows", 1, SK_DROP, 0, "On (recommended)\nOff", "1|0", nullptr},
     {"rfPower", "RF power %", 1, SK_NUM, 3, nullptr, nullptr, "-1 = leave the radio's"},
     {"useRR73", "Sign off with", 1, SK_DROP, 0, "RR73\nRRR, then 73", "1|0", nullptr},
     {"maxRetries", "Repeats before giving up", 1, SK_NUM, 2, nullptr, nullptr, ""},

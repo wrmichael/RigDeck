@@ -36,6 +36,7 @@ public:
     // --- audio thread -------------------------------------------------------------------------
     void rxAudio48k(const int16_t* mono, size_t n);
     bool txActive() const { return txOn_.load(); }
+    float txLevelNow() const;                       // TX audio level in use, % (automatic when cfg.autoAlc)
     void txAudio48k(int16_t* mono, size_t n);
 
     // --- worker threads (each call blocks forever) --------------------------------------------
@@ -68,7 +69,7 @@ public:
         uint32_t decId = 0;
         std::string clkSrc, band, txText, nextText, dx, grid, status, net, call, myGrid, model;
         std::string staState, staIp, staReason;
-        int staRssi = 0;
+        int staRssi = 0, txLvl = 0;
     };
     struct UiDecode { uint32_t id; int64_t slotMs; int snr; float dt; int freq; std::string text; bool cq, toMe; };
     void uiState(UiState& s);
@@ -174,6 +175,17 @@ private:
     NmeaTime nmea_, nmeaMod_;
     float gpsErr_ = 0;
     void gpsTime(int64_t utcNow, int64_t mono, const char* src);
+    // automatic TX audio level (ALC)
+    struct AlcLevel { float level = 0, ceiling = 0; };
+    std::map<std::string, AlcLevel> alcLevel_;
+    std::atomic<float> txGain_{50.0f};
+    std::string alcBand_;
+    uint32_t alcSeen_ = 0;
+    int alcMax_ = 0;
+    bool alcCut_ = false;
+    void alcStartTx();
+    void alcTick(int64_t mono);
+    void alcEndTx();
     uint32_t ppsUsed_ = 0;
     std::string status_, netInfo_;
     StaStatus sta_;

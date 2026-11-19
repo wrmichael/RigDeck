@@ -162,8 +162,8 @@ void Radio::textPoll() {                                                 // mtx_
     int step = pollStep_++;
     if (proto == RP_YAESU) {
         static const char* rx[] = {"FA;", "SM0;", "MD0;", "SM0;", "TX;", "BI;", "PC;", "KS;"};
-        static const char* tx[] = {"RM5;", "RM6;", "RM4;", "TX;"};
-        push(pttWanted ? tx[step % 4] : rx[step % 8]);
+        static const char* tx[] = {"RM4;", "RM5;", "RM4;", "RM6;", "RM4;", "TX;"};
+        push(pttWanted ? tx[step % 6] : rx[step % 8]);
         if (extPoll && !pttWanted && (step & 1)) {
             static const char* ext[] = {"AG0;", "RG0;", "SQ0;", "MG;", "RL0;", "GT0;", "NL0;", "BC0;", "PR0;", "VX;", "RA0;", "PA"};
             const char* e = ext[extStep_++ % 12];
@@ -236,7 +236,7 @@ void Radio::textAnswer(const std::string& a) {
         else if (c == "SM" && a[2] == '0') smeter = num(a, 3, 3);
         else if (c == "RM" && a.size() >= 6) {
             int v = num(a, 3, 3);
-            if (a[2] == '1') smeter = v; else if (a[2] == '5') po = v; else if (a[2] == '6') swr = v; else if (a[2] == '4') alc = v;
+            if (a[2] == '1') smeter = v; else if (a[2] == '5') po = v; else if (a[2] == '6') swr = v; else if (a[2] == '4') { alc = v; alcSeq++; }
         }
         else if (c == "AG" && a[2] == '0') level[0x01] = pct255(num(a, 3, 3));
         else if (c == "RG" && a[2] == '0') level[0x02] = pct255(num(a, 3, 3));

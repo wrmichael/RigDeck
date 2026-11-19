@@ -80,6 +80,7 @@ public:
     bool connected() const;
     std::atomic<uint64_t> freq{0};
     std::atomic<int> mode{-1}, dataMode{-1}, smeter{0}, po{0}, swr{0}, alc{0};
+    std::atomic<uint32_t> alcSeq{0};                   // +1 for every ALC reading received
     std::atomic<bool> pttState{false};                 // what the radio last reported
     std::atomic<bool> pttWanted{false};
     std::atomic<int64_t> lastRxMono{-100000};

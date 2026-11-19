@@ -168,8 +168,8 @@ void Radio::poll() {
         } else if (q_.empty() && now - lastPoll_ >= 200) {
             lastPoll_ = now;
             static const uint8_t rxPoll[][2] = {{0x03, 0xFF}, {0x15, 0x02}, {0x04, 0xFF}, {0x15, 0x02}, {0x1A, 0x06}, {0x1C, 0x00}, {0x16, 0x47}};
-            static const uint8_t txPoll[][2] = {{0x15, 0x11}, {0x15, 0x13}, {0x15, 0x12}, {0x1C, 0x00}};
-            const uint8_t* p = pttWanted ? txPoll[pollStep_ % 4] : rxPoll[pollStep_ % 7];
+            static const uint8_t txPoll[][2] = {{0x15, 0x13}, {0x15, 0x11}, {0x15, 0x13}, {0x15, 0x12}, {0x15, 0x13}, {0x1C, 0x00}};
+            const uint8_t* p = pttWanted ? txPoll[pollStep_ % 6] : rxPoll[pollStep_ % 7];   // ALC every 0.4 s while transmitting
             pollStep_++;
             std::vector<uint8_t> d;
             if (p[1] != 0xFF) d.push_back(p[1]);
@@ -230,7 +230,7 @@ void Radio::handle(const CivFrame& f) {
             if (d[0] == 0x02) smeter = v;
             else if (d[0] == 0x11) po = v;
             else if (d[0] == 0x12) swr = v;
-            else if (d[0] == 0x13) alc = v;
+            else if (d[0] == 0x13) { alc = v; alcSeq++; }
         }
         break;
     case 0xFA: ng++; break;

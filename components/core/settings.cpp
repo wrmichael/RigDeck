@@ -68,6 +68,7 @@ bool Settings::set(const std::string& k, const std::string& v) {
         return true;
     }
     if (k == "txFreq") return toInt(v, 200, 2900, txFreq);
+    if (k == "autoAlc") return toInt(v, 0, 1, autoAlc);
     if (k == "txLevel") return toInt(v, 1, 100, txLevel);
     if (k == "opMode") return toInt(v, 0, 2, opMode);
     if (k == "cqParity") return toInt(v, 0, 1, cqParity);
@@ -97,7 +98,7 @@ std::string Settings::serialize(bool secrets) const {
     if (secrets) { S("apPass", apPass); S("staPass", staPass); }
     I("radioType", radioType); I("catBaud", catBaud); I("keyWpm", keyWpm);
     for (int i = 0; i < 6; i++) { snprintf(b, sizeof b, "macro%d", i + 1); S(b, macro[i]); }
-    I("civAddr", civAddr); I("civBaud", civBaud); I("txFreq", txFreq); I("txLevel", txLevel);
+    I("civAddr", civAddr); I("civBaud", civBaud); I("txFreq", txFreq); I("autoAlc", autoAlc); I("txLevel", txLevel);
     I("opMode", opMode); I("cqParity", cqParity); I("useRR73", useRR73); I("maxRetries", maxRetries);
     I("watchdogMin", watchdogMin); I("rfPower", rfPower); I("logProto", logProto); I("logPort", logPort);
     I("cwWpm", cwWpm); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);

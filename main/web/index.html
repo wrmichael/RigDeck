@@ -184,7 +184,8 @@ table.log th{color:var(--dim);font-weight:500}
       <label for="s_op">Operator callsign (ADIF OPERATOR)</label><input id="s_op" maxlength="11" placeholder="optional">
       <label for="s_mySigInfo">Park / reference (ADIF MY_SIG_INFO)</label><input id="s_mySigInfo" maxlength="40" placeholder="e.g. US-1234, empty = none">
       <label for="s_mySig">Programme (ADIF MY_SIG)</label><input id="s_mySig" maxlength="12" placeholder="optional, e.g. WWFF">
-      <label for="s_txLevel">TX audio level %</label><input id="s_txLevel" inputmode="numeric">
+      <label for="s_txLevel">TX audio level % (maximum)</label><input id="s_txLevel" inputmode="numeric">
+      <label for="s_autoAlc">Lower the audio automatically when the radio shows ALC</label><select id="s_autoAlc"><option value="1">On (recommended)</option><option value="0">Off</option></select>
       <label for="s_rfPower">RF power % (-1 = leave)</label><input id="s_rfPower" inputmode="numeric">
       <label for="s_useRR73">Sign off with</label><select id="s_useRR73"><option value="1">RR73</option><option value="0">RRR, then 73</option></select>
       <label for="s_maxRetries">Repeats before giving up</label><input id="s_maxRetries" inputmode="numeric">
@@ -280,7 +281,7 @@ function render(){
     $("mlabel").textContent="Po";$("m1").style.width=Math.min(100,r.po/2.13)+"%";$("m1").style.background="var(--tx)";
     $("mval").textContent="";
     const swr=r.swr<=48?1+r.swr/96:(r.swr<=80?1.5+(r.swr-48)/64:2+(r.swr-80)/40);
-    $("meters").textContent=`Power ${Math.round(Math.min(100,r.po/2.13))}%   ALC ${Math.round(Math.min(100,r.alc/1.2))}%   SWR about ${swr.toFixed(1)}`;
+    $("meters").textContent=`Power ${Math.round(Math.min(100,r.po/2.13))}%   ALC ${Math.round(Math.min(100,r.alc/1.2))}%   SWR about ${swr.toFixed(1)}${S.tx&&S.tx.txLvl!=null?`   audio ${S.tx.txLvl}%`:""}`;
   }else{
     $("mlabel").textContent="S";$("m1").style.width=Math.min(100,r.s/2.41)+"%";$("m1").style.background="var(--rx)";
     $("mval").textContent=r.s<=120?"S"+Math.round(r.s/120*9):"S9+"+Math.round((r.s-120)/2)+"dB";
