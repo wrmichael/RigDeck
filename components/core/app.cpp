@@ -273,7 +273,10 @@ void App::stopTx(const char* why) {
 }
 
 void App::txAudio48k(int16_t* out, size_t n) {
-    const float amp = cfg.txLevel * 320.0f;         // 100 % = just under full scale
+    // 100 % = just under full scale. The QMX makes RF from the audio's frequency, not its level, and
+    // only keys up when the audio is above ~80 % of full scale (its "Rise threshold"), so it always
+    // gets full level; its power is set on the QMX itself.
+    const float amp = (radio.proto.load() == RP_QMX ? 100 : cfg.txLevel) * 320.0f;
     if (gen_ == GEN_FTX) {
         if (!genStarted_.exchange(true)) {
             // Align to the clock: negative = wait for the nominal start (slot + 0.5 s),
