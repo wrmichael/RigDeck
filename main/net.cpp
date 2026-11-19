@@ -21,7 +21,7 @@ static bool s_want = false;                          // the home network should 
 static bool s_sntp = false;
 static int s_retry = 0;
 static App::StaStatus s_st;
-static esp_timer_handle_t s_retryTimer = nullptr, s_rssiTimer = nullptr;
+static esp_timer_handle_t s_retryTimer = nullptr;
 
 static void publish() {
     std::string s = "AP \"" + s_app->cfg.apSsid + "\" 192.168.4.1";
@@ -57,10 +57,23 @@ static void staConnectNow() {
 }
 static void onRetryTimer(void*) { staConnectNow(); }
 
-static void onRssiTimer(void*) {
-    if (s_st.state != "connected") return;
+// Signal strength is asked once per connection, from its own short-lived task. The Wi-Fi
+// co-processor's older firmware may not answer this request at all (each attempt then blocks for
+// 5 s and holds memory), so after one unanswered try it is not asked again until restart.
+static bool s_rssiBroken = false;
+static void rssiTask(void*) {
     wifi_ap_record_t ap;
-    if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK && ap.rssi != s_st.rssi) { s_st.rssi = ap.rssi; publish(); }
+    int64_t t0 = esp_timer_get_time();
+    esp_err_t e = esp_wifi_sta_get_ap_info(&ap);
+    if (e == ESP_OK) { s_st.rssi = ap.rssi; publish(); }
+    else if (esp_timer_get_time() - t0 > 2000000) {
+        s_rssiBroken = true;
+        ESP_LOGW(TAG, "the Wi-Fi chip does not report signal strength (older co-processor firmware); not asking again");
+    }
+    vTaskDelete(nullptr);
+}
+static void askRssi() {
+    if (!s_rssiBroken) xTaskCreate(rssiTask, "rssi", 3072, nullptr, 2, nullptr);
 }
 
 static void startSntp() {
@@ -133,7 +146,7 @@ static void onEvent(void*, esp_event_base_t base, int32_t id, void* data) {
         s_st.ip = ip;
         ESP_LOGI(TAG, "home network connected, address %s", ip);
         publish();
-        onRssiTimer(nullptr);
+        askRssi();
     }
 }
 
@@ -148,10 +161,6 @@ void net_start(App& app) {
     ta.callback = onRetryTimer;
     ta.name = "sta-retry";
     esp_timer_create(&ta, &s_retryTimer);
-    ta.callback = onRssiTimer;
-    ta.name = "sta-rssi";
-    esp_timer_create(&ta, &s_rssiTimer);
-    esp_timer_start_periodic(s_rssiTimer, 10 * 1000000ULL);
     app.wifiControl = [](bool connect) { if (connect) staJoin(); else staLeave(); };
 
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();

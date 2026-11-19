@@ -44,8 +44,18 @@ static void decodeTask(void*) { s_app.decodeLoop(); }
 static void netlogTask(void*) { s_app.netLoop(); }
 
 static void controlTask(void*) {
+    int64_t lastMem = 0;
     for (;;) {
         s_app.tick();
+        int64_t now = monoMs();
+        if (now - lastMem >= 60000) {                  // memory once a minute: a leak shows as a falling "internal" figure
+            lastMem = now;
+            ESP_LOGI(TAG, "memory: internal %u kB free (lowest %u kB, largest block %u kB), PSRAM %u kB free",
+                     (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                     (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                     (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024),
+                     (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
+        }
         if (s_app.rebootReq) {
             for (int i = 0; i < 60; i++) { s_app.tick(); vTaskDelay(pdMS_TO_TICKS(10)); }   // let PTT-off go out
             esp_restart();

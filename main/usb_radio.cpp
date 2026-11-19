@@ -16,6 +16,8 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "usb/usb_host.h"
 #include "usb/cdc_acm_host.h"
 #include "usb/uac_host.h"
@@ -280,7 +282,9 @@ static void handleEvent(const AudioEv& e) {
     uac_host_device_config_t dc = {};
     dc.addr = e.addr;
     dc.iface_num = e.iface;
-    dc.buffer_size = tx ? 28800 : 57600;            // at least 100 ms of transmit audio, 200 ms of receive audio
+    // Ring buffers come from internal RAM, which the USB host, Wi-Fi link and display also need:
+    // 100 ms / 200 ms of 16-bit stereo (about 67 / 133 ms at 24 bits, still plenty).
+    dc.buffer_size = tx ? 19200 : 38400;
     dc.buffer_threshold = dc.buffer_size / 4;
     dc.callback = uacDeviceCb;
     uac_host_device_handle_t h = nullptr;
@@ -296,6 +300,30 @@ static void handleEvent(const AudioEv& e) {
 }
 
 // This task also runs the receive DSP (ft8_lib's FFT keeps ~31 kB of work arrays on the stack).
+// A stream that will not start (usually: internal RAM too short for the USB transfer buffers) is
+// retried after a pause, not in a tight loop, and reported once with the memory figures.
+static int64_t s_startRetryMs = 0;
+static int s_startFails = 0;
+static bool startStream(uac_host_device_handle_t h, const uac_host_stream_config_t* cfg, const char* what) {
+    int64_t now = esp_timer_get_time() / 1000;
+    if (now < s_startRetryMs) { vTaskDelay(pdMS_TO_TICKS(20)); return false; }
+    esp_err_t e = uac_host_device_start(h, (uac_host_stream_config_t*)cfg);
+    if (e == ESP_OK) {
+        if (s_startFails) ESP_LOGI(TAG, "audio %s started after %d failed attempt(s)", what, s_startFails);
+        s_startFails = 0;
+        return true;
+    }
+    s_startFails++;
+    int pauseMs = s_startFails < 3 ? 250 : s_startFails < 10 ? 1000 : 5000;
+    s_startRetryMs = now + pauseMs;
+    if (s_startFails == 1 || s_startFails % 20 == 0)
+        ESP_LOGE(TAG, "audio %s will not start (%s), attempt %d; internal RAM free %u kB, largest block %u kB",
+                 what, esp_err_to_name(e), s_startFails,
+                 (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                 (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+    return false;
+}
+
 static void audioTask(void*) {
     static int16_t mono[960];
     static uint8_t raw[960 * 6];                     // 20 ms of stereo at up to 24 bits
@@ -311,7 +339,7 @@ static void audioTask(void*) {
         if (s_app->txActive()) {
             if (s_micRun) { uac_host_device_stop(s_mic); s_micRun = false; }
             if (!s_spkRun) {
-                if (uac_host_device_start(s_spk, &s_spkCfg) != ESP_OK) { vTaskDelay(pdMS_TO_TICKS(20)); continue; }
+                if (!startStream(s_spk, &s_spkCfg, "to radio")) continue;
                 uac_host_device_set_mute(s_spk, false);      // not every codec has these controls: ignore errors
                 uac_host_device_set_volume(s_spk, 100);
                 s_spkRun = true;
@@ -331,7 +359,7 @@ static void audioTask(void*) {
         } else {
             if (s_spkRun) { uac_host_device_stop(s_spk); s_spkRun = false; }
             if (!s_micRun) {
-                if (uac_host_device_start(s_mic, &s_micCfg) != ESP_OK) { vTaskDelay(pdMS_TO_TICKS(20)); continue; }
+                if (!startStream(s_mic, &s_micCfg, "from radio")) continue;
                 s_micRun = true;
             }
             int ch = s_micCfg.channels;
