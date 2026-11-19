@@ -1,0 +1,24 @@
+dependencies:
+  idf: ">=5.5.3"
+  # USB host stack with external-hub support and the full-speed-only option (usb_host_config_t.fsls_only)
+  espressif/usb: ">=1.6.0"
+  espressif/usb_host_cdc_acm: "^2.4.0"
+  espressif/usb_host_uac: "^1.5.0"
+  # Display, touch and LVGL for the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B (versions as in Waveshare's examples).
+  waveshare/esp32_p4_wifi6_touch_lcd_7b:
+    version: "==3.0.1"
+    rules:
+      - if: "target in [esp32p4]"
+  lvgl/lvgl:
+    version: "==9.5.0"
+    rules:
+      - if: "target in [esp32p4]"
+  # ESP32-P4 has no radio of its own: Wi-Fi runs on the board's ESP32-C6 co-processor.
+  espressif/esp_wifi_remote:
+    version: "*"
+    rules:
+      - if: "target in [esp32p4]"
+  espressif/esp_hosted:
+    version: "*"
+    rules:
+      - if: "target in [esp32p4]"

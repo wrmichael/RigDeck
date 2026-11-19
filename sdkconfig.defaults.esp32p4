@@ -1,0 +1,17 @@
+# ESP32-P4 boards reach Wi-Fi through the on-board ESP32-C6 (esp_hosted over SDIO). The pin defaults
+# of the esp_hosted component match Espressif's ESP32-P4-Function-EV-Board; other boards may need
+# "idf.py menuconfig" -> Component config -> ESP-Hosted config.
+CONFIG_SPIRAM=y
+
+# On-device touch interface: LVGL 9 on the Waveshare 7 inch display (settings as in Waveshare's examples).
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
+CONFIG_LV_USE_CLIB_MALLOC=y
+CONFIG_LV_USE_CLIB_STRING=y
+CONFIG_LV_USE_CLIB_SPRINTF=y
+CONFIG_LV_DEF_REFR_PERIOD=15
+CONFIG_LV_OS_FREERTOS=y
+CONFIG_LV_DRAW_SW_DRAW_UNIT_CNT=2
+CONFIG_LV_FONT_MONTSERRAT_16=y
+CONFIG_LV_FONT_MONTSERRAT_20=y
+CONFIG_LV_FONT_MONTSERRAT_28=y
+CONFIG_LV_FONT_MONTSERRAT_36=y

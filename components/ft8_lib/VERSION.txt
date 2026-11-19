@@ -1,0 +1,1 @@
+ft8_lib commit 9fec6ca39886edbf96f4f5e71edc76da5074e871 (2025-08-23), unmodified subset: ft8/, fft/, common/monitor.*

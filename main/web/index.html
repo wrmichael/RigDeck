@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IC-7100 FT8</title>
+<style>
+:root{--bg:#0d1317;--pan:#151e25;--pan2:#1c2831;--line:#2a3944;--tx:#ff5b5b;--rx:#3fcf8e;--amb:#f6b93b;--txt:#dce5ea;--dim:#8498a5;--cq:#7fd0ff;--me:#ff9d9d;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--pan2);border:1px solid var(--line);border-radius:6px;padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--dim)}
+button.on{background:var(--amb);border-color:var(--amb);color:#1a1300;font-weight:600}
+a{color:var(--amb)}
+a.dl{display:inline-block;background:var(--rx);border:1px solid var(--rx);border-radius:6px;padding:9px 16px;color:#04170e;font-weight:700;font-size:15px;text-decoration:none;cursor:pointer}
+a.dl:hover{filter:brightness(1.12)}
+a.dl:focus-visible{outline:2px solid var(--amb);outline-offset:1px}
+button.danger{background:#5a1d1d;border-color:#8a2b2b}
+button.txon{background:var(--tx);border-color:var(--tx);color:#2a0000;font-weight:700}
+input,select{background:#0b1014;border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--amb);outline-offset:1px}
+header{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:8px 14px;background:var(--pan);border-bottom:1px solid var(--line)}
+#freq{font:600 26px/1 var(--mono);color:var(--amb);letter-spacing:.5px}
+#freq small{font-size:13px;color:var(--dim);font-weight:400}
+.dots{display:flex;gap:10px;font-size:12px;color:var(--dim)}
+.dot::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#51606b;margin-right:4px}
+.dot.ok::before{background:var(--rx)}.dot.bad::before{background:var(--tx)}
+#clock{font:500 16px var(--mono);margin-left:auto}
+#mycall{font-weight:600}
+.meter{width:150px;height:9px;background:#0b1014;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--rx)}
+#slot{height:6px;background:#0b1014}#slot i{display:block;height:100%;width:0;background:var(--rx)}
+#slot.tx i{background:var(--tx)}
+#banner{display:none;padding:7px 14px;background:#4a3a10;color:#ffe6a6;border-bottom:1px solid #6b5416}
+#txline{padding:5px 14px;font:13px var(--mono);background:var(--pan);border-bottom:1px solid var(--line);color:var(--dim);min-height:29px}
+#txline b{color:var(--tx)}
+nav{display:flex;gap:4px;padding:8px 14px 0}
+nav button{border-radius:6px 6px 0 0;border-bottom:none}
+main{padding:10px 14px 30px}
+.grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:12px}
+@media(max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}#clock{margin-left:0}}
+.pan{background:var(--pan);border:1px solid var(--line);border-radius:8px;padding:10px}
+.pan h3{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px}
+.row label{color:var(--dim);font-size:12px}
+canvas{display:block;width:100%;height:110px;background:#000;border-radius:6px;cursor:crosshair;image-rendering:pixelated}
+#act{height:46vh;min-height:240px;overflow:auto;font:13px/1.5 var(--mono);background:#0b1014;border-radius:6px}
+#act table{border-collapse:collapse;width:100%}
+#act td{padding:0 6px;white-space:nowrap}
+#act tr{cursor:pointer}#act tr:hover{background:#18242d}
+#act tr.sep td{border-top:1px solid var(--line)}
+#act .cq{color:var(--cq)}#act .me{color:var(--me);font-weight:600}#act .tx{color:var(--amb)}
+#act td.n{text-align:right;color:var(--dim)}
+.msgs button{display:block;width:100%;text-align:left;font:13px var(--mono);margin-bottom:4px}
+.msgs button span{color:var(--dim);margin-right:8px}
+#pskrx{height:30vh;min-height:160px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:14px/1.5 var(--mono);background:#0b1014;border-radius:6px;padding:8px}
+table.log{border-collapse:collapse;width:100%;font:13px var(--mono)}
+table.log td,table.log th{padding:3px 8px;text-align:left;border-bottom:1px solid var(--line)}
+table.log th{color:var(--dim);font-weight:500}
+.form{display:grid;grid-template-columns:minmax(120px,200px) minmax(0,1fr);gap:8px 12px;align-items:center;max-width:620px}
+.form label{color:var(--dim)}
+.hint{color:var(--dim);font-size:12px}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div id="freq">--.---.--- <small></small></div>
+  <div>
+    <div class="row" style="margin:0 0 4px"><span id="mlabel" class="hint">S</span><div class="meter"><i id="m1"></i></div><span id="mval" class="hint"></span></div>
+    <div class="row" style="margin:0"><span class="hint">Audio in</span><div class="meter" style="width:112px"><i id="m2"></i></div><span id="lvl" class="hint"></span></div>
+  </div>
+  <div class="dots"><span class="dot" id="dUsb">USB</span><span class="dot" id="dCiv">CI-V</span><span class="dot" id="dAud">Audio</span><span class="dot" id="dClk">Clock</span></div>
+  <div id="clock">--:--:--</div>
+  <div id="mycall"></div>
+</header>
+<div id="slot"><i></i></div>
+<div id="banner"></div>
+<div id="txline"></div>
+<nav>
+  <button data-tab="op" class="on">Operate</button><button data-tab="qlog">SSB / CW log</button><button data-tab="log">Log</button><button data-tab="set">Settings</button>
+</nav>
+<main>
+<section id="tab-op">
+  <div class="pan" style="margin-bottom:12px">
+    <div class="row">
+      <span id="modes"><button data-mode="FT8">FT8</button><button data-mode="FT4">FT4</button><button data-mode="CW" title="FT8-style contacts sent in Morse code">FT-CW</button><button data-mode="PSK31">PSK31</button></span>
+      <span id="bands"></span>
+      <input id="dial" size="10" inputmode="decimal" placeholder="MHz" aria-label="Dial frequency in MHz"><button id="setdial">Set</button>
+    </div>
+    <canvas id="wf" width="512" height="110" title="Click to set your transmit frequency"></canvas>
+  </div>
+  <div class="grid">
+    <div>
+      <div class="pan" id="ftPane">
+        <h3>Band activity <span id="decinfo" style="text-transform:none;letter-spacing:0"></span></h3>
+        <div id="act"><table><tbody></tbody></table></div>
+        <div class="hint" style="margin-top:6px">Tap a line to work that station. Blue = CQ, red = calling you, amber = your transmissions.</div>
+      </div>
+      <div class="pan hide" id="pskPane">
+        <h3>PSK31 receive <span id="pskinfo" style="text-transform:none;letter-spacing:0"></span></h3>
+        <div id="pskrx"></div>
+        <div class="row" style="margin-top:8px"><input id="psktxt" style="flex:1" maxlength="400" placeholder="Type and press Send"><button id="psksend">Send</button></div>
+        <div class="row"><button data-mac="cq">CQ</button><button data-mac="call">Answer</button><button data-mac="rst">Report</button><button data-mac="73">73</button><button id="pskclr">Clear screen</button></div>
+        <div class="row"><label>Their call</label><input id="pskcall" size="9"><label>RST sent</label><input id="pskrs" size="4" value="599"><label>rcvd</label><input id="pskrr" size="4" value="599"><button id="psklog">Log QSO</button></div>
+      </div>
+    </div>
+    <div>
+      <div class="pan" style="margin-bottom:12px">
+        <h3>Transmit</h3>
+        <div class="row">
+          <button id="txen">Enable TX</button>
+          <button id="halt" class="danger">Halt TX</button>
+          <button id="tune">Tune</button>
+        </div>
+        <div class="row" id="opRow"><label>Operation</label>
+          <button data-op="0">Manual</button><button data-op="1">Auto CQ</button><button data-op="2">Auto answer CQs</button>
+        </div>
+        <div class="row"><label>TX audio Hz</label><input id="txf" size="5" inputmode="numeric">
+          <span id="parRow"><label>TX slot</label><button data-par="0">Even :00</button><button data-par="1">Odd :15</button></span>
+        </div>
+        <div id="meters" class="hint"></div>
+      </div>
+      <div class="pan" id="qsoPane">
+        <h3>QSO <span id="qsoinfo" style="text-transform:none;letter-spacing:0"></span></h3>
+        <div class="row"><input id="dxcall" size="9" placeholder="DX call"><input id="dxgrid" size="5" placeholder="Grid"><button id="dxset">Set</button><button id="dxclr">Clear</button><button id="cq">CQ</button></div>
+        <div class="msgs" id="msgs"></div>
+        <div class="row"><input id="free" maxlength="13" size="14" placeholder="Free text (13)"><button id="freeb">Send once</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="tab-qlog" class="hide">
+  <div class="pan" style="margin-bottom:12px">
+    <h3>Radio <span id="qlinfo" style="text-transform:none;letter-spacing:0"></span></h3>
+    <div class="row">
+      <button id="qlSsb">SSB</button><button id="qlCw">CW</button>
+      <label>Keyer</label><button data-wpm="-1">&minus;</button><span id="qlWpm" style="min-width:64px;text-align:center">-- wpm</span><button data-wpm="1">+</button>
+      <button id="qlStop" class="danger">Stop CW</button>
+    </div>
+  </div>
+  <div class="pan" style="margin-bottom:12px">
+    <h3>Contact</h3>
+    <div class="row">
+      <input id="qlFreq" size="10" maxlength="12" placeholder="MHz" inputmode="decimal" title="Follows the radio until you type a frequency" style="font:600 20px var(--mono);color:var(--amb)" autocomplete="off">
+      <input id="qlCall" size="11" maxlength="11" placeholder="Callsign" style="font:600 20px var(--mono);text-transform:uppercase" autocomplete="off">
+      <label>Sent</label><input id="qlRs" size="4" maxlength="6" placeholder="599">
+      <label>Rcvd</label><input id="qlRr" size="4" maxlength="6" placeholder="599">
+      <input id="qlName" size="12" maxlength="30" placeholder="Name">
+      <input id="qlNote" size="18" maxlength="60" placeholder="Note">
+      <button id="qlLog" class="on">Log contact</button>
+    </div>
+    <div id="qlDupe" style="color:var(--tx);min-height:18px"></div>
+    <div class="row" id="qlMacros"></div>
+    <div class="row"><input id="qlText" style="flex:1" maxlength="90" placeholder="Type CW to send through the radio's keyer, press Enter" autocomplete="off"><button id="qlSend">Send CW</button></div>
+    <p class="hint">Frequency and mode follow the radio until you type a frequency or press SSB / CW; your choice is kept until the contact is logged. Frequency in MHz (14.250), kHz (14250) or Hz. Empty reports log as 59 (voice) or 599 (CW). Macros need the radio in CW mode; edit them in Settings. {CALL} is the callsign box, {RST} the Sent box (599 is sent as 5NN), {MYCALL}, {GRID} and {REF} (park reference) come from Settings.</p>
+  </div>
+</section>
+
+<section id="tab-log" class="hide">
+  <div class="pan">
+    <h3>Logbook</h3>
+    <div class="row"><span id="logn"></span><span id="fwd" class="hint"></span></div>
+    <div class="row">
+      <a id="dlcur" class="dl" href="/log.adi" download="ic7100-current.adi">&#11015; Download current log</a>
+      <a id="dlall" class="dl" href="/archive.adi" download="ic7100-archive.adi">&#11015; Download full archive</a>
+      <button id="clrlog">Clear current log</button>
+    </div>
+    <table class="log"><thead><tr><th>UTC</th><th>Call</th><th>Grid</th><th>Band</th><th>Mode</th><th>Sent</th><th>Rcvd</th></tr></thead><tbody id="logrows"></tbody></table>
+    <p class="hint">Every contact is written to two files: the current log and the archive. Clearing the current log leaves the archive untouched, so download the current log into your logging program, clear it, and the next download holds only new contacts. The table shows contacts made since power-up or the last clear.</p>
+    <div class="row"><button id="eraseall" class="danger">Erase archive and current log</button></div>
+  </div>
+</section>
+
+<section id="tab-set" class="hide">
+  <div class="pan">
+    <h3>Station</h3>
+    <div class="form" id="form">
+      <label for="s_call">Callsign</label><input id="s_call" maxlength="11">
+      <label for="s_grid">Grid locator</label><input id="s_grid" maxlength="6">
+      <label for="s_op">Operator callsign (ADIF OPERATOR)</label><input id="s_op" maxlength="11" placeholder="optional">
+      <label for="s_mySigInfo">Park / reference (ADIF MY_SIG_INFO)</label><input id="s_mySigInfo" maxlength="40" placeholder="e.g. US-1234, empty = none">
+      <label for="s_mySig">Programme (ADIF MY_SIG)</label><input id="s_mySig" maxlength="12" placeholder="optional, e.g. WWFF">
+      <label for="s_txLevel">TX audio level %</label><input id="s_txLevel" inputmode="numeric">
+      <label for="s_rfPower">RF power % (-1 = leave)</label><input id="s_rfPower" inputmode="numeric">
+      <label for="s_useRR73">Sign off with</label><select id="s_useRR73"><option value="1">RR73</option><option value="0">RRR, then 73</option></select>
+      <label for="s_maxRetries">Repeats before giving up</label><input id="s_maxRetries" inputmode="numeric">
+      <label for="s_watchdogMin">TX watchdog, minutes</label><input id="s_watchdogMin" inputmode="numeric">
+      <label for="s_radioType">Radio</label><select id="s_radioType"><option value="0">Find automatically</option><option value="1">Icom IC-7100 / IC-705</option><option value="2">Yaesu FTX-1</option><option value="3">QRP Labs QMX / QMX+</option></select>
+      <label for="s_catBaud">FTX-1 CAT-1 rate (radio menu)</label><select id="s_catBaud"><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select>
+      <label for="s_keyWpm">Keyer speed for the logger, wpm (0 = leave the radio's)</label><input id="s_keyWpm" inputmode="numeric">
+      <label for="s_macro1">CW macro 1 (Label|text)</label><input id="s_macro1" maxlength="90">
+      <label for="s_macro2">CW macro 2</label><input id="s_macro2" maxlength="90">
+      <label for="s_macro3">CW macro 3</label><input id="s_macro3" maxlength="90">
+      <label for="s_macro4">CW macro 4</label><input id="s_macro4" maxlength="90">
+      <label for="s_macro5">CW macro 5</label><input id="s_macro5" maxlength="90">
+      <label for="s_macro6">CW macro 6</label><input id="s_macro6" maxlength="90">
+      <label for="s_civAddr">CI-V address (88 = IC-7100, A4 = IC-705; found automatically)</label><input id="s_civAddr">
+      <label for="s_civBaud">CI-V baud</label><select id="s_civBaud"><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option></select>
+      <label for="s_logProto">Send log to</label><select id="s_logProto"><option value="0">Nowhere (file only)</option><option value="1">TCP, ADIF text</option><option value="2">UDP, ADIF text</option><option value="3">UDP, WSJT-X format</option></select>
+      <label for="s_logHost">Logger address</label><input id="s_logHost" placeholder="192.168.4.2">
+      <label for="s_logPort">Logger port</label><input id="s_logPort" inputmode="numeric">
+      <label for="s_cwWpm">FT-CW speed, wpm (same at both stations)</label><input id="s_cwWpm" inputmode="numeric">
+      <label for="s_gpsClock">Clock from radio's GPS</label><select id="s_gpsClock"><option value="0">Off</option><option value="1">On (GPS on DATA1, GPS Out to USB2)</option></select>
+      <label for="s_gpsBaud">GPS Out baud</label><select id="s_gpsBaud"><option>4800</option><option>9600</option></select>
+      <label for="s_gpsDelayMs">GPS sentence delay, ms</label><input id="s_gpsDelayMs" inputmode="numeric">
+      <label for="s_apSsid">Hotspot name</label><input id="s_apSsid" maxlength="32">
+      <label for="s_apPass">Hotspot password</label><input id="s_apPass" type="password" placeholder="unchanged" autocomplete="new-password">
+      <label for="s_staSsid">Also join Wi-Fi network</label><input id="s_staSsid" maxlength="32" placeholder="optional">
+      <label for="s_staPass">Its password</label><input id="s_staPass" type="password" placeholder="unchanged" autocomplete="new-password">
+    </div>
+    <div class="row" style="margin-top:12px"><button id="save" class="on">Save settings</button><button id="reboot">Restart device</button><span id="saveinfo" class="hint"></span></div>
+    <p class="hint">Hotspot and Wi-Fi changes take effect after a restart. CI-V baud and GPS baud changes too.</p>
+    <h3 style="margin-top:16px">Clock</h3>
+    <div class="row"><span id="clkinfo"></span><button data-trim="-100">-0.1 s</button><button data-trim="-20">-20 ms</button><button data-trim="20">+20 ms</button><button data-trim="100">+0.1 s</button></div>
+    <p class="hint">Without internet or GPS the clock follows this browser's clock each time the page is open. If most stations show the same DT offset, nudge the clock until DT is near zero. With GPS on, change "GPS sentence delay" instead: lower it if DT values are mostly negative, raise it if they are mostly positive.</p>
+    <div id="netinfo" class="hint"></div>
+  </div>
+</section>
+</main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id), demo=location.protocol==="file:";
+const BANDS={FT8:{"160":1.84,"80":3.573,"40":7.074,"30":10.136,"20":14.074,"17":18.1,"15":21.074,"12":24.915,"10":28.074,"6":50.313,"2":144.174},
+ FT4:{"80":3.575,"40":7.0475,"30":10.14,"20":14.08,"17":18.104,"15":21.14,"12":24.919,"10":28.18,"6":50.318,"2":144.17},
+ CW:{"160":1.835,"80":3.565,"40":7.065,"30":10.125,"20":14.065,"17":18.095,"15":21.065,"12":24.91,"10":28.065,"6":50.095,"2":144.065},
+ PSK31:{"80":3.58,"40":7.07,"30":10.142,"20":14.07,"17":18.1,"15":21.07,"12":24.92,"10":28.12}};
+let S=null, since=0, pskSince=0, cfgLoaded=false, lastTx="", lastRtt=60, specSeq=-1, lastSlot=-1, busy=false;
+
+async function cmd(c,args){
+  if(demo) return {ok:true};
+  const body=new URLSearchParams(Object.assign({c},args||{}));
+  try{
+    const r=await fetch("/api/cmd",{method:"POST",body});
+    const j=await r.json();
+    if(!j.ok) banner(j.err||"Command failed");
+    poll();
+    return j;
+  }catch(e){banner("No connection to the device");return {ok:false};}
+}
+let bannerT=0;
+function banner(t){const b=$("banner");b.textContent=t;b.style.display=t?"block":"none";clearTimeout(bannerT);if(t)bannerT=setTimeout(()=>banner(""),6000);}
+function hhmmss(ms){return new Date(ms).toISOString().substr(11,8);}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+function addRow(cls,t,snr,dt,f,msg,id,sep){
+  const tb=document.querySelector("#act tbody"), box=$("act");
+  const stick=box.scrollTop+box.clientHeight>=box.scrollHeight-30;
+  const tr=document.createElement("tr");
+  tr.className=cls+(sep?" sep":"");
+  if(id) tr.dataset.id=id;
+  tr.innerHTML=`<td>${t}</td><td class="n">${snr}</td><td class="n">${dt}</td><td class="n">${f}</td><td>${esc(msg)}</td>`;
+  tb.appendChild(tr);
+  while(tb.children.length>400) tb.removeChild(tb.firstChild);
+  if(stick) box.scrollTop=box.scrollHeight;
+}
+
+function render(){
+  const r=S.radio, tx=S.tx, q=S.qso, psk=S.mode==="PSK31";
+  if(S.cfg) render.call=S.cfg.call;
+  S.cfg_call=render.call||"";
+  const mhz=r.freq?(r.freq/1e6).toFixed(6):"--.------";
+  $("freq").innerHTML=`${mhz.slice(0,-3)}<small>${mhz.slice(-3)} MHz ${esc(r.band)} ${r.rmode===1?(r.data===1?"USB-D":"USB"):""} ${esc(r.model||"")}</small>`;
+  $("dUsb").className="dot "+(r.ser?"ok":"bad");
+  $("dCiv").className="dot "+(r.civ?"ok":"bad");
+  $("dAud").className="dot "+(r.aud?"ok":"bad");
+  $("dClk").className="dot "+(S.clk.ok?"ok":"bad");
+  $("dClk").textContent="Clock ("+S.clk.src+")";
+  $("clock").textContent=S.clk.ok?hhmmss(S.utc)+" UTC":"clock not set";
+  // meters
+  if(tx.on||r.ptt){
+    $("mlabel").textContent="Po";$("m1").style.width=Math.min(100,r.po/2.13)+"%";$("m1").style.background="var(--tx)";
+    $("mval").textContent="";
+    const swr=r.swr<=48?1+r.swr/96:(r.swr<=80?1.5+(r.swr-48)/64:2+(r.swr-80)/40);
+    $("meters").textContent=`Power ${Math.round(Math.min(100,r.po/2.13))}%   ALC ${Math.round(Math.min(100,r.alc/1.2))}%   SWR about ${swr.toFixed(1)}`;
+  }else{
+    $("mlabel").textContent="S";$("m1").style.width=Math.min(100,r.s/2.41)+"%";$("m1").style.background="var(--rx)";
+    $("mval").textContent=r.s<=120?"S"+Math.round(r.s/120*9):"S9+"+Math.round((r.s-120)/2)+"dB";
+    $("meters").textContent="";
+  }
+  $("m2").style.width=Math.max(0,Math.min(100,(S.lvl+60)/60*100))+"%";
+  $("m2").style.background=S.lvl>-3?"var(--tx)":(S.lvl<-45?"var(--amb)":"var(--rx)");
+  $("lvl").textContent=S.lvl<=-99?"none":S.lvl+" dBFS";
+  // slot bar and transmit line
+  const sl=$("slot");
+  sl.className=tx.on?"tx":"";
+  sl.firstElementChild.style.width=psk?(tx.on?"100%":"0"):(S.slot.t/S.slot.len*100)+"%";
+  $("txline").innerHTML=tx.on?`<b>TX</b> ${esc(tx.text)}`:(psk?"":(tx.en&&q.m[tx.msg-1]?`next: ${esc(q.m[tx.msg-1])} (${tx.par?"odd":"even"} slots)`:"receiving"));
+  if(tx.on&&tx.text&&tx.text!==lastTx&&!psk&&tx.text!=="TUNE") addRow("tx",hhmmss(S.utc).slice(0,8),"TX","",tx.freq,tx.text,0,false);
+  lastTx=tx.on?tx.text:"";
+  // buttons
+  $("txen").className=tx.en?"txon":"";$("txen").textContent=tx.en?"TX enabled":"Enable TX";
+  $("tune").className=tx.tune?"txon":"";
+  document.querySelectorAll("[data-mode]").forEach(b=>b.className=b.dataset.mode===S.mode?"on":"");
+  document.querySelectorAll("[data-op]").forEach(b=>b.className=+b.dataset.op===S.op?"on":"");
+  document.querySelectorAll("[data-par]").forEach(b=>b.className=+b.dataset.par===tx.par?"on":"");
+  $("ftPane").classList.toggle("hide",psk);$("qsoPane").classList.toggle("hide",psk);
+  $("pskPane").classList.toggle("hide",!psk);$("opRow").classList.toggle("hide",psk);$("parRow").classList.toggle("hide",psk);$("txen").classList.toggle("hide",psk);
+  if(document.activeElement!==$("txf")) $("txf").value=psk?S.psk.f:tx.freq;
+  const bb=$("bands");
+  if(bb.dataset.mode!==S.mode){bb.dataset.mode=S.mode;bb.innerHTML=Object.keys(BANDS[S.mode]).map(b=>`<button data-band="${b}">${b}m</button>`).join("");}
+  bb.querySelectorAll("button").forEach(b=>b.className=Math.abs(BANDS[S.mode][b.dataset.band]*1e6-r.freq)<500?"on":"");
+  // QSO panel
+  $("qsoinfo").textContent=q.dx?`${q.dx} ${q.grid}  sent ${q.rs>-99?q.rs:"-"}  rcvd ${q.rr>-99?q.rr:"-"}  try ${q.try}`:"";
+  $("msgs").innerHTML=q.m.slice(0,6).map((m,i)=>`<button data-msg="${i+1}" class="${tx.msg===i+1?"on":""}"><span>Tx${i+1}</span>${esc(m||"-")}</button>`).join("");
+  $("decinfo").textContent=S.decMs?`decode ${S.decMs} ms`:"";
+  // decodes
+  for(const d of S.dec){
+    const m=d.m, mine=S.cfg_call&&m.startsWith(S.cfg_call+" ");
+    const slot=d.t;
+    addRow(mine?"me":(m.startsWith("CQ ")?"cq":""),hhmmss(d.t),d.snr,d.dt.toFixed(1),d.f,m,d.id,slot!==lastSlot);
+    lastSlot=slot;
+  }
+  since=S.decId;
+  // PSK
+  if(S.psk.text){const p=$("pskrx");const stick=p.scrollTop+p.clientHeight>=p.scrollHeight-30;p.textContent+=S.psk.text;if(p.textContent.length>20000)p.textContent=p.textContent.slice(-15000);if(stick)p.scrollTop=p.scrollHeight;}
+  pskSince=S.psk.seq;
+  $("pskinfo").textContent=`RX ${S.psk.f} Hz (tracking ${S.psk.afc} Hz), signal quality ${S.psk.q}%`;
+  // log
+  $("logn").textContent=S.log.n+" contacts in the current log, "+S.log.all+" in the archive"+(S.log.behind?" (archive incomplete: download the current log)":"");
+  const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
+  $("dlcur").download=`ic7100-current-${stamp}.adi`;$("dlall").download=`ic7100-archive-${stamp}.adi`;
+  $("fwd").textContent=(S.log.ok||S.log.fail)?`forwarded ${S.log.ok}, failed attempts ${S.log.fail}`:"";
+  $("logrows").innerHTML=S.log.last.slice().reverse().map(l=>`<tr><td>${hhmmss(l.t)}</td><td>${esc(l.call)}</td><td>${esc(l.grid)}</td><td>${esc(l.band)}</td><td>${esc(l.mode)}</td><td>${esc(l.rs)}</td><td>${esc(l.rr)}</td></tr>`).join("");
+  $("clkinfo").textContent=S.clk.ok?`Source: ${S.clk.src}, set ${S.clk.age} s ago`:"Clock not set";
+  $("netinfo").textContent=S.net;
+  if(S.msg&&S.msg!==render.lastMsg){render.lastMsg=S.msg;banner(S.msg);}
+  if(tx.wd) banner("TX watchdog stopped automatic transmission. Press Enable TX to resume.");
+  if(S.cfg&&!cfgLoaded){
+    cfgLoaded=true;
+    for(const k in S.cfg){const e=$("s_"+k);if(e) e.value=k==="civAddr"?"0x"+(+S.cfg[k]).toString(16).toUpperCase():S.cfg[k];}
+  }
+  // SSB / CW logger
+  {const MN={0:"LSB",1:"USB",2:"AM",3:"CW",4:"RTTY",5:"FM",7:"CW-R",8:"RTTY-R",23:"DV"}, cw=r.rmode===3||r.rmode===7;
+   $("qlinfo").textContent=`${(r.freq/1e6).toFixed(3)} MHz  ${MN[r.rmode]||"--"}  ${r.band||""}  ${r.model||""}`;
+   const qf=$("qlFreq");
+   if(!qlManual&&document.activeElement!==qf){const v=r.civ&&r.freq?(r.freq/1e6).toFixed(6):"";if(qf.value!==v)qf.value=v;}
+   qf.style.color=qlManual?"var(--txt)":"var(--amb)";
+   const lcw=qlMode?qlMode==="CW":cw, lssb=qlMode?qlMode==="SSB":(r.rmode===0||r.rmode===1)&&r.data!==1;
+   $("qlCw").classList.toggle("on",lcw);$("qlSsb").classList.toggle("on",lssb);
+   $("qlWpm").textContent=r.wpm>0?r.wpm+" wpm":"-- wpm";
+   const d=(qlMode?qlMode==="CW":cw||r.rmode===4||r.rmode===8)?"599":"59";$("qlRs").placeholder=$("qlRr").placeholder=d;}
+  if(S.cfg){const h=[1,2,3,4,5,6].map(i=>S.cfg["macro"+i]||"").join("\n");
+    if(h!==render.mac){render.mac=h;$("qlMacros").innerHTML=h.split("\n").map((m,i)=>`<button data-macro="${i+1}" title="${esc(m.slice(m.indexOf("|")+1))}">${esc(m.split("|")[0])}</button>`).join("");}}
+  if(S.cfg) $("mycall").textContent=S.cfg.call?S.cfg.call+" "+S.cfg.grid:"Set your callsign in Settings";
+}
+
+async function poll(){
+  if(busy) return; busy=true;
+  try{
+    if(demo){S=demoState();}
+    else{
+      const t0=performance.now();
+      const r=await fetch(`/api/state?since=${since}&psk=${pskSince}&cfg=${cfgLoaded&&render.call!==undefined?0:1}`);
+      S=await r.json();
+      lastRtt=performance.now()-t0;
+    }
+    render();
+  }catch(e){$("dUsb").className=$("dCiv").className=$("dAud").className="dot";$("clock").textContent="device not responding";}
+  busy=false;
+}
+// The device has no clock of its own on a hotspot: hand it this browser's UTC, corrected for latency.
+function syncTime(){ if(!demo) fetch("/api/cmd",{method:"POST",body:new URLSearchParams({c:"time",ms:Math.round(Date.now()+lastRtt/2)})}).catch(()=>{}); }
+
+// waterfall
+const wf=$("wf"), ctx=wf.getContext("2d");
+function color(v){ // 0..1 -> black, blue, cyan, yellow, white
+  const s=[[0,0,0],[10,20,110],[20,150,190],[240,220,60],[255,255,255]], x=Math.max(0,Math.min(.999,v))*4, i=x|0, f=x-i;
+  return s[i].map((c,k)=>c+(s[i+1][k]-c)*f);
+}
+function drawSpec(hex){
+  const img=ctx.getImageData(0,0,wf.width,wf.height-1);
+  ctx.putImageData(img,0,1);
+  const row=ctx.createImageData(wf.width,1), n=hex.length/2;
+  let vals=[],sorted;
+  for(let i=0;i<n;i++) vals.push(parseInt(hex.substr(i*2,2),16));
+  sorted=vals.slice().sort((a,b)=>a-b);
+  const floor=sorted[n>>2];                        // auto level: quartile = noise floor
+  for(let x=0;x<wf.width;x++){
+    const c=color((vals[Math.floor(x*n/wf.width)]-floor+4)/70);
+    row.data.set([c[0],c[1],c[2],255],x*4);
+  }
+  ctx.putImageData(row,0,0);
+  if(S){const f=S.mode==="PSK31"?S.psk.f:S.tx.freq, x=f/3000*wf.width, w=S.mode==="PSK31"?31:(S.mode==="FT4"?83:50);
+    ctx.fillStyle="#ff5b5b";ctx.fillRect(x,0,Math.max(1,w/3000*wf.width),3);}
+}
+async function pollSpec(){
+  try{
+    if(demo){let h="";for(let i=0;i<256;i++){let v=70+Math.random()*14;if(i>12&&i<240&&((i*7)%41<3))v+=40*Math.random();h+=("0"+(v|0).toString(16)).slice(-2);}drawSpec(h);return;}
+    const j=await (await fetch("/api/spec")).json();
+    if(j.seq!==specSeq){specSeq=j.seq;drawSpec(j.d);}
+  }catch(e){}
+}
+wf.addEventListener("click",e=>{
+  const r=wf.getBoundingClientRect(), hz=Math.round((e.clientX-r.left)/r.width*3000/10)*10;
+  if(hz<200||hz>2900) return;
+  cmd(S&&S.mode==="PSK31"?"pskfreq":"txfreq",{hz});
+});
+
+// controls
+document.querySelector("nav").addEventListener("click",e=>{
+  const t=e.target.dataset.tab; if(!t) return;
+  document.querySelectorAll("nav button").forEach(b=>b.className=b.dataset.tab===t?"on":"");
+  ["op","qlog","log","set"].forEach(x=>$("tab-"+x).classList.toggle("hide",x!==t));
+});
+document.body.addEventListener("click",e=>{
+  const b=e.target.closest("button,tr"); if(!b) return; const d=b.dataset;
+  if(d.mode){cmd("mode",{m:d.mode});document.querySelector("#act tbody").innerHTML="";}
+  else if(d.band) cmd("band",{hz:Math.round(BANDS[S.mode][d.band]*1e6)});
+  else if(d.op!==undefined) cmd("op",{v:d.op});
+  else if(d.par!==undefined) cmd("parity",{v:d.par});
+  else if(d.msg) cmd("txmsg",{n:d.msg});
+  else if(d.trim) cmd("trim",{ms:d.trim});
+  else if(d.id) cmd("call",{id:d.id});
+  else if(d.mac){
+    const me=S.cfg_call||"", dx=$("pskcall").value.toUpperCase();
+    const t={cq:`CQ CQ CQ de ${me} ${me} ${me} pse k\n`,call:`${dx} ${dx} de ${me} ${me} k\n`,rst:`${dx} de ${me} ur ${$("pskrs").value} ${$("pskrs").value} name is OP btu ${dx} de ${me} k\n`,"73":`${dx} de ${me} tnx QSO 73 sk\n`}[d.mac];
+    $("psktxt").value=t.replace(/\n/g," ");
+  }
+});
+$("txen").onclick=()=>cmd("txen",{v:S&&S.tx.en?0:1});
+$("halt").onclick=()=>cmd("halt");
+$("tune").onclick=()=>cmd("tune",{v:S&&S.tx.tune?0:1});
+$("cq").onclick=()=>cmd("cq");
+$("dxclr").onclick=()=>cmd("clear");
+$("dxset").onclick=()=>cmd("dx",{call:$("dxcall").value,grid:$("dxgrid").value}).then(j=>{if(j.ok)cmd("txmsg",{n:1});});
+$("freeb").onclick=()=>cmd("free",{text:$("free").value});
+$("txf").onchange=()=>cmd(S&&S.mode==="PSK31"?"pskfreq":"txfreq",{hz:$("txf").value});
+$("setdial").onclick=()=>{const m=parseFloat($("dial").value);if(m>0)cmd("freq",{hz:Math.round(m*1e6)});};
+$("psksend").onclick=()=>{const t=$("psktxt").value;if(t)cmd("psktx",{text:t+"\n"}).then(j=>{if(j.ok)$("psktxt").value="";});};
+$("psktxt").onkeydown=e=>{if(e.key==="Enter")$("psksend").click();};
+$("pskclr").onclick=()=>$("pskrx").textContent="";
+$("psklog").onclick=()=>cmd("logqso",{call:$("pskcall").value,rs:$("pskrs").value,rr:$("pskrr").value}).then(j=>{if(j.ok)banner("Logged "+$("pskcall").value.toUpperCase());});
+$("clrlog").onclick=()=>{if(confirm("Clear the current log? Its contacts stay in the archive."))cmd("clearlog",{confirm:"yes"});};
+$("eraseall").onclick=()=>{if(confirm("Erase the archive AND the current log from the device? Every stored contact and the worked-before list will be gone. This cannot be undone.")&&confirm("Really erase everything?"))cmd("eraselogs",{confirm:"yes"});};
+// SSB / CW logger
+// Frequency and mode follow the radio until the operator types a frequency or picks SSB / CW.
+var qlManual=false, qlMode="";
+$("qlFreq").oninput=()=>{qlManual=true;};
+function qlTypedHz(){const t=$("qlFreq").value.trim();if(!t)return 0;const n=parseFloat(t);return t.includes(".")?n*1e6:n<2000?n*1e6:n<2e6?n*1e3:n;}
+$("qlSsb").onclick=()=>{qlMode="SSB";render();if(!S||!S.radio.civ)return;const f=qlManual&&qlTypedHz()||S.radio.freq, lsb=f<10e6&&!(f>=5e6&&f<5.6e6);cmd("rmode",{m:lsb?"00":"01",fil:1});};
+$("qlCw").onclick=()=>{qlMode="CW";render();if(S&&S.radio.civ)cmd("rmode",{m:"03",fil:1});};
+document.querySelectorAll("[data-wpm]").forEach(b=>b.onclick=()=>{const w=(S&&S.radio.wpm>0?S.radio.wpm:20)+(+b.dataset.wpm);cmd("cwspeed",{wpm:w});});
+$("qlStop").onclick=()=>cmd("cwstop");
+$("qlMacros").onclick=e=>{const b=e.target.closest("[data-macro]");if(b)cmd("macro",{n:b.dataset.macro,call:$("qlCall").value,rs:$("qlRs").value||"599"});};
+function qlSend(){const t=$("qlText").value.trim();if(t)cmd("cwsend",{text:t}).then(j=>{if(j.ok)$("qlText").value="";});}
+$("qlSend").onclick=qlSend;$("qlText").onkeydown=e=>{if(e.key==="Enter")qlSend();};
+function qlLog(){cmd("logqso",{call:$("qlCall").value,mode:qlMode||"AUTO",freq:qlManual||!(S&&S.radio.civ)?$("qlFreq").value:"",rs:$("qlRs").value,rr:$("qlRr").value,name:$("qlName").value,comment:$("qlNote").value}).then(j=>{
+  if(!j.ok)return;banner("Logged "+$("qlCall").value.toUpperCase());["qlCall","qlRs","qlRr","qlName","qlNote"].forEach(id=>$(id).value="");$("qlDupe").textContent="";qlManual=false;qlMode="";render();$("qlCall").focus();});}
+$("qlLog").onclick=qlLog;
+["qlCall","qlRs","qlRr","qlName","qlNote"].forEach(id=>$(id).onkeydown=e=>{if(e.key==="Enter")qlLog();});
+$("qlCall").oninput=()=>{const c=$("qlCall").value.trim().toUpperCase();$("qlDupe").textContent=c.length>2&&S&&S.log.last.some(l=>l.call===c&&l.band===S.radio.band)?"Worked before on this band (current log)":"";};
+$("reboot").onclick=()=>{if(confirm("Restart the device now?"))cmd("reboot");};
+$("save").onclick=async()=>{
+  const a={};
+  document.querySelectorAll("#form input,#form select").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=e.value;});
+  const j=await cmd("set",a);
+  if(j.ok){$("saveinfo").textContent=j.restart?"Saved. Restart the device to apply the Wi-Fi changes.":"Saved.";cfgLoaded=false;render.call=undefined;}
+};
+
+function demoState(){
+  const now=Date.now(), t=now%15000, slot=Math.floor(now/15000);
+  const d=[]; if(demoState.s!==slot&&t>13600){demoState.s=slot;
+    [["CQ K1ABC FN42",-7,1012],["W9XYZ N0CALL -12",3,1540],["CQ DX VK2DEF QF56",-18,2210],["G4AAA EA3BB R-09",-11,640]].forEach((x,i)=>d.push({id:++demoState.id,t:slot*15000,p:slot&1,snr:x[1],dt:.1*i,f:x[2],m:x[0]}));}
+  return {utc:now,clk:{ok:true,src:"demo",age:1},mode:"FT8",op:1,radio:{ser:true,aud:true,civ:true,model:"IC-7100",freq:14074000,band:"20m",rmode:1,data:1,ptt:false,s:95,po:0,swr:0,alc:0,wpm:22},
+    slot:{len:15000,t,par:slot&1},tx:{en:false,on:false,msg:6,par:0,text:"",last:"",freq:1500,lvl:50,tune:false,wd:false},
+    qso:{dx:"",grid:"",rs:-99,rr:-99,try:0,m:["","","","","","CQ W9XYZ EN37",""]},lvl:-22,dec:d,decId:demoState.id,decMs:640,
+    psk:{seq:0,f:1000,afc:1000,q:20,text:""},log:{n:0,all:0,behind:false,ok:0,fail:0,last:[]},msg:"",net:"Preview mode: open this page from the device to control the radio",cfg:{call:"W9XYZ",grid:"EN37",txLevel:"50",macro1:"CQ|CQ CQ DE {MYCALL} {MYCALL} K",macro2:"His call|{CALL}",macro3:"Report|{CALL} UR {RST} {RST} BK",macro4:"TU 73|TU 73 DE {MYCALL} E E",macro5:"My call|{MYCALL}",macro6:"AGN?|AGN?"}};
+}
+demoState.id=0;
+poll(); setInterval(poll,700); setInterval(pollSpec,300); setTimeout(syncTime,1500); setInterval(syncTime,20000);
+</script>
+</body>
+</html>

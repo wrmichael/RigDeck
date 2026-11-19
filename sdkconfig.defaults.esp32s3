@@ -1,0 +1,3 @@
+# ESP32-S3 modules with 8 MB octal PSRAM (N8R8 / N16R8). For quad-PSRAM modules (N4R2) delete this line.
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y

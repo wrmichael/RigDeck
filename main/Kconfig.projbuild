@@ -1,0 +1,12 @@
+menu "IC-7100 FT8 controller"
+
+    config IC7100_DISPLAY
+        bool "On-device touch interface (Waveshare ESP32-P4-WIFI6-Touch-LCD-7B)"
+        depends on IDF_TARGET_ESP32P4
+        default y
+        help
+            Drives the board's 7 inch 1024x600 display and touch panel with an operating screen:
+            waterfall, band activity, transmit controls, mode and band selection. Turn this off
+            for ESP32-P4 boards without this display; the web interface is always available.
+
+endmenu

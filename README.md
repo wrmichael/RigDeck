@@ -1,0 +1,352 @@
+# RigDeck
+
+**An FT8 station, logger and control head in one small touch-screen box.**
+
+RigDeck is firmware for the Waveshare ESP32-P4 7-inch touch board. Plug it into your radio's USB
+port with one cable and it:
+
+- works **FT8 / FT4** contacts on its own (Auto CQ, Auto hunt) or by hand, with a live waterfall;
+- runs **FT-CW**, FT8-style automatic contacts sent as high-speed Morse, and **PSK31**;
+- logs **SSB / CW** contacts by hand, with CW macros sent through the radio's keyer;
+- acts as a **control head**: band, frequency, mode, filters, levels and DSP from the touch screen;
+- keeps an **ADIF log** on the board (current log + archive, downloadable), and can send each contact to
+  a logging program over the network (WSJT-X UDP, ADIF over TCP/UDP);
+- sets its clock from the radio's GPS, or from the browser;
+- creates its own **Wi-Fi hotspot** with a web page that mirrors everything, so a phone or laptop
+  can run it too.
+
+Radios: Icom **IC-7100** (tested on the air), Icom **IC-705**, Yaesu **FTX-1** and QRP Labs **QMX / QMX+**
+(tested against simulated radios so far; reports welcome).
+
+> RigDeck started life as "IC7100-FT8"; some internal names (the hotspot name, the build output) still
+> use that name and will be renamed in a coming release.
+
+## Status
+
+Running on a Waveshare ESP32-P4-WIFI6-Touch-LCD-7B with ESP-IDF 6.1 and an IC-7100: the hotspot,
+web page, CI-V control, USB audio in both directions and transmit have been confirmed on the air
+by the first user. Other boards (ESP32-S3 in particular) are still untested, and so are the
+IC-705, Yaesu FTX-1 and QRP Labs QMX drivers (tested against simulated radios only).
+
+Checked on a PC with `sh test/build.sh`: FT8/FT4 encode/decode loopback, two simulated stations
+completing contacts (also with a slow decoder and in FT4), PSK31 loopback, log management, and the
+web page's script. `sh test/ui_sim.sh` renders the touch interface on a PC and taps its controls.
+
+Things found on real hardware, already handled in this source:
+
+- The IC-7100's audio codec has a 1,191-byte USB configuration descriptor; the USB host default
+  limit is 256 (`CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE=4096`).
+- The radio's hub is a full-speed TI TUSB2046, so the ESP32-P4's high-speed port works with it
+  as is. (The firmware asks for full-speed-only mode and carries on if ESP-IDF refuses.)
+- The Waveshare board's ESP32-C6 ships with old esp-hosted firmware that streams several frames
+  per SDIO read without announcing it. `components/espressif__esp_hosted` is a copy of
+  esp_hosted 3.1.0 with a one-line patch for that (search for "IC7100-FT8 local patch").
+  Updating the C6 firmware would make the patch unnecessary.
+
+## Touch screen (Waveshare ESP32-P4-WIFI6-Touch-LCD-7B)
+
+On this board the firmware also drives the 7 inch display, so no phone is needed to operate:
+
+- Header: frequency, band/mode, signal and audio meters, link status, UTC clock.
+- Waterfall: tap to set your transmit audio frequency (red marker).
+- Band activity: tap a line to work that station. Blue = CQ, red = calling you, amber = your TX.
+- Enable TX / HALT TX, Manual / Auto CQ / Auto hunt (answer CQs), CQ, Tune, Clear, TX slot.
+- **Log: N** button: opens the logbook screen with the current log's contacts, the current and
+  archive counts, **Clear current log** and **Erase archive + log** (both ask first).
+- Bottom row: FT8/FT4 and band buttons.
+
+Callsign, grid, levels, network logging, PSK31 and the log downloads stay on the web page.
+Touching the screen counts as "operator present" for the TX watchdog, the same as an open web page.
+For ESP32-P4 boards without this display: `idf.py menuconfig` > IC-7100 FT8 controller > turn the
+touch interface off.
+
+## Hardware
+
+The IC-7100's USB-B socket is a USB hub with two CP210x serial bridges (one is CI-V) and a USB
+audio codec behind it. The board has to be a USB *host* that can drive a hub, a vendor serial chip
+and isochronous audio together. An Arduino Uno cannot (no USB host, no Wi-Fi, 2 kB RAM), and a
+classic ESP32 or a Heltec LoRa board cannot either (no USB host; Heltec V3 also has no PSRAM).
+
+| Board | Verdict |
+|---|---|
+| **ESP32-P4 board with on-board ESP32-C6 Wi-Fi and a USB-A host socket** (Espressif ESP32-P4-Function-EV-Board, Waveshare ESP32-P4-WIFI6 and similar) | **Recommended.** 16 USB host channels, lots of PSRAM, plug the radio straight into the USB-A socket. |
+| ESP32-S3 with PSRAM (e.g. ESP32-S3-DevKitC-1 N8R8 / N16R8) | Cheapest, experimental. The S3 has 8 USB host channels and this radio needs exactly 8 the way the firmware uses them (hub 2, three device control pipes 3, CI-V in/out 2, one audio stream 1). That is why receive and transmit audio are never open together. No margin. |
+
+ESP32-S3 wiring (USB-A socket breakout, then a normal A-to-B printer cable to the radio):
+
+| USB-A pin | ESP32-S3 |
+|---|---|
+| D- (white) | GPIO19 |
+| D+ (green) | GPIO20 |
+| VBUS (red) | 5V pin (the radio's hub looks for 5 V to know a host is there) |
+| GND (black) | GND |
+
+Power the board from its other USB port or a 5 V supply. A clip-on ferrite on the USB cable is
+cheap insurance against RF getting into the board.
+
+## IC-705
+
+The IC-705 connects with one micro-USB cable as well. It appears as a single USB device with
+two serial ports and audio (no hub), so it also fits within an ESP32-S3's USB limits. The
+firmware finds the CI-V port and the CI-V address (A4h) by itself; nothing needs changing in
+Settings when you swap radios. **Not yet tried on a real IC-705.**
+
+- Radio: SET > Connectors > MOD Input > **DATA MOD: USB**; USB AF/IF Output > Output Select **AF**.
+  Leave USB SEND/Keying OFF and the CI-V address at A4h.
+- GPS clock: the IC-705 has its own GPS. SET > Connectors > USB (B) Function >
+  **GPS Out: DATA -> USB (B)**, then on the web page turn on "Clock from radio's GPS".
+- Run the radio from its battery or a supply as usual; if the board should not charge or power
+  the radio over USB, check the radio's USB power input setting.
+
+## Yaesu FTX-1
+
+The FTX-1 connects with one USB-C cable. Inside it, as in the IC-7100, are a hub, a CP2105 dual
+serial bridge and an audio codec; the firmware probes the serial ports, recognises Yaesu CAT
+(`ID;` answered with four digits) and uses the first port (CAT-1). **Not yet tried on a real FTX-1.**
+
+- Radio menu: the **CAT-1 rate** must match "FTX-1 CAT-1 rate" in Settings (38400 by default).
+- FT8 etc. run in **DATA-U**, which the firmware selects. Set the radio's data-mode audio input to
+  USB and the USB audio levels as in any WSJT-X guide for the FTX-1.
+- RF power: the field head runs 1-10 W, the optima (SPA-1) 5-100 W; the percentage in Settings
+  is converted to watts for the head the radio reports.
+- Logger CW macros are sent with the radio's keyer (text written to keyer memory 1, then played,
+  50 characters at most). Break-in is turned on if it is off, otherwise only sidetone is heard.
+- The radio screen covers frequency, modes (including C4FM as "DV"), DATA, AF/RF/squelch/mic/
+  power, preamp (IPO/AMP1/AMP2 on HF), attenuator, noise blanker, DNR, auto notch, AGC,
+  speech processor and VOX. Filter buttons have no FTX-1 equivalent and are ignored.
+
+## QRP Labs QMX / QMX+
+
+The QMX appears as one USB device (STMicroelectronics VID 0483) with a CDC serial port and 24-bit
+48 kHz USB audio; the firmware speaks its Kenwood TS-480 style CAT and converts audio to and from
+24 bits. **Not yet tried on a real QMX.**
+
+- FT8 etc. use the QMX's **DIGI** mode (`MD6`), which the firmware selects.
+  Transmit is keyed with `TQ1`, and the QMX itself generates the RF from the audio tone.
+- The QMX has no CAT commands for power, gain or filters, so on the radio screen those buttons and
+  sliders have no effect. Frequency, band, mode
+  (LSB/USB/CW/DIGI), A/B and keyer speed work.
+- Logger CW macros use the QMX keyer (`KY`), sent in 24-character pieces.
+
+## SSB / CW logger and CW macros
+
+A screen (button **SSB/CW** on the operating screen) and a web tab (**SSB / CW log**) for contacts
+made by hand. Opening the screen turns automatic FT8 transmit off.
+
+- The **frequency** box (MHz) follows the radio. Type a frequency into it (14.250, or 14250 kHz) and
+  it stays as typed, shown in white instead of amber, until the contact is logged; then it follows
+  the radio again. With no radio connected, type the frequency.
+- **SSB** / **CW** choose the mode that is logged, whatever mode the radio is in, until the contact
+  is logged; then the mode follows the radio again. When a radio is connected they also switch it
+  (LSB below 10 MHz except 60 m, USB above), since the CW macros need the radio in CW.
+- Type the callsign, reports, name and a note, press **LOG**. SSB contacts get an LSB/USB submode. Empty reports are logged as
+  59 (voice) or 599 (CW). A callsign already worked on this band is flagged in red.
+- Six **macro** buttons send CW through the radio's own keyer (radio must be in CW mode); **Stop CW**
+  aborts. The keyer speed is shown and set with − / +. On the web page you can also type free text.
+- Macros are edited in Settings as `Label|text`. In the text, `{CALL}` is the callsign box,
+  `{RST}` the Sent box (9 is sent as N: 599 → 5NN), `{MYCALL}`, `{GRID}` (4 characters) and
+  `{REF}` (the park reference, MY_SIG_INFO) come from Settings. Defaults: CQ, His call, Report,
+  TU 73, My call, AGN?.
+- "Keyer speed for the logger" in Settings is sent to the radio whenever it connects (0 leaves the
+  radio's own speed alone).
+- The NAME field is written to ADIF as NAME; the note as COMMENT.
+
+## Settings on the touch screen
+
+The gear button at the top right of the operating screen opens **Settings**: everything on the web
+page's Settings tab, in six tabs (Station, Operating, Radio, CW, Logging, Wi-Fi). Tap a box to type
+(a keyboard rises from the bottom; ✓ or ✕ puts it away), choose from lists, then press **Save**.
+Invalid values are refused with the field named on the status line. Password boxes stay empty: leave
+them empty to keep the current password. **Restart** restarts the controller (needed after Wi-Fi,
+baud-rate and GPS changes). CW macros have a label box (the button name) and a text box.
+
+## Choosing the radio
+
+Settings > Radio is **Find automatically** by default: every serial port on the USB bus is tried as
+Icom CI-V (configured address, 88h, A4h), as Yaesu CAT and as QMX CAT, and the first that answers
+is used. You can swap radios without changing anything. Pick a specific radio there only if the
+search ever settles on the wrong one. The GPS clock option works with the Icoms only.
+
+## Radio settings (SET > Connectors)
+
+- **DATA MOD: USB** (default is ACC; without this the radio transmits silence)
+- **USB MOD Level:** start around 20 %
+- **USB AF Level:** around 50 %; if your firmware has **ACC/USB Output Select**, set it to AF
+- **CI-V address 88h**, CI-V baud 19200 or Auto (both are the firmware's defaults; changeable in Settings)
+- USB SEND / USB keying: OFF (PTT is done with a CI-V command, the serial control lines are held idle)
+
+The firmware puts the radio in USB-D (USB with DATA mode on) whenever you pick a band.
+
+## Build and flash
+
+Built and tested with **ESP-IDF 6.1** (5.5.3 or newer should work; the USB hub support comes from
+Espressif's `usb` component 1.6+, fetched automatically on first build). A ready-to-flash .bin and a
+browser flasher are planned, so you will not need to build it yourself.
+
+```
+idf.py set-target esp32p4
+idf.py build
+idf.py -p PORT flash monitor
+```
+
+On Windows with Espressif's EIM installer, `start.bat` opens a PowerShell with ESP-IDF 6.1 ready
+(edit the path inside if your install differs).
+
+- ESP32-P4: Wi-Fi runs on the board's ESP32-C6 via `esp_hosted`. Its default pins match
+  Espressif's Function-EV board; for other boards check `idf.py menuconfig` > ESP-Hosted. The C6
+  must carry esp-hosted slave firmware (boards normally ship with it).
+- ESP32-S3 with quad PSRAM (N4R2 etc.): delete the `CONFIG_SPIRAM_MODE_OCT` line in
+  `sdkconfig.defaults.esp32s3`.
+- Flash size is set to 8 MB in `sdkconfig.defaults`.
+
+## Using it
+
+1. Join the hotspot **IC7100-FT8**, password **ft8ft8ft8**, and open **http://192.168.4.1**.
+2. Settings tab: enter callsign and grid, change the hotspot password, Save. It refuses to
+   transmit until callsign and grid are set.
+3. Header dots: USB (serial port found), CI-V (radio answering), Audio (codec open), Clock.
+4. **Clock.** FT8 needs UTC within a few tenths of a second and the board has no clock. On the
+   hotspot it copies your phone's or laptop's clock whenever the page is open, so the device is
+   only as accurate as that. If you also give it your home Wi-Fi (Settings > "Also join"), it uses
+   NTP instead. If every decode shows the same DT offset, nudge with the trim buttons.
+5. **Levels.** Receive: the "Audio in" meter should sit roughly -30 to -10 dBFS on band noise
+   (adjust USB AF Level). Transmit: press **Tune** (10 s carrier, into a dummy load) and raise
+   "TX audio level" / USB MOD Level until power stops rising, then back off so ALC stays near zero.
+6. Pick a mode and band. Decodes appear at the end of each 15 s slot.
+   - **Manual:** tap a decode to call that station (this enables TX); the sequence then advances
+     by itself and TX switches off after 73. Tx1-Tx6 buttons override the next message.
+   - **Auto CQ:** press Enable TX; it calls CQ, works whoever answers (strongest first), logs,
+     and calls CQ again.
+   - **Auto answer CQs:** it calls the strongest plain CQ it has not worked on this band, works
+     it, logs, and looks for the next. Directed CQs (CQ DX, CQ POTA...) are left to you.
+   - **Halt TX** unkeys immediately in every mode.
+7. PSK31: click the waterfall on a signal, read the text, type and Send. Log with the form.
+
+Safeguards: transmitter forced off if a transmission overruns its slot or the USB link drops;
+automatic transmission stops after 6 minutes (configurable) with no browser connected; a QSO
+attempt is dropped after 5 unanswered repeats. You are still the control operator: stay with it,
+and check what your licence allows for automatic operation.
+
+## FT-CW: FT8-style contacts in Morse code
+
+An experimental mode of this project's own (nothing else on the air speaks it, so it needs two
+of these controllers). Select **CW** on the touch screen or **FT-CW** on the web page.
+
+- Works exactly like FT8 from the operator's side: 15 s slots, even/odd, the same messages
+  (CQ, grid, dB report, R+report, RR73, 73), Manual / Auto CQ / Auto hunt, tap a decode to call.
+- On the air it is machine-timed Morse on an audio tone, radio in USB-D like FT8: for example
+  `CQ AC9HP EM69 7Q`. The last two characters are a check group; a copy that does not match it
+  (or does not read as a standard message) is discarded, and the decoder uses it to repair one or
+  two marginal dots. Reports are in dB like FT8. Contacts are logged with MODE CW.
+- The decoder is a matched filter for the dot length, run on every audio frequency at once, so
+  several stations 100 Hz or more apart are decoded in the same slot.
+- **Speed** (Settings > "FT-CW speed", default 40 wpm) must be the same at both stations.
+  20 to 50 wpm; the longest standard messages need 35 wpm or more to fit a slot, and the
+  firmware refuses to send a message that will not fit.
+- Sensitivity in simulation: about -5 dB (2500 Hz reference) at 40 wpm, -7 dB at 30 wpm.
+  That is roughly 15 dB less sensitive than FT8: it needs signals you could copy by ear.
+- The band buttons use dial frequencies picked to stay clear of the FT8/FT4 channels
+  (1.835, 3.565, 7.065, 10.125, 14.065, 18.095, 21.065, 24.910, 28.065, 50.095, 144.065 MHz,
+  signal about 1.5 kHz higher). These are only a starting point: tune anywhere you both agree
+  on with the Radio screen, and check they suit your licence and band plan.
+
+## Radio screen (control head)
+
+**Radio** on the operating screen opens a front panel for the transceiver:
+
+- Frequency: step up/down (10 Hz to 1 MHz steps, hold to repeat), band buttons (160 m to 70 cm),
+  or tap **Enter** / the frequency for a keypad (MHz with a point, kHz without).
+- Mode: LSB, USB, CW, AM, FM, RTTY, DV, the DATA switch and filter 1/2/3; VFO A/B exchange.
+- ATT, preamp (off/1/2), noise blanker, noise reduction, auto notch, AGC (fast/mid/slow),
+  speech compressor, VOX.
+- Sliders: AF gain, RF gain, squelch, RF power, mic gain, NR level.
+- Signal meter, and power / ALC while transmitting.
+
+The values are read back from the radio, so the screen follows the radio's own knobs. A control
+shows "--" or stays grey if the radio does not report it. Changing mode here switches automatic
+transmitting off; tapping a band on the operating screen puts the radio back in USB-D. The same
+commands serve the IC-7100 and IC-705 (the attenuator is 12 dB on one and 20 dB on the other).
+
+## Clock from a GPS on the radio
+
+The IC-7100 has no GPS of its own, but if you have a GPS receiver on its DATA1 jack (as used
+for D-STAR), the radio can pass the GPS sentences to its second USB serial port and the firmware
+sets its clock from them:
+
+- Radio: SET > Connectors > USB2/DATA1 Function > **GPS Out: DATA1 -> USB2**, and note the
+  **DVdat/GPS Out Baud** (4800 or 9600). In the GPS set mode, make sure the **RMC** or **ZDA**
+  sentence is switched on (the default GGA alone carries no date).
+- Web page, Settings: **Clock from radio's GPS: On**, GPS Out baud to match, Save, restart.
+- The Clock dot then shows "gps". GPS receivers send their sentence a little after the second;
+  "GPS sentence delay" (default 150 ms) allows for that. If decodes show a steady DT offset,
+  lower the delay when DT is mostly negative and raise it when mostly positive.
+
+This opens a second serial port, which an ESP32-S3 has no spare USB channels for; it is meant
+for the ESP32-P4.
+
+## Logging
+
+- On the board, every contact is written to two ADIF files:
+  - the **current log** (`/log.adi`), which you download and then clear from the Log tab;
+  - the **archive** (`/archive.adi`), which keeps every contact and is not touched by clearing.
+  Typical use: download the current log into your logging program, press "Clear current log",
+  and the next download holds only new contacts. "Download full archive" gives you everything.
+  "Erase archive and current log" (asks twice) is the only thing that deletes the archive.
+  Worked-before (per band) is rebuilt from both files at boot, so clearing does not reset it.
+  Storage is about 2 MB, roughly 3,000 contacts across both files.
+- Optional ADIF fields, set on the Settings tab and written to every contact from then on:
+  **OPERATOR** (operator callsign), **MY_SIG_INFO** (for example a park or event reference such
+  as US-1234) and, optionally, **MY_SIG** (the programme name, e.g. WWFF; blank by default).
+  Empty fields are left out of the log.
+- Network (Settings > "Send log to"), one message per finished QSO, retried if the logger is unreachable:
+  - **UDP, WSJT-X format**: the WSJT-X "Logged ADIF" datagram, default port 2237. Use this for
+    programs that listen for WSJT-X (GridTracker, JTAlert, Log4OM and others).
+  - **UDP, ADIF text** or **TCP, ADIF text**: the bare ADIF record (TCP adds CR LF).
+  The logging PC must be reachable: either joined to the hotspot, or on the network the board joined.
+
+## How it fits together
+
+```
+main/            ESP-IDF glue (the only target-specific code)
+  ui.cpp         touch interface (LVGL 9), also built on a PC by test/ui_sim.sh
+  display.c      starts LCD + touch through Waveshare's board support package
+  usb_radio.cpp  USB host: finds the CI-V serial port by probing, opens the codec, audio task
+  net.cpp        hotspot (+ optional client), NTP
+  web.cpp        HTTP server: page, /api/state, /api/spec, /api/cmd, /log.adi
+  web/index.html the control page (no external resources; opened as a file it shows a demo)
+components/core/ portable C++, also built and tested on a PC
+  app.*          slot timing, receive/transmit hand-off, commands, state JSON, logging
+  qso.*          message parsing and the QSO sequencer
+  ftx.*  dsp.*   decoder wrapper + SNR estimate, GFSK synthesiser, decimator, waterfall spectrum
+  civ.*          CI-V framing and IC-7100 control (frequency, USB-D, PTT, meters)
+  cwx.*          FT-CW: Morse framing, keyed-tone synthesiser, multi-frequency decoder
+  nmea.*         GPS time sentences
+  psk31.*        BPSK31 modem      adif.* netlog.*  log formats and network senders
+components/ft8_lib/  vendored github.com/kgoba/ft8_lib (MIT) incl. KISS FFT (BSD-3-Clause)
+test/            host tests: sh test/build.sh
+```
+
+Audio runs at 48 kHz 16-bit over USB, decimated to 12 kHz for decoding. Decoding starts 13.6 s
+into the slot (6.0 s for FT4) so the reply is ready for the next slot; if the decoder runs past
+the boundary the transmission starts late, part-way through the message, up to 2 s in (FT8).
+The page shows the decode time. If it is regularly above ~1400 ms on your board, lower
+`maxCandidates` in `FtxMonitor::decode` (ftx.h).
+
+## Known limits
+
+- SNR reports are an estimate from the waterfall (within about 1 dB of the simulated truth for
+  FT8 in the tests, but not WSJT-X's algorithm).
+- The decoder is ft8_lib's single-pass decoder: no signal subtraction or a-priori decoding, so it
+  finds fewer weak signals than WSJT-X on a crowded band.
+- Standard messages only in the sequencer; contest and DXpedition exchanges are displayed, not worked.
+- PSK31 is keyboard-to-keyboard with manual logging; one over is sent per Send.
+- FTX-1 and QMX command formats come from their CAT manuals; USB IDs and audio formats from
+  published descriptions. Real radios may differ in details (the probe log in the monitor output
+  will show what was found).
+- The web page has no login of its own; the hotspot password is the access control.
+- Settings and log live on SPIFFS; the log file is rewritten by append only.
+
+## Licence
+
+RigDeck's own code: MIT licence, see [LICENSE](LICENSE). Bundled third-party code keeps its own licence;
+see [THIRD_PARTY.md](THIRD_PARTY.md).

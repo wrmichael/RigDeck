@@ -1,0 +1,299 @@
+#include "civ.h"
+#include "clock.h"
+#include <cstring>
+#include <cstdio>
+#include <cctype>
+
+std::vector<uint8_t> civBuild(uint8_t to, uint8_t from, uint8_t cmd, const std::vector<uint8_t>& data) {
+    std::vector<uint8_t> f = {0xFE, 0xFE, to, from, cmd};
+    f.insert(f.end(), data.begin(), data.end());
+    f.push_back(0xFD);
+    return f;
+}
+
+void civFreqToBcd(uint64_t hz, uint8_t out[5]) {
+    for (int i = 0; i < 5; i++) {          // least significant pair first: 10Hz/1Hz, 1kHz/100Hz, ...
+        unsigned v = (unsigned)(hz % 100);
+        out[i] = (uint8_t)(((v / 10) << 4) | (v % 10));
+        hz /= 100;
+    }
+}
+
+uint64_t civBcdToFreq(const uint8_t* b, size_t n) {
+    uint64_t f = 0, mult = 1;
+    for (size_t i = 0; i < n; i++) {
+        f += (uint64_t)((b[i] >> 4) * 10 + (b[i] & 0x0F)) * mult;
+        mult *= 100;
+    }
+    return f;
+}
+
+const char* civModelName(uint8_t a) {
+    switch (a) {
+    case 0x88: return "IC-7100";
+    case 0xA4: return "IC-705";
+    default: return "Icom";
+    }
+}
+
+int civBcdToInt(const uint8_t* b, size_t n) {
+    int v = 0;
+    for (size_t i = 0; i < n; i++) v = v * 100 + (b[i] >> 4) * 10 + (b[i] & 0x0F);
+    return v;
+}
+
+bool CivParser::feed(uint8_t byte, CivFrame& out) {
+    if (!in_) {
+        if (byte == 0xFE) { if (++pre_ >= 2) { in_ = true; buf_.clear(); pre_ = 0; } }
+        else pre_ = 0;
+        return false;
+    }
+    if (byte == 0xFE && buf_.empty()) return false;        // extra preamble bytes
+    if (byte == 0xFC) { in_ = false; return false; }       // bus collision marker: drop the frame
+    if (byte != 0xFD) {
+        if (buf_.size() > 64) { in_ = false; return false; }
+        buf_.push_back(byte);
+        return false;
+    }
+    in_ = false;
+    if (buf_.size() < 3) return false;
+    out.to = buf_[0]; out.from = buf_[1]; out.cmd = buf_[2];
+    out.data.assign(buf_.begin() + 3, buf_.end());
+    return true;
+}
+
+void Radio::send(uint8_t cmd, const std::vector<uint8_t>& data, bool front) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    auto f = civBuild(addr, CTRL, cmd, data);
+    if (front) q_.push_front(f);
+    else if (q_.size() < 24) q_.push_back(f);
+}
+
+void Radio::setFreq(uint64_t hz) {
+    if (isText()) return tSetFreq(hz);
+    uint8_t b[5];
+    civFreqToBcd(hz, b);
+    send(0x05, std::vector<uint8_t>(b, b + 5));
+    send(0x03, {});
+}
+
+void Radio::setUsbData() {
+    if (isText()) return tSetUsbData();
+    send(0x06, {0x01, 0x01});              // USB, FIL1
+    send(0x1A, {0x06, 0x01, 0x01});        // DATA mode on, FIL1
+    send(0x04, {});
+    send(0x1A, {0x06});
+}
+
+void Radio::ptt(bool on) {
+    pttWanted = on;
+    if (proto == RP_YAESU) return sendText(on ? "TX1;" : "TX0;", true);
+    if (proto == RP_QMX) return sendText(on ? "TQ1;" : "TQ0;", true);
+    send(0x1C, {0x00, (uint8_t)(on ? 0x01 : 0x00)}, true);
+}
+
+void Radio::setRfPower(int percent) {
+    if (percent < 0) return;
+    if (percent > 100) percent = 100;
+    if (isText()) return tSetRfPower(percent);
+    int v = percent * 255 / 100;
+    send(0x14, {0x0A, (uint8_t)(((v / 1000) << 4) | ((v / 100) % 10)), (uint8_t)((((v / 10) % 10) << 4) | (v % 10))});
+}
+
+void Radio::requestId() { if (isText()) sendText("ID;"); else send(0x19, {0x00}); }
+
+Radio::Radio() {
+    for (auto& l : level) l = -1;
+    for (auto& f : func) f = -1;
+}
+
+static std::vector<uint8_t> bcd255(int percent) {     // 0..100 % -> 0000..0255 as two BCD bytes
+    if (percent < 0) percent = 0;
+    if (percent > 100) percent = 100;
+    int v = (percent * 255 + 50) / 100;
+    return {(uint8_t)(((v / 1000) << 4) | ((v / 100) % 10)), (uint8_t)((((v / 10) % 10) << 4) | (v % 10))};
+}
+
+void Radio::setMode(uint8_t m, uint8_t fil) {
+    if (isText()) return tSetMode(m);
+    send(0x06, {m, (uint8_t)(fil < 1 || fil > 3 ? 1 : fil)});
+    send(0x04, {});
+    send(0x1A, {0x06});
+}
+
+void Radio::setData(bool on) {
+    if (isText()) return tSetData(on);
+    int fil = filter.load();
+    send(0x1A, {0x06, (uint8_t)(on ? 1 : 0), (uint8_t)(on ? (fil >= 1 && fil <= 3 ? fil : 1) : 0)});
+    send(0x1A, {0x06});
+}
+
+void Radio::setLevel(uint8_t sub, int percent) {
+    if (isText()) return tSetLevel(sub, percent);
+    auto v = bcd255(percent);
+    send(0x14, {sub, v[0], v[1]});
+    send(0x14, {sub});
+}
+
+void Radio::setFunc(uint8_t sub, uint8_t value) {
+    if (isText()) return tSetFunc(sub, value);
+    send(0x16, {sub, value});
+    send(0x16, {sub});
+}
+
+void Radio::setAtt(uint8_t bcdDb) {
+    if (isText()) return tSetAtt(bcdDb != 0);
+    send(0x11, {bcdDb});
+    send(0x11, {});
+}
+
+void Radio::vfo(uint8_t sub) {
+    if (isText()) return tVfo(sub);
+    send(0x07, {sub});
+    send(0x03, {});
+    send(0x04, {});
+}
+
+bool Radio::connected() const { return clk::monoMs() - lastRxMono.load() < 3000; }
+
+void Radio::poll() {
+    int64_t now = clk::monoMs();
+    std::vector<uint8_t> out;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (now - lastSend_ < 40) return;                  // give the radio time to answer
+        if (q_.empty() && now - lastPoll_ >= 200 && isText()) {
+            lastPoll_ = now;
+            textPoll();
+        } else if (q_.empty() && now - lastPoll_ >= 200) {
+            lastPoll_ = now;
+            static const uint8_t rxPoll[][2] = {{0x03, 0xFF}, {0x15, 0x02}, {0x04, 0xFF}, {0x15, 0x02}, {0x1A, 0x06}, {0x1C, 0x00}, {0x16, 0x47}};
+            static const uint8_t txPoll[][2] = {{0x15, 0x11}, {0x15, 0x13}, {0x15, 0x12}, {0x1C, 0x00}};
+            const uint8_t* p = pttWanted ? txPoll[pollStep_ % 4] : rxPoll[pollStep_ % 7];
+            pollStep_++;
+            std::vector<uint8_t> d;
+            if (p[1] != 0xFF) d.push_back(p[1]);
+            q_.push_back(civBuild(addr, CTRL, p[0], d));
+            if (extPoll && !pttWanted && (pollStep_ & 1)) {       // every other poll, one front-panel setting
+                static const uint8_t ext[][2] = {{0x14, 0x01}, {0x14, 0x02}, {0x14, 0x03}, {0x14, 0x0A}, {0x14, 0x0B}, {0x14, 0x06},
+                                                 {0x16, 0x02}, {0x16, 0x12}, {0x16, 0x22}, {0x16, 0x40}, {0x16, 0x41}, {0x16, 0x44},
+                                                 {0x16, 0x46}, {0x11, 0xFF}, {0x14, 0x0C}, {0x16, 0x47}};
+                const uint8_t* e = ext[extStep_++ % 16];
+                std::vector<uint8_t> ed;
+                if (e[1] != 0xFF) ed.push_back(e[1]);
+                q_.push_back(civBuild(addr, CTRL, e[0], ed));
+            }
+        }
+        if (q_.empty()) return;
+        out = q_.front();
+        q_.pop_front();
+        lastSend_ = now;
+    }
+    if (write) write(out.data(), out.size());
+}
+
+void Radio::onRx(const uint8_t* d, size_t n) {
+    if (isText()) { for (size_t i = 0; i < n; i++) textRx((char)d[i]); return; }
+    for (size_t i = 0; i < n; i++) {
+        CivFrame f;
+        bool got;
+        {
+            std::lock_guard<std::mutex> lk(mtx_);
+            got = parser_.feed(d[i], f);
+        }
+        if (got) handle(f);
+    }
+}
+
+void Radio::handle(const CivFrame& f) {
+    if (f.from != addr) return;                            // includes the echo of our own commands
+    if (f.to != CTRL && f.to != 0x00) return;              // 0x00 = "transceive" broadcast from the radio
+    lastRxMono = clk::monoMs();
+    const auto& d = f.data;
+    switch (f.cmd) {
+    case 0x00: case 0x03: if (d.size() >= 5) freq = civBcdToFreq(d.data(), 5); break;
+    case 0x01: case 0x04:
+        if (d.size() >= 1) mode = d[0];
+        if (d.size() >= 2) filter = d[1];
+        break;
+    case 0x14:
+        if (d.size() >= 3 && d[0] < 16) level[d[0]] = (civBcdToInt(d.data() + 1, 2) * 100 + 127) / 255;
+        if (d.size() >= 3 && d[0] == 0x0C) keySpeed = 6 + (civBcdToInt(d.data() + 1, 2) * 42 + 127) / 255;
+        break;
+    case 0x16: if (d.size() >= 2 && d[0] < 0x50) func[d[0]] = d[1]; break;
+    case 0x11: if (d.size() >= 1) att = (d[0] >> 4) * 10 + (d[0] & 0x0F); break;
+    case 0x1A: if (d.size() >= 2 && d[0] == 0x06) dataMode = d[1]; break;
+    case 0x1C: if (d.size() >= 2 && d[0] == 0x00) pttState = d[1] != 0; break;
+    case 0x15:
+        if (d.size() >= 3) {
+            int v = civBcdToInt(d.data() + 1, 2);
+            if (d[0] == 0x02) smeter = v;
+            else if (d[0] == 0x11) po = v;
+            else if (d[0] == 0x12) swr = v;
+            else if (d[0] == 0x13) alc = v;
+        }
+        break;
+    case 0xFA: ng++; break;
+    default: break;
+    }
+}
+
+// ---------------------------------------------------------------------------- CW keyer, model
+void Radio::setProto(int p) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    proto = p;
+    q_.clear();
+    line_.clear();
+    parser_ = CivParser();
+    pcHead_ = 0; yMode_ = 0; pollStep_ = 0; extStep_ = 0;
+    freq = 0; mode = -1; dataMode = -1; filter = -1; att = -1; keySpeed = -1;
+    smeter = 0; po = 0; swr = 0; alc = 0; pttState = false;
+    for (auto& l : level) l = -1;
+    for (auto& f : func) f = -1;
+}
+
+const char* Radio::modelName() const {
+    switch (proto.load()) {
+    case RP_YAESU: return pcHead_ == 2 ? "FTX-1 optima" : "FTX-1";
+    case RP_QMX: return "QMX";
+    default: return civModelName(addr);
+    }
+}
+
+size_t Radio::cwMax(int proto) { return proto == RP_YAESU ? 50 : proto == RP_QMX ? 72 : 90; }
+
+void Radio::sendCw(const std::string& text) {
+    std::string t;
+    for (char ch : text) {                              // what a keyer can send, upper case
+        ch = (char)toupper((unsigned char)ch);
+        if (isalnum((unsigned char)ch) || strchr(" /?.,=+-@", ch)) t += ch;
+    }
+    if (t.size() > cwMax(proto)) t.resize(cwMax(proto));
+    if (t.empty()) return;
+    if (isText()) return tSendCw(t);
+    if (func[0x47].load() == 0) send(0x16, {0x47, 0x01});          // semi break-in, or the radio only makes sidetone
+    for (size_t i = 0; i < t.size(); i += 30) {                    // command 17 takes up to 30 characters
+        std::string part = t.substr(i, 30);
+        send(0x17, std::vector<uint8_t>(part.begin(), part.end()));
+    }
+}
+
+void Radio::stopCw() {
+    if (proto == RP_YAESU) return sendText("KY00;", true);
+    if (proto == RP_QMX) return sendText("KY                         ;", true);   // 24 spaces after the separator stop the keyer
+    send(0x17, {0xFF}, true);
+}
+
+void Radio::setKeySpeed(int wpm) {
+    if (wpm < 6) wpm = 6;
+    if (wpm > 48) wpm = 48;
+    char b[16];
+    if (proto == RP_YAESU) { snprintf(b, sizeof b, "KS%03d;", wpm); sendText(b); sendText("KS;"); }
+    else if (proto == RP_QMX) { snprintf(b, sizeof b, "KS%d;", wpm); sendText(b); sendText("KS;"); }
+    else {
+        int v = ((wpm - 6) * 255 + 21) / 42;
+        send(0x14, {0x0C, (uint8_t)(((v / 1000) << 4) | ((v / 100) % 10)), (uint8_t)((((v / 10) % 10) << 4) | (v % 10))});
+        send(0x14, {0x0C});
+    }
+    keySpeed = wpm;
+}

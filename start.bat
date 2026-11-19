@@ -1,0 +1,1 @@
+powershell -NoExit -ExecutionPolicy Bypass -Command ". 'C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1'"
