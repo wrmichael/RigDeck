@@ -85,6 +85,7 @@ public:
     std::atomic<bool> usbSerial{false}, usbAudio{false};
     std::atomic<bool> rebootReq{false};
     std::atomic<bool> ntpSynced{false};
+    std::string fwVersion = "dev";                  // set by the platform (version.txt on the ESP32)
     bool (*haveRam)(size_t bytes) = nullptr;         // platform check before the big decoder allocations
     std::atomic<bool> memFail{false};
     void setNetInfo(const std::string& s);

@@ -12,7 +12,7 @@ struct Settings {
     std::string op;                      // ADIF OPERATOR: who is at the key, if different from the station callsign
     std::string mySig;                   // ADIF MY_SIG: the programme the reference below belongs to (optional, e.g. WWFF)
     std::string mySigInfo;               // ADIF MY_SIG_INFO: e.g. a park reference such as US-1234 (empty = not logged)
-    std::string apSsid = "IC7100-FT8";
+    std::string apSsid = "RigDeck";
     std::string apPass = "ft8ft8ft8";    // WPA2 needs >= 8 chars; change it in the Settings tab
     std::string staSsid;                 // optional: also join an existing network
     std::string staPass;

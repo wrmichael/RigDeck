@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RigDeck Flasher</title>
+<meta name="description" content="Install or update RigDeck firmware on the Waveshare ESP32-P4 7-inch touch board from your browser.">
+<!-- ESP Web Tools: the browser flasher used by ESPHome. Major version pinned as its documentation recommends. -->
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+<style>
+:root{--bg:#0d1317;--pan:#151e25;--pan2:#1c2831;--line:#2a3944;--amb:#f6b93b;--ok:#3fcf8e;--bad:#ff6b6b;--txt:#e6edf1;--dim:#9fb0bb;
+--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:18px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:28px 16px 60px}
+h1{font-size:44px;line-height:1.1;margin:0;color:var(--amb);letter-spacing:.5px}
+.tag{font-size:20px;color:var(--dim);margin:6px 0 26px}
+h2{font-size:24px;margin:34px 0 12px}
+.card{background:var(--pan);border:1px solid var(--line);border-radius:12px;padding:22px 22px 18px}
+.ver{font:600 18px var(--mono);color:var(--dim)}
+.ver b{color:var(--txt)}
+ol{padding-left:1.4em;margin:12px 0 0}
+li{margin:10px 0}
+li b{color:#fff}
+.btn{display:inline-block;background:var(--amb);color:#1a1300;border:0;border-radius:10px;padding:16px 30px;font:700 22px system-ui,sans-serif;cursor:pointer;text-decoration:none}
+.btn:hover{filter:brightness(1.08)}
+.btn:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.btn.alt{background:var(--pan2);color:var(--txt);border:1px solid var(--line);font-size:18px;padding:12px 20px}
+.row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:20px 0 6px}
+.warn{border-left:5px solid var(--amb);background:#221c0d;padding:12px 16px;border-radius:6px;margin:16px 0}
+.note{border-left:5px solid var(--bad);background:#2a1414;padding:12px 16px;border-radius:6px}
+code{font:16px var(--mono);background:var(--pan2);padding:2px 6px;border-radius:4px}
+a{color:var(--amb)}
+footer{margin-top:40px;color:var(--dim);font-size:16px}
+esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:not(:defined) [slot=not-allowed]{display:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>RigDeck</h1>
+  <p class="tag">FT8 / FT4 / FT-CW station, ADIF logger and control head for your radio.</p>
+
+  <div class="card">
+    <div class="ver">Latest firmware: <b id="ver">…</b> &nbsp;·&nbsp; Waveshare ESP32-P4-WIFI6-Touch-LCD-7B</div>
+    <ol>
+      <li>Connect the board's <b>USB-C port</b> to this computer with a data cable (not the USB-A port the radio plugs into).</li>
+      <li>Press <b>Install RigDeck</b>, pick the board's serial port (often "USB Serial" or "CH343"), and follow the steps.</li>
+      <li><b>Updating?</b> When asked, leave <b>"Erase device" unticked</b> to keep your logs and settings.</li>
+      <li>When it restarts, join the Wi-Fi network <b>RigDeck</b> (password <code>ft8ft8ft8</code>) and open <b>http://192.168.4.1</b>, or use the touch screen.</li>
+    </ol>
+    <div class="row">
+      <esp-web-install-button manifest="manifest.json">
+        <button slot="activate" class="btn">Install RigDeck</button>
+        <div slot="unsupported" class="note">This browser cannot flash devices. Use <b>Chrome</b> or <b>Edge</b> on a Windows, Mac, Linux or ChromeOS computer.</div>
+        <div slot="not-allowed" class="note">Flashing needs a secure (https) page. Open this page from its GitHub Pages address.</div>
+      </esp-web-install-button>
+      <a class="btn alt" id="dl" href="firmware/rigdeck.bin" download>Download .bin</a>
+    </div>
+    <div class="warn">Download your log from the RigDeck web page (Log tab) before installing, just in case. Ticking "Erase device" deletes the log, settings and Wi-Fi name.</div>
+  </div>
+
+  <h2>Other ways to flash</h2>
+  <p>The .bin above is a complete image that goes at address <code>0x0</code>. With esptool:</p>
+  <p><code>esptool --chip esp32p4 write-flash 0x0 rigdeck.bin</code></p>
+  <p>Or open Espressif's <a href="https://espressif.github.io/esptool-js/">online flasher</a>, connect, and add the file at address 0x0.</p>
+
+  <h2>About</h2>
+  <p>RigDeck runs FT8, FT4, FT-CW and PSK31, logs SSB/CW contacts with CW macros, keeps an ADIF log, sends contacts to your logging program, and works as a touch-screen control head. Radios: Icom IC-7100 and IC-705, Yaesu FTX-1, QRP Labs QMX / QMX+, over one USB cable.</p>
+  <p><a href="https://github.com/wrmichael/RigDeck">Source code, manual and release notes on GitHub</a> · MIT licence</p>
+
+  <footer>RigDeck by AC9HP. Flashing uses <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>; nothing is installed on your computer.</footer>
+</main>
+<script>
+fetch("manifest.json").then(r => r.json()).then(m => {
+  document.getElementById("ver").textContent = m.version;
+  document.getElementById("dl").setAttribute("download", "rigdeck-" + m.version + ".bin");
+}).catch(() => { document.getElementById("ver").textContent = "(not released yet)"; });
+</script>
+</body>
+</html>

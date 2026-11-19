@@ -458,7 +458,7 @@ bool App::netOnce() {
     } else if (proto == LOG_UDP_ADIF) {
         ok = netSendUdp(host, port, (const uint8_t*)rec.data(), rec.size());
     } else if (proto == LOG_UDP_WSJTX) {
-        auto p = wsjtxLoggedAdif("IC7100-FT8", rec);
+        auto p = wsjtxLoggedAdif("RigDeck", rec);
         ok = netSendUdp(host, port, p.data(), p.size());
     } else ok = true;                                // forwarding was switched off: drop it
     std::lock_guard<std::mutex> nl(netMtx_);
@@ -916,7 +916,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
         first = false;
     }
     o += "]}";
-    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_);
+    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion);
     if (withCfg) o += ",\"cfg\":" + cfg.json();
     return o + "}";
 }

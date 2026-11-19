@@ -18,8 +18,8 @@ port with one cable and it:
 Radios: Icom **IC-7100** (tested on the air), Icom **IC-705**, Yaesu **FTX-1** and QRP Labs **QMX / QMX+**
 (tested against simulated radios so far; reports welcome).
 
-> RigDeck started life as "IC7100-FT8"; some internal names (the hotspot name, the build output) still
-> use that name and will be renamed in a coming release.
+> RigDeck started life as "IC7100-FT8". A controller upgraded from that firmware keeps its saved hotspot
+> name until you change it in Settings; new installs use **RigDeck**.
 
 ## Status
 
@@ -177,6 +177,24 @@ search ever settles on the wrong one. The GPS clock option works with the Icoms 
 
 The firmware puts the radio in USB-D (USB with DATA mode on) whenever you pick a band.
 
+## Install without building (browser flasher)
+
+Open **https://wrmichael.github.io/RigDeck/** in Chrome or Edge, connect the board's USB-C port to the
+computer, and press **Install RigDeck**. When updating, leave "Erase device" unticked to keep the log
+and settings. The same page offers the .bin for esptool (address 0x0).
+
+### Making a release (maintainer)
+
+1. Put the new version number in `version.txt`.
+2. In the ESP-IDF PowerShell, in the RigDeck folder: `.\release.ps1`. It builds, merges bootloader,
+   partition table and program into `build\rigdeck-<version>.bin`, and copies it to `docs\firmware\`
+   with an updated `docs\manifest.json`.
+3. `git add docs version.txt`, `git commit -m "Release x.y.z"`, `git push`. GitHub Pages (Settings >
+   Pages > Deploy from branch `main`, folder `/docs`) then serves the new firmware within a minute or two.
+4. Optionally attach the .bin to a GitHub release.
+
+The version shows on the touch screen (Settings) and on the web page (Settings tab, bottom).
+
 ## Build and flash
 
 Built and tested with **ESP-IDF 6.1** (5.5.3 or newer should work; the USB hub support comes from
@@ -201,7 +219,7 @@ On Windows with Espressif's EIM installer, `start.bat` opens a PowerShell with E
 
 ## Using it
 
-1. Join the hotspot **IC7100-FT8**, password **ft8ft8ft8**, and open **http://192.168.4.1**.
+1. Join the hotspot **RigDeck**, password **ft8ft8ft8**, and open **http://192.168.4.1**.
 2. Settings tab: enter callsign and grid, change the hotspot password, Save. It refuses to
    transmit until callsign and grid are set.
 3. Header dots: USB (serial port found), CI-V (radio answering), Audio (codec open), Clock.

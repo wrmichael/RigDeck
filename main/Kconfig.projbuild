@@ -1,4 +1,4 @@
-menu "IC-7100 FT8 controller"
+menu "RigDeck"
 
     config IC7100_DISPLAY
         bool "On-device touch interface (Waveshare ESP32-P4-WIFI6-Touch-LCD-7B)"

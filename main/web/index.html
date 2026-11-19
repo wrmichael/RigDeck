@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IC-7100 FT8</title>
+<title>RigDeck</title>
 <style>
 :root{--bg:#0d1317;--pan:#151e25;--pan2:#1c2831;--line:#2a3944;--tx:#ff5b5b;--rx:#3fcf8e;--amb:#f6b93b;--txt:#dce5ea;--dim:#8498a5;--cq:#7fd0ff;--me:#ff9d9d;
 --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
@@ -165,8 +165,8 @@ table.log th{color:var(--dim);font-weight:500}
     <h3>Logbook</h3>
     <div class="row"><span id="logn"></span><span id="fwd" class="hint"></span></div>
     <div class="row">
-      <a id="dlcur" class="dl" href="/log.adi" download="ic7100-current.adi">&#11015; Download current log</a>
-      <a id="dlall" class="dl" href="/archive.adi" download="ic7100-archive.adi">&#11015; Download full archive</a>
+      <a id="dlcur" class="dl" href="/log.adi" download="rigdeck-current.adi">&#11015; Download current log</a>
+      <a id="dlall" class="dl" href="/archive.adi" download="rigdeck-archive.adi">&#11015; Download full archive</a>
       <button id="clrlog">Clear current log</button>
     </div>
     <table class="log"><thead><tr><th>UTC</th><th>Call</th><th>Grid</th><th>Band</th><th>Mode</th><th>Sent</th><th>Rcvd</th></tr></thead><tbody id="logrows"></tbody></table>
@@ -322,11 +322,11 @@ function render(){
   // log
   $("logn").textContent=S.log.n+" contacts in the current log, "+S.log.all+" in the archive"+(S.log.behind?" (archive incomplete: download the current log)":"");
   const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
-  $("dlcur").download=`ic7100-current-${stamp}.adi`;$("dlall").download=`ic7100-archive-${stamp}.adi`;
+  $("dlcur").download=`rigdeck-current-${stamp}.adi`;$("dlall").download=`rigdeck-archive-${stamp}.adi`;
   $("fwd").textContent=(S.log.ok||S.log.fail)?`forwarded ${S.log.ok}, failed attempts ${S.log.fail}`:"";
   $("logrows").innerHTML=S.log.last.slice().reverse().map(l=>`<tr><td>${hhmmss(l.t)}</td><td>${esc(l.call)}</td><td>${esc(l.grid)}</td><td>${esc(l.band)}</td><td>${esc(l.mode)}</td><td>${esc(l.rs)}</td><td>${esc(l.rr)}</td></tr>`).join("");
   $("clkinfo").textContent=S.clk.ok?`Source: ${S.clk.src}, set ${S.clk.age} s ago`:"Clock not set";
-  $("netinfo").textContent=S.net;
+  $("netinfo").textContent=S.net+(S.ver?"  ·  RigDeck "+S.ver:"");
   if(S.msg&&S.msg!==render.lastMsg){render.lastMsg=S.msg;banner(S.msg);}
   if(tx.wd) banner("TX watchdog stopped automatic transmission. Press Enable TX to resume.");
   if(S.cfg&&!cfgLoaded){

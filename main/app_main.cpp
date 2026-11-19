@@ -1,4 +1,4 @@
-// IC-7100 FT8/FT4/PSK31 controller - ESP-IDF entry point.
+// RigDeck - ESP-IDF entry point.
 #include "platform.h"
 #include "ui.h"
 #include "clock.h"
@@ -10,6 +10,7 @@
 #include "esp_system.h"
 #include "esp_heap_caps.h"
 #include "esp_spiffs.h"
+#include "esp_app_desc.h"
 #include "nvs_flash.h"
 
 static const char* TAG = "main";
@@ -51,8 +52,9 @@ extern "C" void app_main(void) {
 
     clk::init(monoMs);
     s_app.haveRam = haveRam;
+    s_app.fwVersion = esp_app_get_description()->version;
     s_app.begin("/fs");
-    ESP_LOGI(TAG, "call=%s grid=%s, free heap %u kB", s_app.cfg.call.c_str(), s_app.cfg.grid.c_str(),
+    ESP_LOGI(TAG, "RigDeck %s, call=%s grid=%s, free heap %u kB", s_app.fwVersion.c_str(), s_app.cfg.call.c_str(), s_app.cfg.grid.c_str(),
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_DEFAULT) / 1024));
 
     net_start(s_app);

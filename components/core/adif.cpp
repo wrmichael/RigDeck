@@ -64,7 +64,7 @@ std::string adifRecord(const QsoRecord& q) {
 }
 
 std::string adifHeader() {
-    return "IC-7100 FT8 controller log\n<ADIF_VER:5>3.1.4 <PROGRAMID:10>IC7100-FT8 <EOH>\n";
+    return "RigDeck log\n<ADIF_VER:5>3.1.4 <PROGRAMID:7>RigDeck <EOH>\n";
 }
 
 std::string adifField(const std::string& rec, const char* name) {

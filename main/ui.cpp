@@ -1036,7 +1036,8 @@ void buildSettingsScreen() {
 
     lv_obj_t* head = box(scrSettings, 0, 0, W, SET_HEAD, PAN);
     button(head, 10, 8, 104, 48, LV_SYMBOL_LEFT " Back", onCloseSettings);
-    label(head, 130, 14, f28, TXT, "Settings");
+    label(head, 130, 4, f28, TXT, "Settings");
+    label(head, 132, 38, &lv_font_montserrat_16, DIM, ("RigDeck " + g_app->fwVersion).c_str());
     sStatus = label(head, 270, 22, f16, DIM);
     lv_obj_set_width(sStatus, 440);
     lv_label_set_long_mode(sStatus, LV_LABEL_LONG_MODE_DOTS);
