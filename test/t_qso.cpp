@@ -65,8 +65,8 @@ struct Station {
             else if (f.cmd == 0x1A && f.data.size() == 1) reply(0x1A, {0x06, (uint8_t)dataMode, 0x01});
             else if (f.cmd == 0x1A && f.data.size() == 3) { dataMode = f.data[1]; reply(0xFB, {}); }
             else if (f.cmd == 0x15 && f.data.size() >= 1 && f.data[0] == 0x13) {
-                // ALC: none up to 20 % audio, then rising steeply, as on a real transceiver
-                int a = ptt ? std::max(0, (int)((app.txLevelNow() - 20.0f) * 4.0f)) : 0;
+                // ALC: none up to 10 % audio, then rising steeply (top of the zone, 120, at 25 %)
+                int a = ptt ? std::max(0, (int)((app.txLevelNow() - 10.0f) * 8.0f)) : 0;
                 if (a > 255) a = 255;
                 reply(0x15, {0x13, (uint8_t)(a / 100), (uint8_t)((((a / 10) % 10) << 4) | (a % 10))});
             }
@@ -184,10 +184,10 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
     printf("B log: %s", lb.c_str() + (lb.find("<EOH>") == std::string::npos ? 0 : lb.find("<EOH>") + 6));
     auto count = [](const std::string& s) { int n = 0; for (size_t p = 0; (p = s.find("<EOR>", p)) != std::string::npos; p++) n++; return n; };
     CHECK(count(la) == 1 && count(lb) == 1);                     // one QSO each, no duplicates, no re-calling
-    // automatic level: Settings 30 %, ALC starts at 20 %: settles just below where ALC gets noticeable
+    // automatic level: Settings 30 % puts ALC in the red (170); it settles inside the zone, not at zero
     printf("auto TX level A %.1f %%, B %.1f %%\n", A.app.txLevelNow(), B.app.txLevelNow());
-    CHECK(A.app.txLevelNow() >= 18.0f && A.app.txLevelNow() <= 23.0f);
-    CHECK(B.app.txLevelNow() >= 18.0f && B.app.txLevelNow() <= 23.0f);
+    CHECK(A.app.txLevelNow() >= 18.0f && A.app.txLevelNow() <= 24.4f);
+    CHECK(B.app.txLevelNow() >= 18.0f && B.app.txLevelNow() <= 24.4f);
     CHECK(adifField(la, "CALL") == "K1ABC" && adifField(la, "GRIDSQUARE") == "FN42" && adifField(la, "BAND") == "40m");
     CHECK(adifField(lb, "CALL") == "W9XYZ" && adifField(lb, "GRIDSQUARE") == "EN37");
     CHECK(adifField(la, "RST_SENT") == adifField(lb, "RST_RCVD") && adifField(lb, "RST_SENT") == adifField(la, "RST_RCVD"));

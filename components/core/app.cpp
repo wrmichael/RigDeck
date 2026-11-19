@@ -273,11 +273,11 @@ void App::startTx(int gen) {
 }
 
 // ---- automatic TX audio level from the radio's ALC meter ----------------------------------------
-// FT8 and the other digital modes want no ALC action: ALC compresses the audio, which widens the
-// signal and buries the tones in splatter. While transmitting, every ALC reading (about every 0.4 s)
-// above "barely moving" turns the audio down; a transmission with no ALC at all lets it creep back
-// up, but never past the Settings level or just below the last level that caused ALC. The level
-// found is remembered per band. Icom and Yaesu ALC meters read 0..255 with 120 = top of the ALC zone.
+// Keep the radio's ALC inside its zone, out of the red: overdriving it compresses the audio, which
+// widens the signal and spreads splatter. Icom (and FTX-1) ALC meters read 0..255 with 120 = the top
+// of the ALC zone. While transmitting, every reading (about every 0.4 s) past the zone turns the
+// audio down; a transmission that stays well inside the zone lets it rise again, never past the
+// Settings maximum or just below the last level that went into the red. Remembered per band.
 float App::txLevelNow() const {
     if (radio.proto.load() == RP_QMX) return 100.0f;              // see txAudio48k
     return cfg.autoAlc ? txGain_.load() : (float)cfg.txLevel;
@@ -301,7 +301,7 @@ void App::alcTick(int64_t mono) {
     if (!genStarted_) return;                                      // no audio yet: ALC says nothing
     int a = radio.alc.load();
     alcMax_ = std::max(alcMax_, a);
-    float g = txGain_.load(), f = a > 72 ? 0.75f : a > 30 ? 0.88f : a > 10 ? 0.96f : 1.0f;
+    float g = txGain_.load(), f = a > 180 ? 0.8f : a > 130 ? 0.9f : a > 115 ? 0.97f : 1.0f;
     if (f < 1.0f) {
         auto& L = alcLevel_[alcBand_];
         L.ceiling = g * 0.97f;
@@ -315,9 +315,9 @@ void App::alcEndTx() {
     auto& L = alcLevel_[alcBand_];
     if (L.ceiling <= 0) L.ceiling = (float)cfg.txLevel;
     float g = txGain_.load();
-    if (!alcCut_ && alcMax_ <= 4 && genStarted_) g = std::min({g * 1.06f, L.ceiling, (float)cfg.txLevel});
+    if (!alcCut_ && alcMax_ < 70 && genStarted_) g = std::min({g * 1.06f, L.ceiling, (float)cfg.txLevel});
     L.level = g;
-    if (alcCut_) status("TX audio lowered to " + std::to_string((int)lroundf(g)) + " % to keep the radio's ALC low");
+    if (alcCut_) status("TX audio lowered to " + std::to_string((int)lroundf(g)) + " % to keep the radio's ALC out of the red");
 }
 
 void App::stopTx(const char* why) {

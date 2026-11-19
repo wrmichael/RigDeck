@@ -291,12 +291,12 @@ commands serve the IC-7100 and IC-705 (the attenuator is 12 dB on one and 20 dB 
 
 ## Automatic TX audio level (ALC)
 
-FT8 and the other digital modes should be sent with **no ALC action**: ALC compresses the audio, which
-widens the signal and spreads splatter over other stations. With Settings > Operating > "Lower audio
-when ALC shows" **On** (the default), RigDeck reads the radio's ALC meter about every 0.4 s while
-transmitting and turns its own audio down until ALC barely moves. A transmission with no ALC lets the
-level creep back up, never above the "TX audio level (maximum)" setting or past the level that last
-caused ALC. The level found is remembered per band until restart (or until you change the maximum).
+Driving the radio's ALC into the red compresses the audio, which widens an FT8 signal and spreads
+splatter over other stations. With Settings > Operating > "Lower audio when ALC shows" **On** (the
+default), RigDeck reads the radio's ALC meter about every 0.4 s while transmitting and turns its own
+audio down whenever ALC goes past the ALC zone. A transmission that stays well inside the zone lets
+the level rise again, never above the "TX audio level (maximum)" setting or past the level that last
+went into the red. The level found is remembered per band until restart (or until you change the maximum).
 
 - Set the radio's power as you want it (e.g. 5 W on the IC-705); the audio level only removes ALC.
 - The level in use shows as "audio NN %" next to Po/ALC while transmitting.
