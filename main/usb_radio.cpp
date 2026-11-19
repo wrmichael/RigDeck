@@ -299,7 +299,6 @@ static void handleEvent(const AudioEv& e) {
     if (tx) { s_spk = h; s_spkCfg = fmt; } else { s_mic = h; s_micCfg = fmt; }
 }
 
-// This task also runs the receive DSP (ft8_lib's FFT keeps ~31 kB of work arrays on the stack).
 // A stream that will not start (usually: internal RAM too short for the USB transfer buffers) is
 // retried after a pause, not in a tight loop, and reported once with the memory figures.
 static int64_t s_startRetryMs = 0;
@@ -324,9 +323,14 @@ static bool startStream(uac_host_device_handle_t h, const uac_host_stream_config
     return false;
 }
 
+// Both streams are started once and then left running: receive audio is read all the time (and
+// ignored while transmitting), and the transmit stream carries silence while receiving. Stopping
+// and starting them at every transmission cost internal RAM each time (about 2 kB per cycle on the
+// IC-705) until the next start failed and the radio keyed up with no audio.
+// This task also runs the receive DSP (ft8_lib's FFT keeps ~31 kB of work arrays on the stack).
 static void audioTask(void*) {
-    static int16_t mono[960];
-    static uint8_t raw[960 * 6];                     // 20 ms of stereo at up to 24 bits
+    static int16_t mono[960], txMono[480];
+    static uint8_t raw[960 * 6], out[480 * 6];        // 20 ms in / 10 ms out of stereo at up to 24 bits
     for (;;) {
         AudioEv e;
         while (xQueueReceive(s_evq, &e, 0) == pdTRUE) handleEvent(e);
@@ -335,44 +339,41 @@ static void audioTask(void*) {
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
+        const int mch = s_micCfg.channels, mbps = s_micCfg.bit_resolution / 8;
+        const int sch = s_spkCfg.channels, sbps = s_spkCfg.bit_resolution / 8;
+        if (mch * mbps > 6 || sch * sbps > 6) { vTaskDelay(pdMS_TO_TICKS(100)); continue; }   // more than stereo 24-bit
+        if (!s_micRun) {
+            if (!startStream(s_mic, &s_micCfg, "from radio")) continue;
+            s_micRun = true;
+        }
+        if (!s_spkRun) {
+            if (!startStream(s_spk, &s_spkCfg, "to radio")) continue;
+            uac_host_device_set_mute(s_spk, false);      // not every codec has these controls: ignore errors
+            uac_host_device_set_volume(s_spk, 100);
+            s_spkRun = true;
+        }
         s_app->usbAudio = true;
-        if (s_app->txActive()) {
-            if (s_micRun) { uac_host_device_stop(s_mic); s_micRun = false; }
-            if (!s_spkRun) {
-                if (!startStream(s_spk, &s_spkCfg, "to radio")) continue;
-                uac_host_device_set_mute(s_spk, false);      // not every codec has these controls: ignore errors
-                uac_host_device_set_volume(s_spk, 100);
-                s_spkRun = true;
-            }
-            const int frames = 480;                          // 10 ms
-            if (s_spkCfg.channels * s_spkCfg.bit_resolution > 48) { vTaskDelay(pdMS_TO_TICKS(20)); continue; }
-            s_app->txAudio48k(mono, frames);
-            int ch = s_spkCfg.channels;
-            int bps = s_spkCfg.bit_resolution / 8;           // 2 or 3 bytes, little endian
-            uint8_t* o = raw;
-            for (int i = 0; i < frames; i++) for (int c = 0; c < ch; c++) {
-                if (bps == 3) *o++ = 0;
-                *o++ = (uint8_t)(mono[i] & 0xFF);
-                *o++ = (uint8_t)((uint16_t)mono[i] >> 8);
-            }
-            if (uac_host_device_write(s_spk, raw, frames * ch * bps, 200) != ESP_OK) vTaskDelay(pdMS_TO_TICKS(5));
-        } else {
-            if (s_spkRun) { uac_host_device_stop(s_spk); s_spkRun = false; }
-            if (!s_micRun) {
-                if (!startStream(s_mic, &s_micCfg, "from radio")) continue;
-                s_micRun = true;
-            }
-            int ch = s_micCfg.channels;
-            int bps = s_micCfg.bit_resolution / 8;
-            uint32_t got = 0;
-            if (ch * bps > 6 || uac_host_device_read(s_mic, raw, 960 * ch * bps, &got, 100) != ESP_OK || got == 0) continue;
-            int frames = got / (ch * bps);
-            for (int i = 0; i < frames; i++) {               // left channel, top 16 bits
-                const uint8_t* in = raw + (size_t)i * ch * bps + (bps - 2);
+        // 10 ms from the radio (the read paces this loop) ...
+        uint32_t got = 0;
+        if (uac_host_device_read(s_mic, raw, 480 * mch * mbps, &got, 40) == ESP_OK && got > 0) {
+            int frames = got / (mch * mbps);
+            for (int i = 0; i < frames; i++) {           // left channel, top 16 bits
+                const uint8_t* in = raw + (size_t)i * mch * mbps + (mbps - 2);
                 mono[i] = (int16_t)(in[0] | (in[1] << 8));
             }
-            s_app->rxAudio48k(mono, frames);
+            if (!s_app->txActive()) s_app->rxAudio48k(mono, frames);
         }
+        // ... and 10 ms to it: the transmit signal, or silence
+        const int frames = 480;
+        if (s_app->txActive()) s_app->txAudio48k(txMono, frames);
+        else memset(txMono, 0, sizeof txMono);
+        uint8_t* o = out;
+        for (int i = 0; i < frames; i++) for (int c = 0; c < sch; c++) {
+            if (sbps == 3) *o++ = 0;
+            *o++ = (uint8_t)(txMono[i] & 0xFF);
+            *o++ = (uint8_t)((uint16_t)txMono[i] >> 8);
+        }
+        uac_host_device_write(s_spk, out, frames * sch * sbps, 20);
     }
 }
 

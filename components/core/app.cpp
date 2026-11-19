@@ -856,6 +856,7 @@ void App::uiLogTail(size_t max, std::vector<UiLogEntry>& out) {
 // error passes 25 ms, and never while transmitting, so slot timing does not jitter.
 void App::gpsRx(const uint8_t* data, size_t n) {
     int64_t mono = clk::monoMs();
+    if (clk::valid()) nmea_.setDateHint(clk::utcMs());
     if (!nmea_.feed(data, n, mono)) return;
     if (!cfg.gpsClock || txOn_) return;
     if (cfg.gpsModule && mono - gpsLastMono.load() < 5000 && !strncmp(clk::source(), "gps-", 4)) return;   // the module's PPS is better
@@ -867,6 +868,7 @@ void App::gpsRx(const uint8_t* data, size_t n) {
 // Without PPS it is handled like the radio's GPS (sentence arrival + cfg.gpsDelayMs).
 void App::gpsModuleRx(const uint8_t* data, size_t n) {
     int64_t mono = clk::monoMs();
+    if (clk::valid()) nmeaMod_.setDateHint(clk::utcMs());
     if (!nmeaMod_.feed(data, n, mono)) return;
     if (!cfg.gpsModule || txOn_) return;
     uint32_t pc = ppsCount.load();

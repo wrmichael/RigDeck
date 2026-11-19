@@ -1,6 +1,7 @@
 #include "nmea.h"
 #include <cstring>
 #include <cstdlib>
+#include <initializer_list>
 
 int64_t NmeaTime::daysFromCivil(int y, int m, int d) {
     y -= m <= 2;
@@ -54,6 +55,20 @@ bool NmeaTime::parse() {
     } else if (!strncmp(type, "ZDA", 3)) {
         if (nf < 5 || strlen(f[1]) < 6 || !digits(f[1], 6)) return false;
         day = atoi(f[2]); mon = atoi(f[3]); year = atoi(f[4]);
+    } else if (!strncmp(type, "GGA", 3)) {
+        // fix quality in field 6: 0 = no fix
+        if (hint_ < 1700000000000LL || nf < 7 || strlen(f[1]) < 6 || !digits(f[1], 6) || f[6][0] < '1') return false;
+        int th = two(f[1]), tm = two(f[1] + 2), ts = two(f[1] + 4), tms = 0;
+        if (th > 23 || tm > 59 || ts > 60) return false;
+        if (f[1][6] == '.') { int scale = 100; for (const char* p = f[1] + 7; *p >= '0' && *p <= '9' && scale > 0; p++, scale /= 10) tms += (*p - '0') * scale; }
+        int64_t tod = ((th * 60 + tm) * 60 + ts) * 1000LL + tms;
+        int64_t day0 = (hint_ / 86400000LL) * 86400000LL;
+        int64_t best = day0 + tod;                      // the same time of day yesterday, today or tomorrow: nearest the hint
+        for (int64_t c : {best - 86400000LL, best + 86400000LL})
+            if (llabs(c - hint_) < llabs(best - hint_)) best = c;
+        if (llabs(best - hint_) > 6 * 3600000LL) return false;
+        utc_ = best;
+        return true;
     } else return false;
     hh = two(f[1]); mm = two(f[1] + 2); ss = two(f[1] + 4);
     if (f[1][6] == '.') { int scale = 100; for (const char* p = f[1] + 7; *p >= '0' && *p <= '9' && scale > 0; p++, scale /= 10) ms += (*p - '0') * scale; }

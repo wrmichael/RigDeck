@@ -12,10 +12,13 @@ public:
     int64_t utcMs() const { return utc_; }
     int64_t sentenceStartMono() const { return start_; }
     static int64_t daysFromCivil(int y, int m, int d);     // days since 1970-01-01
+    // GGA carries the time of day but no date (the IC-705 sends only GGA by default). With a hint
+    // (the current clock, to within a few hours) GGA is accepted and given the nearest date.
+    void setDateHint(int64_t utcMs) { hint_ = utcMs; }
 private:
     bool parse();
     char buf_[96];
     size_t len_ = 0;
     bool in_ = false;
-    int64_t curStart_ = 0, start_ = 0, utc_ = 0;
+    int64_t curStart_ = 0, start_ = 0, utc_ = 0, hint_ = 0;
 };

@@ -275,6 +275,28 @@ int main() {
         app.gpsModuleRx((const uint8_t*)s.data(), s.size());
         CHECK(!strcmp(clk::source(), "gps-nmea"));
         CHECK(llabs(clk::utcMs() - (utcOf(18, 30, 7) + 150)) <= 1);
+        // GGA (time of day only, the IC-705's default) is accepted once the date is known, nearest date wins
+        {
+            NmeaTime nt;
+            auto gga = [](const char* hms, char fix) {
+                char body[96], s2[110];
+                snprintf(body, sizeof body, "GPGGA,%s,4000.000,N,08600.000,W,%c,08,1.0,250.0,M,-33.0,M,,", hms, fix);
+                unsigned ck = 0;
+                for (const char* p = body; *p; p++) ck ^= (unsigned char)*p;
+                snprintf(s2, sizeof s2, "$%s*%02X\r\n", body, ck);
+                return std::string(s2);
+            };
+            std::string g = gga("183005.00", '1');
+            CHECK(!nt.feed((const uint8_t*)g.data(), g.size(), 0));          // no date known yet
+            nt.setDateHint(utcOf(18, 29, 0));
+            CHECK(nt.feed((const uint8_t*)g.data(), g.size(), 0) && nt.utcMs() == utcOf(18, 30, 5));
+            g = gga("000002.00", '1');                                       // just after midnight, hint just before
+            nt.setDateHint(t0 + 86400000LL - 3000);
+            CHECK(nt.feed((const uint8_t*)g.data(), g.size(), 0) && nt.utcMs() == t0 + 86400000LL + 2000);
+            g = gga("183005.00", '0');                                       // no fix
+            nt.setDateHint(utcOf(18, 29, 0));
+            CHECK(!nt.feed((const uint8_t*)g.data(), g.size(), 0));
+        }
         // the clock sink sees every change (the ESP32 copies it into its own clock)
         static int64_t sunk = 0;
         clk::setSink([](int64_t u) { sunk = u; });
