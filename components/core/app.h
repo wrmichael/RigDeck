@@ -94,7 +94,8 @@ public:
     std::atomic<bool> usbSerial{false}, usbAudio{false};
     std::atomic<bool> rebootReq{false};
     std::atomic<bool> ntpSynced{false};
-    std::string fwVersion = "dev";                  // set by the platform (version.txt on the ESP32)
+    std::string fwVersion = "dev";
+    void (*logFn)(const char* line) = nullptr;      // platform log (serial monitor on the ESP32)                  // set by the platform (version.txt on the ESP32)
     bool (*haveRam)(size_t bytes) = nullptr;         // platform check before the big decoder allocations
     std::atomic<bool> memFail{false};
     void setNetInfo(const std::string& s);
@@ -181,7 +182,7 @@ private:
     std::atomic<float> txGain_{50.0f};
     std::string alcBand_;
     uint32_t alcSeen_ = 0;
-    int alcMax_ = 0;
+    int alcMax_ = 0, poMax_ = 0, alcReads_ = 0;
     bool alcCut_ = false;
     void alcStartTx();
     void alcTick(int64_t mono);

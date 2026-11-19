@@ -83,6 +83,7 @@ extern "C" void app_main(void) {
     clk::setSink(rtcSink);
     s_app.haveRam = haveRam;
     s_app.fwVersion = esp_app_get_description()->version;
+    s_app.logFn = [](const char* line) { ESP_LOGI("app", "%s", line); };
     s_app.begin("/fs");
     ESP_LOGI(TAG, "RigDeck %s, call=%s grid=%s, free heap %u kB", s_app.fwVersion.c_str(), s_app.cfg.call.c_str(), s_app.cfg.grid.c_str(),
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_DEFAULT) / 1024));

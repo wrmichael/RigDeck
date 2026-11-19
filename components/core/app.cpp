@@ -290,17 +290,22 @@ void App::alcStartTx() {
     txGain_ = std::min(g, (float)cfg.txLevel);
     alcSeen_ = radio.alcSeq.load();
     alcMax_ = 0;
+    poMax_ = 0;
+    alcReads_ = 0;
     alcCut_ = false;
 }
 
 void App::alcTick(int64_t mono) {
-    if (!cfg.autoAlc || !txOn_ || radio.proto.load() == RP_QMX || mono - pttOnMono_ < 800) return;
+    if (!txOn_ || mono - pttOnMono_ < 800) return;
     uint32_t seq = radio.alcSeq.load();
     if (seq == alcSeen_) return;
     alcSeen_ = seq;
     if (!genStarted_) return;                                      // no audio yet: ALC says nothing
     int a = radio.alc.load();
     alcMax_ = std::max(alcMax_, a);
+    poMax_ = std::max(poMax_, radio.po.load());
+    alcReads_++;
+    if (!cfg.autoAlc || radio.proto.load() == RP_QMX) return;
     float g = txGain_.load(), f = a > 180 ? 0.8f : a > 130 ? 0.9f : a > 115 ? 0.97f : 1.0f;
     if (f < 1.0f) {
         auto& L = alcLevel_[alcBand_];
@@ -311,6 +316,12 @@ void App::alcTick(int64_t mono) {
 }
 
 void App::alcEndTx() {
+    if (logFn) {
+        char b[160];
+        snprintf(b, sizeof b, "TX end %s: audio %.1f %% (max %d %%, auto %s), ALC max %d/255 over %d readings, Po max %d/255",
+                 alcBand_.c_str(), txLevelNow(), cfg.txLevel, cfg.autoAlc ? "on" : "off", alcMax_, alcReads_, poMax_);
+        logFn(b);
+    }
     if (!cfg.autoAlc || radio.proto.load() == RP_QMX || alcBand_.empty()) return;
     auto& L = alcLevel_[alcBand_];
     if (L.ceiling <= 0) L.ceiling = (float)cfg.txLevel;
