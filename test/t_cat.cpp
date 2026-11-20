@@ -249,6 +249,7 @@ int main() {
             if (fq) fclose(fq);
             std::string r3 = l3.substr(l3.find("K4FADE"));
             CHECK(adifField(r3, "RST_RCVD") == "-17" && adifField(r3, "GRIDSQUARE") == "EM73" && adifField(r3, "COMMENT").empty());
+            CHECK(adifField(r3, "QSO_DATE") != "19700101");
             CHECK(r3.substr(0, r3.find("<EOR>")).find("RST_SENT") == std::string::npos);
         }
         Settings s2; s2.load(std::string(dir) + "/settings.txt");

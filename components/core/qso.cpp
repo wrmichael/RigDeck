@@ -161,7 +161,8 @@ void Sequencer::logQso() {
         QsoLog q;
         q.call = dxCall; q.grid = dxGrid;
         q.rptSent = rptSent; q.rptRcvd = rptRcvd;
-        q.startMs = qsoStart; q.endMs = now ? now() : qsoStart;
+        q.endMs = now ? now() : qsoStart;
+        q.startMs = qsoStart ? qsoStart : q.endMs;                // call typed in by hand: no start time recorded
         onLog(q);
     }
 }
@@ -178,7 +179,8 @@ int Sequencer::forceLog() {
         q.call = dxCall; q.grid = dxGrid;
         q.rptSent = sentReport ? rptSent : UNSET;
         q.rptRcvd = rptRcvd;
-        q.startMs = qsoStart; q.endMs = now ? now() : qsoStart;
+        q.endMs = now ? now() : qsoStart;
+        q.startMs = qsoStart ? qsoStart : q.endMs;                // call typed in by hand: no start time recorded
         q.partial = true;
         onLog(q);
     }
