@@ -358,6 +358,15 @@ with old Wi-Fi chip firmware (it reports version 0.0.0 or none), which is the li
 dropped connections. RigDeck can update it over the link between the two chips; no cables or
 buttons.
 
+**Over USB (recommended, no Wi-Fi needed):** connect the board's USB-C port to the PC as for
+flashing RigDeck (RigDeck 0.9.15 or later must already be on the board) and double-click
+`update_wifi_chip.bat`. It builds the Wi-Fi chip firmware, writes it to a spare flash area on the
+board, and the board installs it on the Wi-Fi chip at its next start (the status line shows the
+progress), then restarts. Logs and settings are kept. It is installed once; a failing image is
+retried at most 3 times.
+
+**Over Wi-Fi, from the web page:**
+
 1. Get `rigdeck-wifi-chip.bin`: from the release page, or build it by double-clicking
    `build_wifi_chip.bat` (ESP-IDF installed as for RigDeck; the result is
    `docs\firmware\rigdeck-wifi-chip.bin`). It is built from the same ESP-Hosted version RigDeck

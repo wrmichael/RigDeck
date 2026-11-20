@@ -8,7 +8,9 @@ Set-Location -Path (Join-Path $PSScriptRoot "wifi_chip")
 if (-not (Get-Command idf.py -ErrorAction SilentlyContinue)) {
     . 'C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1'
 }
-if (-not (Test-Path sdkconfig)) {
+# Start from sdkconfig.defaults every time, so changes to them always reach the build.
+Remove-Item -Force -ErrorAction SilentlyContinue sdkconfig
+if ($true) {
     idf.py set-target esp32c6
     if ($LASTEXITCODE -ne 0) { Write-Host "set-target failed" -ForegroundColor Red; exit 1 }
 }

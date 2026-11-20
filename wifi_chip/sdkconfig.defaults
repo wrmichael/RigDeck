@@ -24,3 +24,7 @@ CONFIG_FREERTOS_HZ=1000
 CONFIG_ESP_WIFI_NVS_ENABLED=y
 
 CONFIG_ESP_HOSTED_CP_FEAT_WIFI=y
+
+# RigDeck: streaming SDIO (one header per frame, hardware batching), as the firmware the boards ship
+# with. The default software aggregation stalled the link on the Waveshare board after ~80 s.
+CONFIG_EH_TRANSPORT_CP_SDIO_MODE_STREAM=y

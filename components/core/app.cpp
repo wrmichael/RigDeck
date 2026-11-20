@@ -150,6 +150,7 @@ void App::setWifiChip(const std::string& ver, const std::string& upd) {
 void App::setWifiChipUpd(const std::string& upd) {
     std::lock_guard<std::mutex> lk(mtx_);
     wchipUpd_ = upd;
+    if (!upd.empty()) status_ = upd;                 // also on the touch screen's status line
 }
 App::StaStatus App::staStatus() {
     std::lock_guard<std::mutex> lk(mtx_);

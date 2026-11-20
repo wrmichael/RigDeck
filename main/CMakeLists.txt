@@ -12,6 +12,6 @@ endif()
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "."
-    PRIV_REQUIRES core esp_app_format esp_wifi esp_netif esp_event nvs_flash esp_http_server spiffs esp_timer lwip esp_driver_uart esp_driver_gpio
+    PRIV_REQUIRES core esp_app_format esp_wifi esp_netif esp_event nvs_flash esp_http_server spiffs esp_timer lwip esp_driver_uart esp_driver_gpio esp_partition
     EMBED_TXTFILES "web/index.html")
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error -Wno-format -Wno-missing-field-initializers)

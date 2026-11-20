@@ -4,3 +4,4 @@ sdkconfig
 sdkconfig.old
 test/out/
 build_wifi_chip.log
+update_wifi_chip.log
