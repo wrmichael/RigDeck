@@ -1152,7 +1152,19 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         syncSeq();
         if (!cfg.save(dir_ + "/settings.txt")) return err("Could not save settings");
         if (staChanged && wifiControl) wifiControl(!cfg.staSsid.empty());
-        return std::string("{\"ok\":true,\"restart\":") + jbool(wifiChanged) + "}";
+        // A logger address on neither of RigDeck's networks is most likely a typo (e.g. 196. for 192.).
+        std::string warn;
+        if (cfg.logProto != LOG_NONE && !cfg.logHost.empty() && isdigit((unsigned char)cfg.logHost[0])) {
+            auto net16 = [](const std::string& ip) { size_t d = ip.find('.'); d = d == std::string::npos ? d : ip.find('.', d + 1); return ip.substr(0, d); };
+            std::string h = net16(cfg.logHost);
+            bool onSta = !sta_.ip.empty() && h == net16(sta_.ip);
+            bool onAp = h == "192.168" && cfg.logHost.compare(0, 10, "192.168.4.") == 0;
+            if (!onSta && !onAp)
+                warn = "Saved, but the logger address " + cfg.logHost + " is not on RigDeck's networks (home network " +
+                       (sta_.ip.empty() ? std::string("not joined") : sta_.ip) + ", hotspot 192.168.4.x). Check for a typo.";
+        }
+        if (!warn.empty()) status(warn);
+        return std::string("{\"ok\":true,\"restart\":") + jbool(wifiChanged) + (warn.empty() ? "" : ",\"warn\":" + jstr(warn)) + "}";
     }
     if (c == "reboot") {
         if (txState_ == ST_TX) haltReq_ = true;

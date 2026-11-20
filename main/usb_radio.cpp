@@ -166,15 +166,32 @@ static int buildProbes(uint8_t protos, Probe* out) {
 }
 
 static void serialTask(void*) {
+    int gpsFails = 0;
+    int64_t gpsNextUs = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         uint8_t addrs[12];
         int n = 0;
         if (s_cdc) {
-            if (s_app->usbSerial && s_app->cfg.gpsClock && !s_gps &&
-                usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) == ESP_OK) openGpsPort(addrs, n);
+            // The GPS port: when it cannot be opened (on the IC-705 the USB host often has no endpoint
+            // memory left next to CI-V and audio), back off instead of retrying every second; each
+            // failed attempt costs memory and floods the log.
+            if (s_app->usbSerial && s_app->cfg.gpsClock && !s_gps && esp_timer_get_time() >= gpsNextUs &&
+                usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) == ESP_OK) {
+                openGpsPort(addrs, n);
+                if (s_gps) gpsFails = 0;
+                else {
+                    static const int kWaitS[] = {5, 30, 120, 600};
+                    int w = kWaitS[gpsFails < 3 ? gpsFails : 3];
+                    gpsFails++;
+                    gpsNextUs = esp_timer_get_time() + (int64_t)w * 1000000;
+                    ESP_LOGW(TAG, "radio's GPS port could not be opened (attempt %d); next try in %d s", gpsFails, w);
+                }
+            }
             continue;
         }
+        gpsFails = 0;
+        gpsNextUs = 0;
         if (usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) != ESP_OK) continue;
         Radio& radio = s_app->radio;
         for (int i = 0; i < n && !s_app->usbSerial; i++) {

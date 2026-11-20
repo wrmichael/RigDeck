@@ -292,6 +292,14 @@ int main() {
             CHECK(!okr(app.command("logrestore", {{"i", "0"}})));
             CHECK(!okr(app.command("logdel", {{"i", "999"}})));
         }
+        {   // a logger address off RigDeck's networks is flagged
+            App::StaStatus st; st.state = "connected"; st.ip = "192.168.68.94";
+            app.setStaStatus(st);
+            std::string r1 = app.command("set", {{"logProto", "2"}, {"logHost", "196.168.68.137"}, {"logPort", "2333"}});
+            std::string r2 = app.command("set", {{"logHost", "192.168.68.137"}});
+            CHECK(okr(r1) && r1.find("\"warn\"") != std::string::npos && okr(r2) && r2.find("\"warn\"") == std::string::npos);
+            app.command("set", {{"logProto", "0"}});
+        }
         Settings s2; s2.load(std::string(dir) + "/settings.txt");
         CHECK(s2.macro[1] == "Park|{CALL} {REF} {GRID}" && s2.keyWpm == 25);
     }
