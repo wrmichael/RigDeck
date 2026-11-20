@@ -10,7 +10,7 @@
 #   docs\manifest.json               tells the flasher page which file and version
 # The image ends after the program, so the log/settings partition is not touched when it is written.
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"   # idf.py and esptool write progress to stderr; failures are checked by exit code
 Set-Location -Path $PSScriptRoot
 $ver = (Get-Content version.txt -TotalCount 1).Trim()
 Write-Host "Building RigDeck $ver ..." -ForegroundColor Cyan
