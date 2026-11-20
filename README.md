@@ -417,6 +417,13 @@ for the ESP32-P4.
     **Save**, or **Delete contact** (asks first).
   - A change is made in both files (current log and archive), and worked-before follows it.
     Contacts already sent to a logging program are not changed there.
+  - **Recently deleted:** a deleted contact is kept for 7 days (file `deleted.adi`). Restore it from
+    the Log tab's "Recently deleted" list, or with **Undo delete** in the touch Logbook (newest
+    first). It goes back where it was, in time order.
+- **Send test to logger** (Log tab) sends a T1EST contact to the logging program set in Settings
+  without adding it to RigDeck's log. The line below it shows the last attempt (sent or not,
+  where to, when). The first packet to a new address is preceded by a short probe so it is not
+  lost while the network looks the address up.
 - **Log QSO** (touch screen next to CQ, web page in the QSO box) logs the contact in progress
   straight away, for when the other station fades out before the exchange finishes, then goes
   back to calling CQ. It needs at least one signal report: one you sent or one you received. With

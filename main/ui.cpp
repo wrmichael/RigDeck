@@ -325,6 +325,15 @@ void onClearLog(lv_event_t*) {
     if (s.logN == 0) { note("The current log is already empty"); return; }
     confirm("Clear current log", "Remove " + num(s.logN) + " contact(s) from the current log?\nThey stay in the archive.", "Clear", "clearlog");
 }
+void onUndoDelete(lv_event_t*) {
+    App::UiLogEntry e;
+    int n = 0;
+    g_app->uiTrashNewest(e, n);
+    if (e.idx < 0) { note("Nothing was deleted in the last 7 days"); return; }
+    confirm("Restore deleted contact", "Put back " + e.call + (e.when.empty() ? "" : " (" + e.when + " UTC, " + e.band + ")") +
+            "?\n" + num(n) + " deleted contact(s) are kept for 7 days; the web page lists them all.", "Restore", "logrestore",
+            {{"i", num(e.idx)}, {"call", e.call}});
+}
 void onEraseAll(lv_event_t*) {
     App::UiState s;
     g_app->uiState(s);
@@ -474,6 +483,7 @@ void buildLogScreen() {
     button(head, 10, 8, 130, 48, LV_SYMBOL_LEFT "  Back", onCloseLog);
     label(head, 160, 16, f28, TXT, "Logbook");
     lLogCounts = label(head, 320, 22, f20, AMB);
+    button(head, W - 250, 8, 240, 48, LV_SYMBOL_REFRESH "  Undo delete", onUndoDelete);
 
     const int TH = H - 64 - 76;
     logTable = lv_table_create(scrLog);

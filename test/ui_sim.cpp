@@ -158,7 +158,7 @@ int main() {
     clk::init(mono);
     mkdir("test/out", 0755);
     mkdir("test/out/ui", 0755);
-    remove("test/out/ui/log.adi"); remove("test/out/ui/archive.adi"); remove("test/out/ui/settings.txt");
+    remove("test/out/ui/log.adi"); remove("test/out/ui/archive.adi"); remove("test/out/ui/settings.txt"); remove("test/out/ui/deleted.adi");
     radio.app = &app;
     app.radio.write = [](const uint8_t* d, size_t n) { radio.rx(d, n); return true; };
     app.begin("test/out/ui");
@@ -269,13 +269,20 @@ int main() {
     run(0.5);
     CHECK(state().find("\"log\":{\"n\":4,\"all\":4") != std::string::npos);
     CHECK(app.command("logread", {{"file", "all"}}).find("PA3XYZ") == std::string::npos);
+    tap(1024 - 250 + 120, 32);                        // Undo delete
+    run(0.5);
+    savePpm("test/out/ui/8c_undo_confirm.ppm");
+    tap(CONFIRM_X, CONFIRM_Y);
+    run(0.5);
+    CHECK(state().find("\"log\":{\"n\":5,\"all\":5") != std::string::npos);
+    CHECK(app.command("logread", {{"n", "1"}}).find("PA3XYZ") != std::string::npos);
     tap(120, 562);                                    // Clear current log
     run(0.5);
     savePpm("test/out/ui/9_confirm.ppm");
-    CHECK(state().find("\"log\":{\"n\":4") != std::string::npos);        // nothing cleared before confirming
+    CHECK(state().find("\"log\":{\"n\":5") != std::string::npos);        // nothing cleared before confirming
     tap(CONFIRM_X, CONFIRM_Y);                        // the dialog's "Clear" button
     run(0.5);
-    CHECK(state().find("\"log\":{\"n\":0,\"all\":4") != std::string::npos);
+    CHECK(state().find("\"log\":{\"n\":0,\"all\":5") != std::string::npos);
     savePpm("test/out/ui/10_cleared.ppm");
     tap(70, 32);                                      // Back
     run(0.5);

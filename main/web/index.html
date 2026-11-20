@@ -163,7 +163,8 @@ table.log th{color:var(--dim);font-weight:500}
 <section id="tab-log" class="hide">
   <div class="pan">
     <h3>Logbook</h3>
-    <div class="row"><span id="logn"></span><span id="fwd" class="hint"></span></div>
+    <div class="row"><span id="logn"></span><span id="fwd" class="hint"></span><button id="lgTest" title="Sends a contact with T1EST to the logging program set in Settings; it is not added to RigDeck's log">Send test to logger</button></div>
+    <div class="row"><span id="fwdLast" class="hint"></span></div>
     <div class="row">
       <a id="dlcur" class="dl" href="/log.adi" download="rigdeck-current.adi">&#11015; Download current log</a>
       <a id="dlall" class="dl" href="/archive.adi" download="rigdeck-archive.adi">&#11015; Download full archive</a>
@@ -182,6 +183,9 @@ table.log th{color:var(--dim);font-weight:500}
       <div class="row"><button id="lgSave" class="on">Save changes</button><button id="lgCancel">Cancel</button><button id="lgDel" class="danger">Delete contact</button><span id="lgMsg" class="hint"></span></div>
       <p class="hint">Times are UTC (HHMM or HHMMSS), dates YYYYMMDD, frequency in MHz (the band follows it). Clear a box to remove that field. Changes apply to both the current log and the archive.</p>
     </div>
+    <h3 style="margin-top:16px">Recently deleted</h3>
+    <table class="log"><thead><tr><th>Date</th><th>UTC</th><th>Call</th><th>Band</th><th>Mode</th><th>Deleted</th><th></th></tr></thead><tbody id="trrows"></tbody></table>
+    <p class="hint" id="trHint">Deleted contacts are kept here for 7 days. Restore puts a contact back where it was (current log, archive or both).</p>
     <p class="hint">Every contact is written to two files: the current log and the archive. Clearing the current log leaves the archive untouched, so download the current log into your logging program, clear it, and the next download holds only new contacts. Edit or Delete fixes a contact in both files.</p>
     <div class="row"><button id="eraseall" class="danger">Erase archive and current log</button></div>
   </div>
@@ -346,6 +350,7 @@ function render(){
   const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
   $("dlcur").download=`rigdeck-current-${stamp}.adi`;$("dlall").download=`rigdeck-archive-${stamp}.adi`;
   $("fwd").textContent=(S.log.ok||S.log.fail)?`forwarded ${S.log.ok}, failed attempts ${S.log.fail}`:"";
+  $("fwdLast").textContent=S.log.fwd?`Last: ${S.log.fwd}${S.log.fwdT?" at "+hhmmss(S.log.fwdT)+" UTC":""}`:"";
   if(typeof LG!=="undefined"&&(S.log.n!==LG.cn||S.log.all!==LG.all)&&!LG.edit){LG.cn=S.log.n;LG.all=S.log.all;if(!$("tab-log").classList.contains("hide"))lgLoad();}
   $("clkinfo").textContent=S.clk.ok?`Source: ${S.clk.src}, set ${S.clk.age} s ago`:"Clock not set";
   $("netinfo").textContent=S.net+(S.ver?"  ·  RigDeck "+S.ver:"");
@@ -487,8 +492,17 @@ $("staDis").onclick=()=>cmd("wifi",{do:"disconnect"});
 // ---- log management: list, edit, delete ----
 var LG={from:0,n:25,total:0,items:[],edit:null,cn:-1,all:-1};
 const LG_MAIN=["CALL","QSO_DATE","TIME_ON","FREQ","BAND","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","NAME","COMMENT"];
+async function trLoad(){
+  if(demo) return;
+  const j=await cmd("logtrash");
+  if(!j||!j.ok) return;
+  LG.trash=j.items;
+  const d=s=>s&&s.length>=8?`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`:"", t=s=>s?`${s.slice(0,2)}:${s.slice(2,4)}`:"";
+  $("trrows").innerHTML=j.items.length?j.items.map((it,k)=>{const f=it.f,del=f.APP_RIGDECK_DELETED||"";return `<tr><td>${d(f.QSO_DATE)}</td><td>${t(f.TIME_ON)}</td><td>${esc(f.CALL||"")}</td><td>${esc(f.BAND||"")}</td><td>${esc(f.SUBMODE||f.MODE||"")}</td><td>${del.length===14?d(del)+" "+t(del.slice(8)):""}</td><td><button data-trres="${k}">Restore</button></td></tr>`;}).join(""):`<tr><td colspan="7" class="hint">Nothing deleted in the last 7 days</td></tr>`;
+}
 async function lgLoad(){
   if(demo) return;
+  trLoad();
   const j=await cmd("logread",{file:$("lgFile").value,from:LG.from,n:LG.n,q:$("lgQ").value.trim()});
   if(!j||!j.ok) return;
   LG.total=j.total;LG.items=j.items;
@@ -508,6 +522,10 @@ function lgOpen(k){
 function lgClose(){LG.edit=null;$("lgEdit").classList.add("hide");lgLoad();}
 $("logrows").addEventListener("click",e=>{const b=e.target.closest("[data-lgedit]");if(b)lgOpen(+b.dataset.lgedit);});
 $("lgFile").onchange=()=>{LG.from=0;lgLoad();};
+$("trrows").addEventListener("click",async e=>{const b=e.target.closest("[data-trres]");if(!b)return;
+  const it=LG.trash[+b.dataset.trres];if(!it)return;
+  const j=await cmd("logrestore",{i:it.i,call:it.f.CALL});if(j&&j.ok)lgLoad();});
+$("lgTest").onclick=()=>cmd("logtest");
 $("lgQ").oninput=()=>{LG.from=0;clearTimeout(LG.qt);LG.qt=setTimeout(lgLoad,300);};
 $("lgPrev").onclick=()=>{LG.from=Math.max(0,LG.from-LG.n);lgLoad();};
 $("lgNext").onclick=()=>{if(LG.from+LG.n<LG.total){LG.from+=LG.n;lgLoad();}};

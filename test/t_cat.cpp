@@ -175,7 +175,7 @@ int main() {
     {   // ---------------- logger: macros and manual entries through the app
         const char* dir = "test/out/cat";
         mkdir(dir, 0755);
-        for (const char* n : {"/log.adi", "/archive.adi", "/settings.txt"}) remove((std::string(dir) + n).c_str());
+        for (const char* n : {"/log.adi", "/archive.adi", "/settings.txt", "/deleted.adi", "/alc.txt"}) remove((std::string(dir) + n).c_str());
         App app; FakeText f; f.r = &app.radio; f.yaesu = false; f.mode = '2'; f.freq = 14250000;
         app.radio.write = [&f](const uint8_t* d, size_t n) { f.rx(d, n); return true; };
         app.begin(dir);
@@ -279,6 +279,17 @@ int main() {
             App::UiState u2; app.uiState(u2);
             CHECK(u2.logN == u0.logN - 1 && u2.logAll == u0.logAll - 1);
             CHECK(app.command("logread", {{"file", "all"}, {"q", "usb"}}).find("\"total\":1") != std::string::npos);
+            // recently deleted: listed, restored to both files in time order
+            std::string tr = app.command("logtrash", {});
+            CHECK(tr.find("K4FADE") != std::string::npos && tr.find("\"APP_RIGDECK_FROM\":\"both\"") != std::string::npos);
+            CHECK(okr(app.command("logrestore", {{"i", "0"}, {"call", "K4FADE"}})));
+            cur = slurpF("/log.adi"); all = slurpF("/archive.adi");
+            CHECK(cur.find("K4FADE") != std::string::npos && all.find("K4FADE") != std::string::npos);
+            CHECK(cur.find("APP_RIGDECK") == std::string::npos);
+            App::UiState u3; app.uiState(u3);
+            CHECK(u3.logN == u0.logN && u3.logAll == u0.logAll);
+            CHECK(app.command("logtrash", {}).find("K4FADE") == std::string::npos);
+            CHECK(!okr(app.command("logrestore", {{"i", "0"}})));
             CHECK(!okr(app.command("logdel", {{"i", "999"}})));
         }
         Settings s2; s2.load(std::string(dir) + "/settings.txt");

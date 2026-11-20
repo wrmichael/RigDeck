@@ -1,4 +1,6 @@
 #include "app.h"
+#include <ctime>
+#include <thread>
 #include "clock.h"
 #include "netlog.h"
 #include <cstdio>
@@ -99,6 +101,7 @@ void App::begin(const std::string& dataDir) {
     syncSeq();
     // Worked-before comes from the archive (all QSOs) as well as the current log.
     logReload();
+    trashPurge();
     archiveBehind_ = logCount_ > archiveCount_;
 }
 
@@ -180,6 +183,7 @@ std::string App::logChange(bool archive, int idx, const std::string& expectCall,
         recs.erase(recs.begin() + idx);
     }
     if (!adifWriteRecords(path, recs)) return "Could not save the log (storage full?)";
+    bool inOther = false;
     std::vector<std::string> o;
     if (adifReadRecords(other, o)) {
         for (size_t i = o.size(); i > 0; i--) {
@@ -187,9 +191,111 @@ std::string App::logChange(bool archive, int idx, const std::string& expectCall,
             if (fields) o[i - 1] = repl;
             else o.erase(o.begin() + (i - 1));
             adifWriteRecords(other, o);
+            inOther = true;
             break;
         }
     }
+    if (!fields) {                                    // keep it in the "recently deleted" list for a week
+        AdifFields f = adifParse(orig);
+        int64_t now = clk::valid() ? clk::utcMs() : 0;
+        char ts[24] = "0";
+        if (now) { time_t t = (time_t)(now / 1000); struct tm tm; gmtime_r(&t, &tm); strftime(ts, sizeof ts, "%Y%m%d%H%M%S", &tm); }
+        f.emplace_back("APP_RIGDECK_DELETED", ts);
+        f.emplace_back("APP_RIGDECK_FROM", inOther ? "both" : (archive ? "all" : "cur"));
+        FILE* fp = fopen(trashPath().c_str(), "a");
+        if (fp) { fputs(adifBuild(f).c_str(), fp); fputc('\n', fp); fclose(fp); }
+        trashPurge();
+    }
+    logReload();
+    return "";
+}
+
+// "Recently deleted": records with the time of deletion and the files they came from. Entries are
+// dropped after 7 days (only when the clock is known; an entry deleted without a clock stays until
+// the clock is set and it is then treated as deleted now).
+void App::trashPurge() {
+    if (!clk::valid()) return;
+    std::vector<std::string> recs, keep;
+    if (!adifReadRecords(trashPath(), recs) || recs.empty()) return;
+    time_t now = (time_t)(clk::utcMs() / 1000);
+    bool changed = false;
+    for (auto& r : recs) {
+        std::string d = adifField(r, "APP_RIGDECK_DELETED");
+        if (d == "0" || d.size() != 14) {             // deleted before the clock was set: start its week now
+            AdifFields f = adifParse(r);
+            struct tm tm; gmtime_r(&now, &tm);
+            char ts[24]; strftime(ts, sizeof ts, "%Y%m%d%H%M%S", &tm);
+            adifSetField(f, "APP_RIGDECK_DELETED", ts);
+            keep.push_back(adifBuild(f));
+            changed = true;
+            continue;
+        }
+        QsoRecord q = adifToQso("<QSO_DATE:8>" + d.substr(0, 8) + " <TIME_ON:6>" + d.substr(8) + " <CALL:1>X <EOR>");
+        if (now * 1000LL - q.startMs > 7LL * 86400000LL) { changed = true; continue; }
+        keep.push_back(r);
+    }
+    if (changed) {
+        if (keep.empty()) remove(trashPath().c_str());
+        else adifWriteRecords(trashPath(), keep);
+    }
+}
+
+void App::uiTrashNewest(UiLogEntry& e, int& count) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    trashPurge();
+    std::vector<std::string> recs;
+    adifReadRecords(trashPath(), recs);
+    count = (int)recs.size();
+    e = UiLogEntry();
+    if (recs.empty()) return;
+    const std::string& r = recs.back();
+    e.idx = count - 1;
+    e.call = adifField(r, "CALL");
+    e.date = adifField(r, "QSO_DATE"); e.time = adifField(r, "TIME_ON");
+    if (e.date.size() == 8 && e.time.size() >= 4) e.when = e.date.substr(0, 4) + "-" + e.date.substr(4, 2) + "-" + e.date.substr(6, 2) + " " + e.time.substr(0, 2) + ":" + e.time.substr(2, 2);
+    e.band = adifField(r, "BAND");
+}
+
+std::string App::trashJson() {
+    trashPurge();
+    std::vector<std::string> recs;
+    adifReadRecords(trashPath(), recs);
+    std::string o = "{\"ok\":true,\"items\":[";
+    for (int i = (int)recs.size() - 1; i >= 0; i--) {
+        o += std::string(i == (int)recs.size() - 1 ? "" : ",") + "{\"i\":" + jnum(i) + ",\"f\":{";
+        bool first = true;
+        for (auto& kv : adifParse(recs[i])) { o += std::string(first ? "" : ",") + jstr(kv.first) + ":" + jstr(kv.second); first = false; }
+        o += "}}";
+    }
+    return o + "]}";
+}
+
+// Put a deleted contact back where it came from (in time order) and take it off the list.
+std::string App::trashRestore(int idx) {
+    std::vector<std::string> recs;
+    if (!adifReadRecords(trashPath(), recs) || idx < 0 || idx >= (int)recs.size()) return "That contact is no longer in the deleted list";
+    AdifFields f = adifParse(recs[idx]);
+    std::string from = "cur";
+    for (auto& kv : f) if (kv.first == "APP_RIGDECK_FROM") from = kv.second;
+    adifSetField(f, "APP_RIGDECK_DELETED", "");
+    adifSetField(f, "APP_RIGDECK_FROM", "");
+    std::string rec = adifBuild(f);
+    QsoRecord q = adifToQso(rec);
+    auto putBack = [&](const std::string& path) {
+        std::vector<std::string> l;
+        adifReadRecords(path, l);
+        size_t at = l.size();
+        while (at > 0 && adifToQso(l[at - 1]).startMs > q.startMs) at--;
+        l.insert(l.begin() + at, rec);
+        return adifWriteRecords(path, l);
+    };
+    bool ok = true;
+    if (from == "cur" || from == "both") ok = putBack(logPath()) && ok;
+    if (from == "all" || from == "both") ok = putBack(archivePath()) && ok;
+    if (!ok) return "Could not save the log (storage full?)";
+    recs.erase(recs.begin() + idx);
+    if (recs.empty()) remove(trashPath().c_str());
+    else adifWriteRecords(trashPath(), recs);
     logReload();
     return "";
 }
@@ -652,6 +758,13 @@ bool App::netOnce() {
         proto = cfg.logProto; host = cfg.logHost; port = cfg.logPort;
     }
     bool ok = false;
+    static std::string primed;                       // a first packet to a host can be lost while its address is looked up
+    if (proto != LOG_TCP_ADIF && proto != LOG_NONE && primed != host) {
+        static const uint8_t z = 0;
+        netSendUdp(host, 9, &z, 1);                  // discard port; only makes the network learn the host
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        primed = host;
+    }
     if (proto == LOG_TCP_ADIF) {
         std::string line = rec + "\r\n";
         ok = netSendTcp(host, port, (const uint8_t*)line.data(), line.size());
@@ -665,7 +778,14 @@ bool App::netOnce() {
         ok = netSendUdp(host, port, p5.data(), p5.size());
         ok = netSendUdp(host, port, p12.data(), p12.size()) && ok;
     } else ok = true;                                // forwarding was switched off: drop it
+    static const char* const pn[] = {"off", "TCP ADIF", "UDP ADIF", "UDP WSJT-X"};
+    char m[160];
+    snprintf(m, sizeof m, "%s %s to %s:%d (%s)", ok ? "sent" : "could not send", q.call.c_str(), host.c_str(), port,
+             proto >= 0 && proto <= 3 ? pn[proto] : "?");
+    if (logFn) logFn(m);
     std::lock_guard<std::mutex> nl(netMtx_);
+    netLast_ = m;
+    netLastMs_ = clk::valid() ? clk::utcMs() : 0;
     if (ok) { netQ_.pop_front(); netOk_++; }
     else netFail_++;
     return ok;
@@ -961,6 +1081,30 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         status("Current log cleared");
         return ok();
     }
+    if (c == "logtest") {                                            // send a test contact to the logging program only
+        if (cfg.logProto == LOG_NONE || cfg.logHost.empty()) return err("Choose where to send the log first (Settings)");
+        QsoRecord q;
+        q.call = "T1EST";
+        q.mode = "SSB"; q.submode = "USB";
+        q.rstSent = "59"; q.rstRcvd = "59";
+        q.freqHz = radio.freq.load() ? radio.freq.load() : 14250000;
+        q.startMs = q.endMs = clk::valid() ? clk::utcMs() : 0;
+        q.myCall = cfg.call; q.myGrid = cfg.grid;
+        q.comment = "RigDeck test - delete me";
+        std::lock_guard<std::mutex> nl(netMtx_);
+        netQ_.push_back({adifRecord(q), q});
+        netCv_.notify_one();
+        status("Test contact T1EST queued for " + cfg.logHost + ":" + std::to_string(cfg.logPort));
+        return ok();
+    }
+    if (c == "logtrash") return trashJson();                          // recently deleted contacts
+    if (c == "logrestore") {
+        std::string call = arg(a, "call");
+        std::string e = trashRestore(atoi(arg(a, "i", "-1").c_str()));
+        if (!e.empty()) return err(e);
+        status("Contact " + call + " restored");
+        return ok();
+    }
     if (c == "logread") {                                            // a page of the log for editing, newest first
         int from = atoi(arg(a, "from").c_str()), n = atoi(arg(a, "n", "50").c_str());
         return logReadJson(arg(a, "file") == "all", from, std::max(1, std::min(n, 200)), arg(a, "q"));
@@ -1184,7 +1328,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     uint32_t fresh = pskSeq_ - sincePsk;
     if (sincePsk > pskSeq_ || fresh > pskText_.size()) fresh = (uint32_t)pskText_.size();
     o += jstr(pskText_.substr(pskText_.size() - fresh)) + "}";
-    o += ",\"log\":{\"n\":" + jnum(logCount_) + ",\"all\":" + jnum(archiveCount_) + std::string(",\"behind\":") + jbool(archiveBehind_) + ",\"ok\":" + jnum(netOk_.load()) + ",\"fail\":" + jnum(netFail_.load()) + ",\"last\":[";
+    o += ",\"log\":{\"n\":" + jnum(logCount_) + ",\"all\":" + jnum(archiveCount_) + std::string(",\"behind\":") + jbool(archiveBehind_) + ",\"ok\":" + jnum(netOk_.load()) + ",\"fail\":" + jnum(netFail_.load()) + ",\"fwd\":" + [this] { std::lock_guard<std::mutex> nl(netMtx_); return jstr(netLast_) + ",\"fwdT\":" + jnum((long long)netLastMs_); }() + ",\"last\":[";
     first = true;
     for (auto& q : recent_) {
         o += std::string(first ? "" : ",") + "{\"call\":" + jstr(q.call) + ",\"grid\":" + jstr(q.grid) + ",\"t\":" + jnum(q.endMs) + ",\"band\":" + jstr(bandName(q.freqHz));

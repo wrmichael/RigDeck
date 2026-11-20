@@ -56,6 +56,7 @@ public:
     std::string expandMacro(const std::string& macro, const std::string& call, const std::string& rst) const;
     std::string logPath() const { return dir_ + "/log.adi"; }          // current log: cleared by "clearlog"
     std::string archivePath() const { return dir_ + "/archive.adi"; }  // every QSO ever logged
+    std::string trashPath() const { return dir_ + "/deleted.adi"; }    // deleted contacts, kept 7 days for Restore
 
     // --- on-device display --------------------------------------------------------------------
     // Reading state does not count as "an operator is present"; command() does (TX watchdog).
@@ -79,6 +80,8 @@ public:
 
     struct UiLogEntry { std::string when, call, grid, band, mode, sent, rcvd, date, time, freq, name, comment; int idx = -1; };
     void uiLogTail(size_t max, std::vector<UiLogEntry>& out);
+    // newest entry of "recently deleted" (idx -1 if none) and how many there are
+    void uiTrashNewest(UiLogEntry& e, int& count);
     bool uiWorked(const std::string& call);                        // already in the log on the band the radio is on      // newest first, from the current log file
 
     // --- GPS time ------------------------------------------------------------------------------
@@ -176,6 +179,11 @@ private:
     std::string logChange(bool archive, int idx, const std::string& expectCall,
                           const std::map<std::string, std::string>* fields);   // nullptr = delete; returns error or ""
     std::string logReadJson(bool archive, int from, int n, const std::string& filter);
+    void trashPurge();                                 // drop deleted contacts older than 7 days
+    std::string trashJson();
+    std::string trashRestore(int idx);                 // returns error or ""
+    std::string netLast_;                              // last forwarding attempt, for the Log tab
+    int64_t netLastMs_ = 0;
     std::mutex netMtx_;
     std::condition_variable netCv_;
     std::deque<std::pair<std::string, QsoRecord>> netQ_;   // ADIF record and the contact
