@@ -188,6 +188,16 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
     printf("auto TX level A %.1f %%, B %.1f %%\n", A.app.txLevelNow(), B.app.txLevelNow());
     CHECK(A.app.txLevelNow() >= 18.0f && A.app.txLevelNow() <= 24.4f);
     CHECK(B.app.txLevelNow() >= 18.0f && B.app.txLevelNow() <= 24.4f);
+    {   // the learned level survives a restart
+        App again;
+        again.begin(da);
+        std::string saved = slurp(da + "/alc.txt");
+        printf("alc.txt: %s", saved.c_str());
+        size_t bar = saved.find(" 40m|");
+        CHECK(bar != std::string::npos);
+        std::string key = saved.substr(0, bar + 4);
+        CHECK(fabsf(again.alcLearned(key) - A.app.txLevelNow()) < 0.2f);
+    }
     CHECK(adifField(la, "CALL") == "K1ABC" && adifField(la, "GRIDSQUARE") == "FN42" && adifField(la, "BAND") == "40m");
     CHECK(adifField(lb, "CALL") == "W9XYZ" && adifField(lb, "GRIDSQUARE") == "EN37");
     CHECK(adifField(la, "RST_SENT") == adifField(lb, "RST_RCVD") && adifField(lb, "RST_SENT") == adifField(la, "RST_RCVD"));

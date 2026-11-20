@@ -296,7 +296,8 @@ splatter over other stations. With Settings > Operating > "Lower audio when ALC 
 default), RigDeck reads the radio's ALC meter about every 0.4 s while transmitting and turns its own
 audio down whenever ALC goes past the ALC zone. A transmission that stays well inside the zone lets
 the level rise again, never above the "TX audio level (maximum)" setting or past the level that last
-went into the red. The level found is remembered per band until restart (or until you change the maximum).
+went into the red. The level found is kept for each radio and band (file `alc.txt` with the log), so
+it survives restarts; changing the maximum or turning the feature off starts it fresh.
 
 - Set the radio's power as you want it (e.g. 5 W on the IC-705); the audio level only removes ALC.
 - The level in use shows as "audio NN %" next to Po/ALC while transmitting.

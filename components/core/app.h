@@ -36,7 +36,8 @@ public:
     // --- audio thread -------------------------------------------------------------------------
     void rxAudio48k(const int16_t* mono, size_t n);
     bool txActive() const { return txOn_.load(); }
-    float txLevelNow() const;                       // TX audio level in use, % (automatic when cfg.autoAlc)
+    float txLevelNow() const;
+    float alcLearned(const std::string& key) const { auto it = alcLevel_.find(key); return it == alcLevel_.end() ? 0 : it->second.level; }                       // TX audio level in use, % (automatic when cfg.autoAlc)
     void txAudio48k(int16_t* mono, size_t n);
 
     // --- worker threads (each call blocks forever) --------------------------------------------
@@ -187,6 +188,9 @@ private:
     void alcStartTx();
     void alcTick(int64_t mono);
     void alcEndTx();
+    std::string alcPath() const;
+    void alcLoad();
+    void alcSave();
     uint32_t ppsUsed_ = 0;
     std::string status_, netInfo_;
     StaStatus sta_;

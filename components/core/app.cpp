@@ -76,6 +76,7 @@ App::App() {}
 void App::begin(const std::string& dataDir) {
     dir_ = dataDir;
     cfg.load(dir_ + "/settings.txt");
+    alcLoad();
     radio.addr = (uint8_t)cfg.civAddr;
     seq.now = [] { return clk::utcMs(); };
     seq.workedBefore = [this](const std::string& call) {
@@ -284,7 +285,7 @@ float App::txLevelNow() const {
 }
 
 void App::alcStartTx() {
-    alcBand_ = bandName(radio.freq.load());
+    alcBand_ = std::string(radio.modelName()) + " " + bandName(radio.freq.load());   // each radio has its own levels
     auto it = alcLevel_.find(alcBand_);
     float g = it != alcLevel_.end() ? it->second.level : (float)cfg.txLevel;
     txGain_ = std::min(g, (float)cfg.txLevel);
@@ -327,8 +328,34 @@ void App::alcEndTx() {
     if (L.ceiling <= 0) L.ceiling = (float)cfg.txLevel;
     float g = txGain_.load();
     if (!alcCut_ && alcMax_ < 70 && genStarted_) g = std::min({g * 1.06f, L.ceiling, (float)cfg.txLevel});
+    bool changed = fabsf(L.level - g) >= 0.5f || alcCut_;
     L.level = g;
+    if (changed) alcSave();                                        // kept across restarts (only when it moved, to spare the flash)
     if (alcCut_) status("TX audio lowered to " + std::to_string((int)lroundf(g)) + " % to keep the radio's ALC out of the red");
+}
+
+// Learned levels: one line per radio and band, "<radio> <band>|<level>|<ceiling>".
+std::string App::alcPath() const { return dir_ + "/alc.txt"; }
+void App::alcLoad() {
+    alcLevel_.clear();
+    FILE* f = fopen(alcPath().c_str(), "r");
+    if (!f) return;
+    char line[128];
+    while (fgets(line, sizeof line, f)) {
+        char* a = strchr(line, '|');
+        if (!a) continue;
+        *a = 0;
+        AlcLevel L;
+        if (sscanf(a + 1, "%f|%f", &L.level, &L.ceiling) == 2 && L.level >= 1 && L.level <= 100) alcLevel_[line] = L;
+    }
+    fclose(f);
+}
+void App::alcSave() {
+    FILE* f = fopen(alcPath().c_str(), "w");
+    if (!f) return;
+    for (auto& kv : alcLevel_)
+        if (kv.second.level > 0) fprintf(f, "%s|%.1f|%.1f\n", kv.first.c_str(), kv.second.level, kv.second.ceiling);
+    fclose(f);
 }
 
 void App::stopTx(const char* why) {
@@ -837,8 +864,9 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         // The hotspot's own name/password need a restart; the home network is re-joined right away.
         bool wifiChanged = wifi && (n.apSsid != cfg.apSsid || n.apPass != cfg.apPass);
         bool staChanged = wifi && (n.staSsid != cfg.staSsid || n.staPass != cfg.staPass);
-        if (n.txLevel != cfg.txLevel || n.autoAlc != cfg.autoAlc) alcLevel_.clear();   // start again from the new level
+        bool alcReset = n.txLevel != cfg.txLevel || n.autoAlc != cfg.autoAlc;   // start again from the new level
         cfg = n;
+        if (alcReset) { alcLevel_.clear(); alcSave(); }
         radio.addr = (uint8_t)cfg.civAddr;
         syncSeq();
         if (!cfg.save(dir_ + "/settings.txt")) return err("Could not save settings");
