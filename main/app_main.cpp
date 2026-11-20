@@ -55,6 +55,10 @@ static void controlTask(void*) {
                      (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024),
                      (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024),
                      (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
+            App::StaStatus w = s_app.staStatus();            // and the home network, to line up with "can't reach it"
+            if (w.state != "off")
+                ESP_LOGI(TAG, "home network: %s %s %s%s%s", w.state.c_str(), w.ssid.c_str(), w.ip.c_str(),
+                         w.reason.empty() ? "" : ", ", w.reason.c_str());
         }
         if (s_app.rebootReq) {
             for (int i = 0; i < 60; i++) { s_app.tick(); vTaskDelay(pdMS_TO_TICKS(10)); }   // let PTT-off go out

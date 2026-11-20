@@ -12,6 +12,8 @@
 #include "esp_log.h"
 #include "esp_sntp.h"
 #include "esp_timer.h"
+#include "ping/ping_sock.h"
+#include <atomic>
 #include <string>
 
 static const char* TAG = "net";
@@ -48,6 +50,44 @@ static std::string reasonText(int r) {
     case 200: return "signal lost";
     default: return "disconnected (reason " + std::to_string(r) + ")";
     }
+}
+
+// Link check: while joined, ping the router every 20 s. If it answered earlier on this connection
+// and then misses 3 in a row (about a minute), the link is dead even though Wi-Fi still says
+// "connected" (seen with the board's older Wi-Fi co-processor firmware): drop it and join again.
+// Routers that never answer ping are left alone.
+static esp_ping_handle_t s_ping = nullptr;
+static esp_timer_handle_t s_dropTimer = nullptr;                 // disconnects outside the ping task
+static std::atomic<int> s_pingMiss{0};
+static std::atomic<bool> s_pingSeen{false};
+static void pingStop() {
+    if (!s_ping) return;
+    esp_ping_stop(s_ping);
+    esp_ping_delete_session(s_ping);
+    s_ping = nullptr;
+}
+static void pingStart(uint32_t gw) {
+    pingStop();
+    s_pingMiss = 0;
+    s_pingSeen = false;
+    if (!gw) return;
+    esp_ping_config_t pc = ESP_PING_DEFAULT_CONFIG();
+    ip_addr_set_ip4_u32(&pc.target_addr, gw);
+    pc.count = ESP_PING_COUNT_INFINITE;
+    pc.interval_ms = 20000;
+    pc.timeout_ms = 3000;
+    pc.task_stack_size = 3072;
+    esp_ping_callbacks_t cb = {};
+    cb.on_ping_success = [](esp_ping_handle_t, void*) { s_pingSeen = true; s_pingMiss = 0; };
+    cb.on_ping_timeout = [](esp_ping_handle_t, void*) {
+        if (!s_pingSeen) return;
+        if (++s_pingMiss == 3) {
+            ESP_LOGW(TAG, "home network: router stopped answering for a minute; joining again");
+            esp_timer_start_once(s_dropTimer, 100000);  // the disconnect event re-joins
+        }
+    };
+    if (esp_ping_new_session(&pc, &cb, &s_ping) == ESP_OK) esp_ping_start(s_ping);
+    else { s_ping = nullptr; ESP_LOGW(TAG, "link check not started"); }
 }
 
 static void staConnectNow() {
@@ -114,6 +154,7 @@ static void staJoin() {
 
 static void staLeave() {
     s_want = false;
+    pingStop();
     esp_timer_stop(s_retryTimer);
     if (s_staNetif) esp_wifi_disconnect();
     setState(s_app->cfg.staSsid.empty() ? "off" : "disconnected");
@@ -127,6 +168,7 @@ static void onEvent(void*, esp_event_base_t base, int32_t id, void* data) {
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         const wifi_event_sta_disconnected_t* e = (const wifi_event_sta_disconnected_t*)data;
         int r = e ? e->reason : 0;
+        pingStop();
         if (!s_want) { setState(s_app->cfg.staSsid.empty() ? "off" : "disconnected"); return; }
         // Keep trying, a little slower each time (2, 4, 8 ... 60 s); the hotspot stays up meanwhile.
         int delayS = s_retry < 5 ? (2 << s_retry) : 60;
@@ -147,6 +189,11 @@ static void onEvent(void*, esp_event_base_t base, int32_t id, void* data) {
         ESP_LOGI(TAG, "home network connected, address %s", ip);
         publish();
         askRssi();
+        pingStart(e->ip_info.gw.addr);
+    } else if (base == IP_EVENT && id == IP_EVENT_STA_LOST_IP) {
+        ESP_LOGW(TAG, "home network: address lost");
+        pingStop();
+        if (s_want) setState("getting address");
     }
 }
 
@@ -161,12 +208,17 @@ void net_start(App& app) {
     ta.callback = onRetryTimer;
     ta.name = "sta-retry";
     esp_timer_create(&ta, &s_retryTimer);
+    esp_timer_create_args_t td = {};
+    td.callback = [](void*) { esp_wifi_disconnect(); };
+    td.name = "sta-drop";
+    esp_timer_create(&td, &s_dropTimer);
     app.wifiControl = [](bool connect) { if (connect) staJoin(); else staLeave(); };
 
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&init));
     esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, onEvent, nullptr, nullptr);
     esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, onEvent, nullptr, nullptr);
+    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_LOST_IP, onEvent, nullptr, nullptr);
 
     wifi_config_t ap = {};
     strlcpy((char*)ap.ap.ssid, app.cfg.apSsid.c_str(), sizeof ap.ap.ssid);
