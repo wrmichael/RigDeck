@@ -248,7 +248,7 @@ int main() {
             while (fq && fgets(lb, sizeof lb, fq)) l3 += lb;
             if (fq) fclose(fq);
             std::string r3 = l3.substr(l3.find("K4FADE"));
-            CHECK(adifField(r3, "RST_RCVD") == "-17" && adifField(r3, "GRIDSQUARE") == "EM73" && adifField(r3, "COMMENT") == "Incomplete");
+            CHECK(adifField(r3, "RST_RCVD") == "-17" && adifField(r3, "GRIDSQUARE") == "EM73" && adifField(r3, "COMMENT").empty());
             CHECK(r3.substr(0, r3.find("<EOR>")).find("RST_SENT") == std::string::npos);
         }
         Settings s2; s2.load(std::string(dir) + "/settings.txt");

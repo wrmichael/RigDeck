@@ -92,7 +92,6 @@ void App::begin(const std::string& dataDir) {
         else r.mode = "FT8";
         r.rstSent = rpt(q.rptSent);
         r.rstRcvd = rpt(q.rptRcvd);
-        if (q.partial) r.comment = r.comment.empty() ? "Incomplete" : r.comment + " incomplete";
         r.startMs = q.startMs;
         r.endMs = q.endMs;
         logQso(r);
