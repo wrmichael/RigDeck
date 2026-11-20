@@ -16,7 +16,7 @@ global.setInterval=()=>{};global.setTimeout=(f)=>{};global.confirm=()=>true;
 global.URLSearchParams=URLSearchParams;
 const src=/<script>([\s\S]*)<\/script>/.exec(fs.readFileSync('main/web/index.html','utf8'))[1];
 (async()=>{ eval(src+"\n;global._poll=poll;global._spec=pollSpec;global._lg=lgLoad;"); await new Promise(r=>setImmediate(r)); await global._poll(); await global._spec(); try{const r=await global._lg();}catch(e){console.log("lg err",e)}
-  const must=[['freq','7.074'],['mycall','W9XYZ EN37'],['logn','1 contacts'],['dClk','Clock (']];
+  const must=[['freq','7.074'],['mycall','W9XYZ EN37'],['logn','3 contacts'],['dClk','Clock (']];
   let bad=0; for(const [id,t] of must){ const v=(els[id].innerHTML||'')+(els[id].textContent||''); if(!v.includes(t)){bad++;console.log('UI FAIL',id,JSON.stringify(v));} }
   if(!els['logrows'].innerHTML.includes('K1ABC')){bad++;console.log('UI FAIL logrows');}
   if(!els['msgs'].innerHTML.includes('CQ W9XYZ EN37')){bad++;console.log('UI FAIL msgs');}

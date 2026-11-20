@@ -165,6 +165,8 @@ table.log th{color:var(--dim);font-weight:500}
     <h3>Logbook</h3>
     <div class="row"><span id="logn"></span><span id="fwd" class="hint"></span><button id="lgTest" title="Sends a contact with T1EST to the logging program set in Settings; it is not added to RigDeck's log">Send test to logger</button></div>
     <div class="row"><span id="fwdLast" class="hint"></span></div>
+    <div class="row"><button id="lgSync" class="on">Send unsent to logger</button><span id="lgUnsent"></span><button id="lgMark" title="Use once if your logging program already has these contacts (for example from an ADIF import), so they are not sent again">Mark all as already sent</button></div>
+    <p class="hint">RigDeck remembers every contact it has sent to the logging program (Settings, "Send log to"). Back home from the field, press Send unsent and the contacts it has not sent yet go to the logger. With UDP, "sent" means it left the board; RigDeck cannot tell whether the logger was listening. TCP knows.</p>
     <div class="row">
       <a id="dlcur" class="dl" href="/log.adi" download="rigdeck-current.adi">&#11015; Download current log</a>
       <a id="dlall" class="dl" href="/archive.adi" download="rigdeck-archive.adi">&#11015; Download full archive</a>
@@ -350,6 +352,8 @@ function render(){
   const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
   $("dlcur").download=`rigdeck-current-${stamp}.adi`;$("dlall").download=`rigdeck-archive-${stamp}.adi`;
   $("fwd").textContent=(S.log.ok||S.log.fail)?`forwarded ${S.log.ok}, failed attempts ${S.log.fail}`:"";
+  $("lgUnsent").textContent=S.log.unsent?`${S.log.unsent} contact(s) in the current log not sent yet`:"All contacts in the current log have been sent";
+  $("lgSync").disabled=!S.log.unsent;
   $("fwdLast").textContent=S.log.fwd?`Last: ${S.log.fwd}${S.log.fwdT?" at "+hhmmss(S.log.fwdT)+" UTC":""}`:"";
   if(typeof LG!=="undefined"&&(S.log.n!==LG.cn||S.log.all!==LG.all)&&!LG.edit){LG.cn=S.log.n;LG.all=S.log.all;if(!$("tab-log").classList.contains("hide"))lgLoad();}
   $("clkinfo").textContent=S.clk.ok?`Source: ${S.clk.src}, set ${S.clk.age} s ago`:"Clock not set";
@@ -526,6 +530,8 @@ $("trrows").addEventListener("click",async e=>{const b=e.target.closest("[data-t
   const it=LG.trash[+b.dataset.trres];if(!it)return;
   const j=await cmd("logrestore",{i:it.i,call:it.f.CALL});if(j&&j.ok)lgLoad();});
 $("lgTest").onclick=()=>cmd("logtest");
+$("lgSync").onclick=()=>cmd("logsync");
+$("lgMark").onclick=()=>{if(confirm("Mark every contact in the current log as already in the logging program? They will not be sent by Send unsent."))cmd("logmarksent",{confirm:"yes"});};
 $("lgQ").oninput=()=>{LG.from=0;clearTimeout(LG.qt);LG.qt=setTimeout(lgLoad,300);};
 $("lgPrev").onclick=()=>{LG.from=Math.max(0,LG.from-LG.n);lgLoad();};
 $("lgNext").onclick=()=>{if(LG.from+LG.n<LG.total){LG.from+=LG.n;lgLoad();}};

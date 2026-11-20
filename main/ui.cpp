@@ -325,6 +325,9 @@ void onClearLog(lv_event_t*) {
     if (s.logN == 0) { note("The current log is already empty"); return; }
     confirm("Clear current log", "Remove " + num(s.logN) + " contact(s) from the current log?\nThey stay in the archive.", "Clear", "clearlog");
 }
+lv_obj_t *bLogSync, *lLogSync;
+int shownUnsent = -1;
+void onLogSync(lv_event_t*) { cmd("logsync"); }
 void onUndoDelete(lv_event_t*) {
     App::UiLogEntry e;
     int n = 0;
@@ -506,10 +509,11 @@ void buildLogScreen() {
     lv_obj_add_flag(logTable, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
 
     lv_obj_t* bot = box(scrLog, 0, H - 76, W, 76, PAN);
-    button(bot, 10, 10, 230, 56, "Clear current log", onClearLog);
-    button(bot, 250, 10, 230, 56, "Erase archive + log", onEraseAll, nullptr, 0x7a2020);
-    lLogInfo = label(bot, 496, 10, f16, DIM);
-    lv_obj_set_width(lLogInfo, W - 496 - 12);
+    button(bot, 10, 10, 200, 56, "Clear current log", onClearLog);
+    button(bot, 218, 10, 200, 56, "Erase archive + log", onEraseAll, nullptr, 0x7a2020);
+    bLogSync = button(bot, 426, 10, 220, 56, "Send unsent", onLogSync, &lLogSync, 0x1f5a3a);
+    lLogInfo = label(bot, 656, 6, f16, DIM);
+    lv_obj_set_width(lLogInfo, W - 656 - 10);
 }
 
 // ---- radio screen: a control head for the transceiver --------------------------------------------
@@ -1465,7 +1469,11 @@ void refresh(lv_timer_t*) {
             snprintf(b, sizeof b, "Current log: %d      Archive: %d", s.logN, s.logAll);
             setText(lLogCounts, b);
         }
-        std::string info = "Tap a contact to edit or delete it. Download logs from the web page (Log tab).  " + s.net;
+        if (s.unsent != shownUnsent) {
+            shownUnsent = s.unsent;
+            setText(lLogSync, s.unsent ? "Send unsent (" + num(s.unsent) + ")" : std::string("All sent"));
+        }
+        std::string info = "Tap a contact to edit or delete it. Logs download from the web page.  " + s.net;
         if (s.netOk || s.netFail) { snprintf(b, sizeof b, "\nSent to logger: %d, failed attempts: %d", s.netOk, s.netFail); info += b; }
         setText(lLogInfo, info);
     }

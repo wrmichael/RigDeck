@@ -40,6 +40,8 @@ struct Station {
         mkdir(dir, 0755);
         remove((std::string(dir) + "/log.adi").c_str());
         remove((std::string(dir) + "/archive.adi").c_str());
+        remove((std::string(dir) + "/sent.txt").c_str());
+        remove((std::string(dir) + "/deleted.adi").c_str());
         remove((std::string(dir) + "/settings.txt").c_str());
         app.radio.write = [this](const uint8_t* d, size_t n) { fakeRadio(d, n); return true; };
         app.begin(dir);
@@ -245,6 +247,27 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
     n = recv(sock, pkt, sizeof pkt, 0);
     CHECK(n > 40 && pkt[11] == 12);
     if (n > 0) CHECK(std::string((char*)pkt, n).find("<CALL:5>K1ABC") != std::string::npos);
+    // "Send unsent": contacts logged while forwarding was off go later; sent ones never twice
+    {
+        CHECK(A.app.stateJson(0, 0, false).find("\"unsent\":0") != std::string::npos);
+        A.app.command("set", {{"logProto", "0"}});
+        A.app.command("logqso", {{"call", "N0FLD"}, {"mode", "SSB"}, {"freq", "14.250"}});
+        A.app.command("logqso", {{"call", "N0PRK"}, {"mode", "CW"}, {"freq", "7.030"}});
+        CHECK(A.app.stateJson(0, 0, false).find("\"unsent\":2") != std::string::npos);
+        A.app.command("set", {{"logProto", "2"}});
+        std::string r = A.app.command("logsync", {});
+        CHECK(r.find("\"queued\":2") != std::string::npos);
+        CHECK(A.app.command("logsync", {}).find("\"queued\":2") == std::string::npos);   // already queued: not twice
+        A.app.netOnce(); A.app.netOnce();
+        std::string got;
+        for (int k = 0; k < 6; k++) { ssize_t m = recv(sock, pkt, sizeof pkt, 0); if (m > 1) got += std::string((char*)pkt, m) + "\n"; }
+        CHECK(got.find("N0FLD") != std::string::npos && got.find("N0PRK") != std::string::npos);
+        CHECK(A.app.stateJson(0, 0, false).find("\"unsent\":0") != std::string::npos);
+        CHECK(A.app.command("logsync", {}).find("\"queued\":0") != std::string::npos);
+        App again;                                               // remembered across restarts
+        again.begin(da);
+        CHECK(again.stateJson(0, 0, false).find("\"unsent\":0") != std::string::npos);
+    }
     close(sock);
 
     std::string js = A.app.stateJson(0, 0, true);

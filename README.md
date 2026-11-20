@@ -420,6 +420,12 @@ for the ESP32-P4.
   - **Recently deleted:** a deleted contact is kept for 7 days (file `deleted.adi`). Restore it from
     the Log tab's "Recently deleted" list, or with **Undo delete** in the touch Logbook (newest
     first). It goes back where it was, in time order.
+- **Send unsent to logger** (Log tab; touch Logbook "Send unsent (N)"): RigDeck remembers which
+  contacts the logging program has received (`sent.txt`). Log in the field with no network, come
+  home, press it, and every contact of the current log not sent yet goes to the logger; contacts
+  already sent are never sent twice. **Mark all as already sent** is for contacts the logger got
+  another way (an ADIF import). With UDP, "sent" means it left the board (the logger does not
+  answer); TCP ADIF confirms the connection.
 - **Send test to logger** (Log tab) sends a T1EST contact to the logging program set in Settings
   without adding it to RigDeck's log. The line below it shows the last attempt (sent or not,
   where to, when). The first packet to a new address is preceded by a short probe so it is not

@@ -100,6 +100,7 @@ void App::begin(const std::string& dataDir) {
     };
     syncSeq();
     // Worked-before comes from the archive (all QSOs) as well as the current log.
+    sentLoad();
     logReload();
     trashPurge();
     archiveBehind_ = logCount_ > archiveCount_;
@@ -134,6 +135,7 @@ void App::logReload() {
     std::vector<std::string> recs;
     adifReadRecords(logPath(), recs);
     for (size_t i = recs.size() > 30 ? recs.size() - 30 : 0; i < recs.size(); i++) recent_.push_back(adifToQso(recs[i]));
+    unsent_ = countUnsent();
 }
 
 // Edit (fields) or delete (fields == nullptr) record idx of the current log or the archive. The
@@ -738,20 +740,68 @@ void App::logQso(const QsoRecord& in) {              // mtx_ held
     status(saved ? "Logged " + q.call : "QSO with " + q.call + " could not be saved to the device (storage full?)");
     if (cfg.logProto != LOG_NONE && !cfg.logHost.empty()) {
         std::lock_guard<std::mutex> nl(netMtx_);
-        if (netQ_.size() < 50) netQ_.push_back({rec, q});
+        if (netQ_.size() < 50) netQ_.push_back({rec, q, false});
         netCv_.notify_one();
     }
+    unsent_++;
+}
+
+// A contact's identity for "already sent": call, start and band/mode, so an edited comment or
+// report does not make it go again, but a changed call or time does.
+std::string App::sentKey(const std::string& rec) {
+    return upperTrim(adifField(rec, "CALL")) + "|" + adifField(rec, "QSO_DATE") + "|" + adifField(rec, "TIME_ON").substr(0, 4) + "|" +
+           adifField(rec, "BAND") + "|" + adifField(rec, "MODE") + "|" + adifField(rec, "SUBMODE");
+}
+void App::sentLoad() {
+    std::lock_guard<std::mutex> nl(netMtx_);
+    sent_.clear();
+    FILE* f = fopen(sentPath().c_str(), "r");
+    if (!f) return;
+    char line[160];
+    while (fgets(line, sizeof line, f)) {
+        size_t n = strlen(line);
+        while (n && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
+        if (n) sent_.insert(line);
+    }
+    fclose(f);
+}
+int App::countUnsent() {
+    std::vector<std::string> recs;
+    adifReadRecords(logPath(), recs);
+    std::lock_guard<std::mutex> nl(netMtx_);
+    int n = 0;
+    for (auto& r : recs) if (!sent_.count(sentKey(r))) n++;
+    return n;
+}
+int App::queueUnsent(bool archive) {
+    std::vector<std::string> recs;
+    adifReadRecords(archive ? archivePath() : logPath(), recs);
+    std::lock_guard<std::mutex> nl(netMtx_);
+    std::set<std::string> queued;
+    for (auto& it : netQ_) queued.insert(sentKey(it.rec));
+    int n = 0;
+    for (auto& r : recs) {
+        std::string k = sentKey(r);
+        if (sent_.count(k) || queued.count(k)) continue;
+        queued.insert(k);
+        netQ_.push_back({r, adifToQso(r), false});
+        n++;
+    }
+    if (n) netCv_.notify_one();
+    return n;
 }
 
 bool App::netOnce() {
     std::string rec, host;
     QsoRecord q;
     int proto, port;
+    bool isTest = false;
     {
         std::lock_guard<std::mutex> nl(netMtx_);
         if (netQ_.empty()) return false;
-        rec = netQ_.front().first;
-        q = netQ_.front().second;
+        rec = netQ_.front().rec;
+        q = netQ_.front().q;
+        isTest = netQ_.front().test;
     }
     {
         std::lock_guard<std::mutex> lk(mtx_);
@@ -786,8 +836,18 @@ bool App::netOnce() {
     std::lock_guard<std::mutex> nl(netMtx_);
     netLast_ = m;
     netLastMs_ = clk::valid() ? clk::utcMs() : 0;
-    if (ok) { netQ_.pop_front(); netOk_++; }
-    else netFail_++;
+    if (ok) {
+        netQ_.pop_front();
+        netOk_++;
+        if (!isTest && proto != LOG_NONE) {          // remember it, so "Send unsent" skips it
+            std::string k = sentKey(rec);
+            if (sent_.insert(k).second) {
+                FILE* f = fopen(sentPath().c_str(), "a");
+                if (f) { fputs(k.c_str(), f); fputc('\n', f); fclose(f); }
+                if (unsent_ > 0) unsent_--;
+            }
+        }
+    } else netFail_++;
     return ok;
 }
 
@@ -797,7 +857,12 @@ void App::netLoop() {
             std::unique_lock<std::mutex> nl(netMtx_);
             netCv_.wait(nl, [this] { return !netQ_.empty(); });
         }
-        if (!netOnce()) {                            // keep it queued and try again in a while
+        if (netOnce()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(40));   // a whole log: do not flood the receiver
+            bool empty;
+            { std::lock_guard<std::mutex> nl(netMtx_); empty = netQ_.empty(); }
+            if (empty) unsent_ = countUnsent();
+        } else {                                     // keep it queued and try again in a while
             std::unique_lock<std::mutex> nl(netMtx_);
             netCv_.wait_for(nl, std::chrono::seconds(15));
         }
@@ -1092,9 +1157,32 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         q.myCall = cfg.call; q.myGrid = cfg.grid;
         q.comment = "RigDeck test - delete me";
         std::lock_guard<std::mutex> nl(netMtx_);
-        netQ_.push_back({adifRecord(q), q});
+        netQ_.push_back({adifRecord(q), q, true});
         netCv_.notify_one();
         status("Test contact T1EST queued for " + cfg.logHost + ":" + std::to_string(cfg.logPort));
+        return ok();
+    }
+    if (c == "logsync") {                                            // send every contact the logging program does not have yet
+        if (cfg.logProto == LOG_NONE || cfg.logHost.empty()) return err("Choose where to send the log first (Settings)");
+        int n = queueUnsent(arg(a, "file") == "all");
+        status(n ? "Sending " + std::to_string(n) + " contact(s) to " + cfg.logHost : std::string("Nothing to send: the logging program has every contact"));
+        return "{\"ok\":true,\"queued\":" + jnum(n) + "}";
+    }
+    if (c == "logmarksent") {                                        // the logging program already has these: do not send them
+        if (arg(a, "confirm") != "yes") return err("confirm=yes required");
+        std::vector<std::string> recs;
+        adifReadRecords(arg(a, "file") == "all" ? archivePath() : logPath(), recs);
+        {
+            std::lock_guard<std::mutex> nl(netMtx_);
+            FILE* f = fopen(sentPath().c_str(), "a");
+            for (auto& r : recs) {
+                std::string k = sentKey(r);
+                if (sent_.insert(k).second && f) { fputs(k.c_str(), f); fputc('\n', f); }
+            }
+            if (f) fclose(f);
+        }
+        unsent_ = countUnsent();
+        status("Marked as already in the logging program");
         return ok();
     }
     if (c == "logtrash") return trashJson();                          // recently deleted contacts
@@ -1199,7 +1287,7 @@ void App::uiState(UiState& u) {
     int pk = rxPeak_.load();
     u.lvlDb = pk > 0 ? (int)lroundf(20 * log10f(pk / 32768.0f)) : -99;
     u.decId = nextId_; u.decodeMs = decodeMs_;
-    u.logN = logCount_; u.logAll = archiveCount_; u.netOk = netOk_; u.netFail = netFail_;
+    u.logN = logCount_; u.logAll = archiveCount_; u.netOk = netOk_; u.netFail = netFail_; u.unsent = unsent_;
     u.status = memFail ? "Not enough RAM for the decoder" : status_;
     u.net = netInfo_; u.call = cfg.call; u.myGrid = cfg.grid;
 }
@@ -1340,7 +1428,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     uint32_t fresh = pskSeq_ - sincePsk;
     if (sincePsk > pskSeq_ || fresh > pskText_.size()) fresh = (uint32_t)pskText_.size();
     o += jstr(pskText_.substr(pskText_.size() - fresh)) + "}";
-    o += ",\"log\":{\"n\":" + jnum(logCount_) + ",\"all\":" + jnum(archiveCount_) + std::string(",\"behind\":") + jbool(archiveBehind_) + ",\"ok\":" + jnum(netOk_.load()) + ",\"fail\":" + jnum(netFail_.load()) + ",\"fwd\":" + [this] { std::lock_guard<std::mutex> nl(netMtx_); return jstr(netLast_) + ",\"fwdT\":" + jnum((long long)netLastMs_); }() + ",\"last\":[";
+    o += ",\"log\":{\"n\":" + jnum(logCount_) + ",\"all\":" + jnum(archiveCount_) + std::string(",\"behind\":") + jbool(archiveBehind_) + ",\"ok\":" + jnum(netOk_.load()) + ",\"fail\":" + jnum(netFail_.load()) + ",\"unsent\":" + jnum(unsent_.load()) + ",\"fwd\":" + [this] { std::lock_guard<std::mutex> nl(netMtx_); return jstr(netLast_) + ",\"fwdT\":" + jnum((long long)netLastMs_); }() + ",\"last\":[";
     first = true;
     for (auto& q : recent_) {
         o += std::string(first ? "" : ",") + "{\"call\":" + jstr(q.call) + ",\"grid\":" + jstr(q.grid) + ",\"t\":" + jnum(q.endMs) + ",\"band\":" + jstr(bandName(q.freqHz));

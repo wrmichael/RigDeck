@@ -66,7 +66,7 @@ public:
         bool txEn = false, txOn = false, tune = false, wd = false;
         int mode = 0, op = 0, rmode = -1, data = -1, wpm = -1, smeter = 0, po = 0, swr = 0, alc = 0;
         int slotLen = 15000, slotT = 0, txMsg = 0, txPar = 0, txFreq = 1500, tries = 0;
-        int rptSent = -99, rptRcvd = -99, lvlDb = -99, decodeMs = 0, logN = 0, logAll = 0, netOk = 0, netFail = 0;
+        int rptSent = -99, rptRcvd = -99, lvlDb = -99, decodeMs = 0, logN = 0, logAll = 0, netOk = 0, netFail = 0, unsent = 0;
         uint64_t freq = 0;
         uint32_t decId = 0;
         std::string clkSrc, band, txText, nextText, dx, grid, status, net, call, myGrid, model;
@@ -186,7 +186,15 @@ private:
     int64_t netLastMs_ = 0;
     std::mutex netMtx_;
     std::condition_variable netCv_;
-    std::deque<std::pair<std::string, QsoRecord>> netQ_;   // ADIF record and the contact
+    struct NetItem { std::string rec; QsoRecord q; bool test = false; };
+    std::deque<NetItem> netQ_;                         // contacts waiting to go to the logging program
+    std::set<std::string> sent_;                       // contacts the logging program has (key: sentKey)
+    std::atomic<int> unsent_{0};                       // contacts in the current log not sent yet
+    std::string sentPath() const { return dir_ + "/sent.txt"; }
+    static std::string sentKey(const std::string& rec);
+    void sentLoad();
+    int countUnsent();                                 // reads the current log
+    int queueUnsent(bool archive);                     // returns how many were queued
     std::atomic<int> netOk_{0}, netFail_{0};
 
     NmeaTime nmea_, nmeaMod_;
