@@ -123,7 +123,7 @@ int main() {
         CHECK(st.mySig.empty() && st.set("mySig", "wwff") && st.mySig == "WWFF" && st.set("mySig", "") && st.mySig.empty());
     }
     auto pkt = wsjtxLoggedAdif("ID", "X<EOR>");
-    const uint8_t hdr[] = {0xAD, 0xBC, 0xCB, 0xDA, 0, 0, 0, 2, 0, 0, 0, 12, 0, 0, 0, 2, 'I', 'D'};
+    const uint8_t hdr[] = {0xAD, 0xBC, 0xCB, 0xDA, 0, 0, 0, 3, 0, 0, 0, 12, 0, 0, 0, 2, 'I', 'D'};
     CHECK(pkt.size() > sizeof hdr + 4 && !memcmp(pkt.data(), hdr, sizeof hdr));
     uint32_t alen = (pkt[18] << 24) | (pkt[19] << 16) | (pkt[20] << 8) | pkt[21];
     CHECK(alen == pkt.size() - 22 && !memcmp(pkt.data() + pkt.size() - 6, "X<EOR>", 6));

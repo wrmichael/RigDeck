@@ -212,9 +212,38 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
     printf("A keyed %zu times, B keyed %zu times\n", A.pttLog.size() / 2, B.pttLog.size() / 2);
     CHECK(!A.ptt && !B.ptt);
 
+    // WSJT-X format: heartbeat, then "QSO Logged" (type 5), then "Logged ADIF" (type 12)
     uint8_t pkt[1500];
     ssize_t n = recv(sock, pkt, sizeof pkt, 0);
-    CHECK(n > 40 && pkt[0] == 0xAD && pkt[1] == 0xBC && pkt[11] == 12);
+    CHECK(n > 20 && pkt[0] == 0xAD && pkt[1] == 0xBC && pkt[7] == 3 && pkt[11] == 0);
+    n = recv(sock, pkt, sizeof pkt, 0);
+    CHECK(n > 40 && pkt[11] == 5);
+    if (n > 40) {                                                // decode it the way a QDataStream reader would
+        size_t o = 12;
+        auto u32 = [&]() { uint32_t v = 0; for (int i = 0; i < 4 && o < (size_t)n; i++) v = (v << 8) | pkt[o++]; return v; };
+        auto u64 = [&]() { uint64_t hi = u32(); return (hi << 32) | u32(); };
+        auto str = [&]() { uint32_t l = u32(); std::string s; if (l != 0xFFFFFFFFu && o + l <= (size_t)n) { s.assign((char*)pkt + o, l); o += l; } return s; };
+        auto when = [&]() { int64_t jd = (int64_t)u64(); uint32_t ms = u32(); uint8_t spec = pkt[o++]; CHECK(spec == 1);
+                            return (jd - 2440588) * 86400000LL + ms; };
+        CHECK(str() == "RigDeck");
+        int64_t off = when();
+        std::string call = str(), grid = str();
+        uint64_t hz = u64();
+        std::string md = str(), rs = str(), rr = str();
+        str(); str(); str();                                     // power, comments, name
+        int64_t on = when();
+        str();
+        std::string me = str(), myGrid = str();
+        str(); str(); str();
+        printf("type 5: %s %s %llu Hz %s sent %s rcvd %s, on %lld off %lld, me %s %s, %zu of %zd bytes\n", call.c_str(), grid.c_str(),
+               (unsigned long long)hz, md.c_str(), rs.c_str(), rr.c_str(), (long long)on, (long long)off, me.c_str(), myGrid.c_str(), o, n);
+        CHECK(call == "K1ABC" && grid == "FN42" && hz > 7074000 && hz < 7077000 && me == "W9XYZ" && myGrid == "EN37");
+        CHECK(rs == adifField(la, "RST_SENT") && rr == adifField(la, "RST_RCVD") && o == (size_t)n);
+        CHECK(on > 1794000000000LL && off >= on && off - on < 600000);
+        CHECK(md == (!strcmp(mode, "FT4") ? "FT4" : (!strcmp(mode, "CW") ? "CW" : "FT8")));
+    }
+    n = recv(sock, pkt, sizeof pkt, 0);
+    CHECK(n > 40 && pkt[11] == 12);
     if (n > 0) CHECK(std::string((char*)pkt, n).find("<CALL:5>K1ABC") != std::string::npos);
     close(sock);
 

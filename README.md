@@ -385,8 +385,9 @@ for the ESP32-P4.
   as US-1234) and, optionally, **MY_SIG** (the programme name, e.g. WWFF; blank by default).
   Empty fields are left out of the log.
 - Network (Settings > "Send log to"), one message per finished QSO, retried if the logger is unreachable:
-  - **UDP, WSJT-X format**: the WSJT-X "Logged ADIF" datagram, default port 2237. Use this for
-    programs that listen for WSJT-X (GridTracker, JTAlert, Log4OM and others).
+  - **UDP, WSJT-X format**: what WSJT-X sends when it logs (a heartbeat, "QSO Logged" and "Logged
+    ADIF"), default port 2237. Use this for programs that listen for WSJT-X (GridTracker, JTAlert,
+    Log4OM and others). In Log4OM add a UDP inbound connection of type JT_MESSAGE on that port.
   - **UDP, ADIF text** or **TCP, ADIF text**: the bare ADIF record (TCP adds CR LF).
   The logging PC must be reachable: either joined to the hotspot, or on the network the board joined.
 

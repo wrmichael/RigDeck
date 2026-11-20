@@ -80,16 +80,61 @@ std::string adifField(const std::string& rec, const char* name) {
     return rec.substr(e + 1, len);
 }
 
-// WSJT-X NetworkMessage type 12 "Logged ADIF": big-endian magic, schema, type, then two
-// length-prefixed UTF-8 strings (client id, ADIF text with a header).
-std::vector<uint8_t> wsjtxLoggedAdif(const std::string& id, const std::string& record) {
+// WSJT-X NetworkMessage (Qt QDataStream, big-endian): magic, schema, type, client id, then the
+// fields of that type. Strings are a 32-bit byte count and UTF-8. WSJT-X sends a heartbeat now and
+// then, and for each logged contact first type 5 "QSO Logged" and then type 12 "Logged ADIF";
+// RigDeck does the same, because some programs read only one of the two.
+namespace {
+struct Wsjtx {
     std::vector<uint8_t> p;
-    auto u32 = [&](uint32_t v) { p.push_back(v >> 24); p.push_back(v >> 16); p.push_back(v >> 8); p.push_back(v); };
-    auto str = [&](const std::string& s) { u32((uint32_t)s.size()); p.insert(p.end(), s.begin(), s.end()); };
-    u32(0xADBCCBDA);
-    u32(2);
-    u32(12);
-    str(id);
+    void u8(uint8_t v) { p.push_back(v); }
+    void u32(uint32_t v) { p.push_back(v >> 24); p.push_back(v >> 16); p.push_back(v >> 8); p.push_back(v); }
+    void u64(uint64_t v) { u32((uint32_t)(v >> 32)); u32((uint32_t)v); }
+    void str(const std::string& s) { u32((uint32_t)s.size()); p.insert(p.end(), s.begin(), s.end()); }
+    void time(int64_t utcMs) {                       // QDateTime: Julian day (qint64), ms of day, 1 = UTC
+        int64_t day = utcMs >= 0 ? utcMs / 86400000 : (utcMs - 86399999) / 86400000;
+        u64((uint64_t)(day + 2440588));
+        u32((uint32_t)(utcMs - day * 86400000));
+        u8(1);
+    }
+    Wsjtx(uint32_t type, const std::string& id) { u32(0xADBCCBDA); u32(3); u32(type); str(id); }
+};
+}
+
+std::vector<uint8_t> wsjtxHeartbeat(const std::string& id, const std::string& version) {
+    Wsjtx m(0, id);
+    m.u32(3);                                        // highest schema we speak
+    m.str(version);
+    m.str("");                                       // revision
+    return m.p;
+}
+
+std::vector<uint8_t> wsjtxQsoLogged(const std::string& id, const QsoRecord& q) {
+    Wsjtx m(5, id);
+    m.time(q.endMs);
+    m.str(q.call);
+    m.str(q.grid);
+    m.u64(q.freqHz);
+    m.str(q.submode.empty() ? q.mode : q.submode);   // WSJT-X says "FT4", not MFSK
+    m.str(q.rstSent);
+    m.str(q.rstRcvd);
+    m.str("");                                       // TX power
+    m.str(q.comment);
+    m.str(q.name);
+    m.time(q.startMs);
+    m.str(q.op);
+    m.str(q.myCall);
+    m.str(q.myGrid);
+    m.str("");                                       // exchange sent
+    m.str("");                                       // exchange received
+    m.str("");                                       // propagation mode
+    return m.p;
+}
+
+std::vector<uint8_t> wsjtxLoggedAdif(const std::string& id, const std::string& record) {
+    Wsjtx m(12, id);
+    auto& p = m.p;
+    auto str = [&](const std::string& s) { m.str(s); };
     str("\n<adif_ver:5>3.1.0\n<programid:6>WSJT-X\n<EOH>\n" + record);
     return p;
 }

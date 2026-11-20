@@ -171,7 +171,7 @@ private:
     int scanLog(const std::string& path);
     std::mutex netMtx_;
     std::condition_variable netCv_;
-    std::deque<std::string> netQ_;
+    std::deque<std::pair<std::string, QsoRecord>> netQ_;   // ADIF record and the contact
     std::atomic<int> netOk_{0}, netFail_{0};
 
     NmeaTime nmea_, nmeaMod_;

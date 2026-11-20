@@ -16,3 +16,5 @@ std::string adifRecord(const QsoRecord& q);               // one record ending i
 std::string adifHeader();
 std::string adifField(const std::string& rec, const char* name);   // value of a field in a record ("" if absent)
 std::vector<uint8_t> wsjtxLoggedAdif(const std::string& id, const std::string& record);
+std::vector<uint8_t> wsjtxQsoLogged(const std::string& id, const QsoRecord& q);   // type 5, what Log4OM's JT connection reads
+std::vector<uint8_t> wsjtxHeartbeat(const std::string& id, const std::string& version);   // type 0

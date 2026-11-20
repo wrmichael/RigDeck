@@ -532,18 +532,20 @@ void App::logQso(const QsoRecord& in) {              // mtx_ held
     status(saved ? "Logged " + q.call : "QSO with " + q.call + " could not be saved to the device (storage full?)");
     if (cfg.logProto != LOG_NONE && !cfg.logHost.empty()) {
         std::lock_guard<std::mutex> nl(netMtx_);
-        if (netQ_.size() < 50) netQ_.push_back(rec);
+        if (netQ_.size() < 50) netQ_.push_back({rec, q});
         netCv_.notify_one();
     }
 }
 
 bool App::netOnce() {
     std::string rec, host;
+    QsoRecord q;
     int proto, port;
     {
         std::lock_guard<std::mutex> nl(netMtx_);
         if (netQ_.empty()) return false;
-        rec = netQ_.front();
+        rec = netQ_.front().first;
+        q = netQ_.front().second;
     }
     {
         std::lock_guard<std::mutex> lk(mtx_);
@@ -556,8 +558,12 @@ bool App::netOnce() {
     } else if (proto == LOG_UDP_ADIF) {
         ok = netSendUdp(host, port, (const uint8_t*)rec.data(), rec.size());
     } else if (proto == LOG_UDP_WSJTX) {
-        auto p = wsjtxLoggedAdif("RigDeck", rec);
-        ok = netSendUdp(host, port, p.data(), p.size());
+        auto hb = wsjtxHeartbeat("RigDeck", fwVersion);
+        auto p5 = wsjtxQsoLogged("RigDeck", q);
+        auto p12 = wsjtxLoggedAdif("RigDeck", rec);
+        netSendUdp(host, port, hb.data(), hb.size());
+        ok = netSendUdp(host, port, p5.data(), p5.size());
+        ok = netSendUdp(host, port, p12.data(), p12.size()) && ok;
     } else ok = true;                                // forwarding was switched off: drop it
     std::lock_guard<std::mutex> nl(netMtx_);
     if (ok) { netQ_.pop_front(); netOk_++; }
