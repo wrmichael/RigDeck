@@ -172,7 +172,7 @@ private:
 
     // log
     std::deque<QsoRecord> recent_;
-    std::set<std::string> worked_;
+    PSet worked_;                                      // "CALL|band" (PSRAM: one entry per contact)
     int logCount_ = 0, archiveCount_ = 0;
     bool archiveBehind_ = false;                     // a QSO is in the current log but not in the archive
     int scanLog(const std::string& path);
@@ -187,12 +187,12 @@ private:
     int64_t netLastMs_ = 0;
     std::mutex netMtx_;
     std::condition_variable netCv_;
-    struct NetItem { std::string rec; QsoRecord q; bool test = false; };
-    std::deque<NetItem> netQ_;                         // contacts waiting to go to the logging program
-    std::set<std::string> sent_;                       // contacts the logging program has (key: sentKey)
+    struct NetItem { PStr rec; bool test = false; };
+    std::deque<NetItem, PsAlloc<NetItem>> netQ_;       // contacts waiting to go to the logging program (PSRAM)
+    PSet sent_;                                        // contacts the logging program has (key: sentKey)
     std::atomic<int> unsent_{0};                       // contacts in the current log not sent yet
     std::string sentPath() const { return dir_ + "/sent.txt"; }
-    static std::string sentKey(const std::string& rec);
+    static std::string sentKey(std::string_view rec);
     void sentLoad();
     int countUnsent();                                 // reads the current log
     int queueUnsent(bool archive);                     // returns how many were queued

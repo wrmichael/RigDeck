@@ -117,7 +117,7 @@ int App::scanLog(const std::string& path) {
         size_t n = rec.size();
         if (n >= 5 && (rec[n - 1] == '>') && !strncasecmp(rec.c_str() + n - 5, "<EOR>", 5)) {
             std::string call = adifField(rec, "CALL"), band = adifField(rec, "BAND");
-            if (!call.empty()) { worked_.insert(call + "|" + band); count++; }
+            if (!call.empty()) { worked_.insert(pstr(call + "|" + band)); count++; }
             rec.clear();
         } else if (n >= 5 && !strncasecmp(rec.c_str() + n - 5, "<EOH>", 5)) rec.clear();
         if (rec.size() > 2000) rec.clear();
@@ -132,7 +132,7 @@ void App::logReload() {
     archiveCount_ = scanLog(archivePath());
     logCount_ = scanLog(logPath());
     recent_.clear();
-    std::vector<std::string> recs;
+    RecVec recs;
     adifReadRecords(logPath(), recs);
     for (size_t i = recs.size() > 30 ? recs.size() - 30 : 0; i < recs.size(); i++) recent_.push_back(adifToQso(recs[i]));
     unsent_ = countUnsent();
@@ -144,11 +144,11 @@ void App::logReload() {
 std::string App::logChange(bool archive, int idx, const std::string& expectCall,
                            const std::map<std::string, std::string>* fields) {
     std::string path = archive ? archivePath() : logPath(), other = archive ? logPath() : archivePath();
-    std::vector<std::string> recs;
+    RecVec recs;
     if (!adifReadRecords(path, recs) || idx < 0 || idx >= (int)recs.size()) return "That contact is no longer in the log; reload the list";
     if (!expectCall.empty() && strcasecmp(adifField(recs[idx], "CALL").c_str(), expectCall.c_str()))
         return "The log changed since the list was read; reload it";
-    std::string orig = recs[idx], repl;
+    std::string orig = sstr(recs[idx]), repl;
     if (fields) {
         AdifFields f = adifParse(orig);
         bool bandSet = false, freqSet = false;
@@ -186,10 +186,10 @@ std::string App::logChange(bool archive, int idx, const std::string& expectCall,
     }
     if (!adifWriteRecords(path, recs)) return "Could not save the log (storage full?)";
     bool inOther = false;
-    std::vector<std::string> o;
+    RecVec o;
     if (adifReadRecords(other, o)) {
         for (size_t i = o.size(); i > 0; i--) {
-            if (o[i - 1] != orig) continue;
+            if (std::string_view(o[i - 1]) != orig) continue;
             if (fields) o[i - 1] = repl;
             else o.erase(o.begin() + (i - 1));
             adifWriteRecords(other, o);
@@ -217,7 +217,7 @@ std::string App::logChange(bool archive, int idx, const std::string& expectCall,
 // the clock is set and it is then treated as deleted now).
 void App::trashPurge() {
     if (!clk::valid()) return;
-    std::vector<std::string> recs, keep;
+    RecVec recs, keep;
     if (!adifReadRecords(trashPath(), recs) || recs.empty()) return;
     time_t now = (time_t)(clk::utcMs() / 1000);
     bool changed = false;
@@ -228,7 +228,7 @@ void App::trashPurge() {
             struct tm tm; gmtime_r(&now, &tm);
             char ts[24]; strftime(ts, sizeof ts, "%Y%m%d%H%M%S", &tm);
             adifSetField(f, "APP_RIGDECK_DELETED", ts);
-            keep.push_back(adifBuild(f));
+            keep.push_back(pstr(adifBuild(f)));
             changed = true;
             continue;
         }
@@ -245,12 +245,12 @@ void App::trashPurge() {
 void App::uiTrashNewest(UiLogEntry& e, int& count) {
     std::lock_guard<std::mutex> lk(mtx_);
     trashPurge();
-    std::vector<std::string> recs;
+    RecVec recs;
     adifReadRecords(trashPath(), recs);
     count = (int)recs.size();
     e = UiLogEntry();
     if (recs.empty()) return;
-    const std::string& r = recs.back();
+    std::string_view r = recs.back();
     e.idx = count - 1;
     e.call = adifField(r, "CALL");
     e.date = adifField(r, "QSO_DATE"); e.time = adifField(r, "TIME_ON");
@@ -260,7 +260,7 @@ void App::uiTrashNewest(UiLogEntry& e, int& count) {
 
 std::string App::trashJson() {
     trashPurge();
-    std::vector<std::string> recs;
+    RecVec recs;
     adifReadRecords(trashPath(), recs);
     std::string o = "{\"ok\":true,\"items\":[";
     for (int i = (int)recs.size() - 1; i >= 0; i--) {
@@ -274,7 +274,7 @@ std::string App::trashJson() {
 
 // Put a deleted contact back where it came from (in time order) and take it off the list.
 std::string App::trashRestore(int idx) {
-    std::vector<std::string> recs;
+    RecVec recs;
     if (!adifReadRecords(trashPath(), recs) || idx < 0 || idx >= (int)recs.size()) return "That contact is no longer in the deleted list";
     AdifFields f = adifParse(recs[idx]);
     std::string from = "cur";
@@ -284,11 +284,11 @@ std::string App::trashRestore(int idx) {
     std::string rec = adifBuild(f);
     QsoRecord q = adifToQso(rec);
     auto putBack = [&](const std::string& path) {
-        std::vector<std::string> l;
+        RecVec l;
         adifReadRecords(path, l);
         size_t at = l.size();
         while (at > 0 && adifToQso(l[at - 1]).startMs > q.startMs) at--;
-        l.insert(l.begin() + at, rec);
+        l.insert(l.begin() + at, pstr(rec));
         return adifWriteRecords(path, l);
     };
     bool ok = true;
@@ -305,7 +305,7 @@ std::string App::trashRestore(int idx) {
 // One page of a log, newest first: {"total":N,"items":[{"i":index,"f":{"CALL":"..",..}}]}.
 // filter (optional) matches the callsign (contains, any case).
 std::string App::logReadJson(bool archive, int from, int n, const std::string& filter) {
-    std::vector<std::string> recs;
+    RecVec recs;
     adifReadRecords(archive ? archivePath() : logPath(), recs);
     std::string flt = upperTrim(filter);
     std::vector<int> idx;
@@ -739,13 +739,13 @@ void App::logQso(const QsoRecord& in) {              // mtx_ held
     else { archiveBehind_ = true; saved = false; }
     if (appendAdif(logPath(), rec)) logCount_++;
     else saved = false;
-    worked_.insert(q.call + "|" + bandName(q.freqHz));
+    worked_.insert(pstr(q.call + "|" + bandName(q.freqHz)));
     recent_.push_back(q);
     while (recent_.size() > 30) recent_.pop_front();
     status(saved ? "Logged " + q.call : "QSO with " + q.call + " could not be saved to the device (storage full?)");
     if (cfg.logProto != LOG_NONE && !cfg.logHost.empty()) {
         std::lock_guard<std::mutex> nl(netMtx_);
-        if (netQ_.size() < 50) netQ_.push_back({rec, q, false});
+        if (netQ_.size() < 50) netQ_.push_back({pstr(rec), false});
         netCv_.notify_one();
     }
     unsent_++;
@@ -753,7 +753,7 @@ void App::logQso(const QsoRecord& in) {              // mtx_ held
 
 // A contact's identity for "already sent": call, start and band/mode, so an edited comment or
 // report does not make it go again, but a changed call or time does.
-std::string App::sentKey(const std::string& rec) {
+std::string App::sentKey(std::string_view rec) {
     return upperTrim(adifField(rec, "CALL")) + "|" + adifField(rec, "QSO_DATE") + "|" + adifField(rec, "TIME_ON").substr(0, 4) + "|" +
            adifField(rec, "BAND") + "|" + adifField(rec, "MODE") + "|" + adifField(rec, "SUBMODE");
 }
@@ -766,12 +766,12 @@ void App::sentLoad() {
     while (fgets(line, sizeof line, f)) {
         size_t n = strlen(line);
         while (n && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
-        if (n) sent_.insert(line);
+        if (n) sent_.insert(pstr(line));
     }
     fclose(f);
 }
 int App::countUnsent() {
-    std::vector<std::string> recs;
+    RecVec recs;
     adifReadRecords(logPath(), recs);
     std::lock_guard<std::mutex> nl(netMtx_);
     int n = 0;
@@ -779,17 +779,17 @@ int App::countUnsent() {
     return n;
 }
 int App::queueUnsent(bool archive) {
-    std::vector<std::string> recs;
+    RecVec recs;
     adifReadRecords(archive ? archivePath() : logPath(), recs);
     std::lock_guard<std::mutex> nl(netMtx_);
-    std::set<std::string> queued;
-    for (auto& it : netQ_) queued.insert(sentKey(it.rec));
+    PSet queued;
+    for (auto& it : netQ_) queued.insert(pstr(sentKey(it.rec)));
     int n = 0;
     for (auto& r : recs) {
         std::string k = sentKey(r);
         if (sent_.count(k) || queued.count(k)) continue;
-        queued.insert(k);
-        netQ_.push_back({r, adifToQso(r), false});
+        queued.insert(pstr(k));
+        netQ_.push_back({r, false});
         n++;
     }
     if (n) netCv_.notify_one();
@@ -804,10 +804,10 @@ bool App::netOnce() {
     {
         std::lock_guard<std::mutex> nl(netMtx_);
         if (netQ_.empty()) return false;
-        rec = netQ_.front().rec;
-        q = netQ_.front().q;
+        rec = sstr(netQ_.front().rec);
         isTest = netQ_.front().test;
     }
+    q = adifToQso(rec);                              // the record is the one source (also for a resend)
     {
         std::lock_guard<std::mutex> lk(mtx_);
         proto = cfg.logProto; host = cfg.logHost; port = cfg.logPort;
@@ -846,7 +846,7 @@ bool App::netOnce() {
         netOk_++;
         if (!isTest && proto != LOG_NONE) {          // remember it, so "Send unsent" skips it
             std::string k = sentKey(rec);
-            if (sent_.insert(k).second) {
+            if (sent_.insert(pstr(k)).second) {
                 FILE* f = fopen(sentPath().c_str(), "a");
                 if (f) { fputs(k.c_str(), f); fputc('\n', f); fclose(f); }
                 if (unsent_ > 0) unsent_--;
@@ -1162,7 +1162,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         q.myCall = cfg.call; q.myGrid = cfg.grid;
         q.comment = "RigDeck test - delete me";
         std::lock_guard<std::mutex> nl(netMtx_);
-        netQ_.push_back({adifRecord(q), q, true});
+        netQ_.push_back({pstr(adifRecord(q)), true});
         netCv_.notify_one();
         status("Test contact T1EST queued for " + cfg.logHost + ":" + std::to_string(cfg.logPort));
         return ok();
@@ -1175,14 +1175,14 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
     }
     if (c == "logmarksent") {                                        // the logging program already has these: do not send them
         if (arg(a, "confirm") != "yes") return err("confirm=yes required");
-        std::vector<std::string> recs;
+        RecVec recs;
         adifReadRecords(arg(a, "file") == "all" ? archivePath() : logPath(), recs);
         {
             std::lock_guard<std::mutex> nl(netMtx_);
             FILE* f = fopen(sentPath().c_str(), "a");
             for (auto& r : recs) {
                 std::string k = sentKey(r);
-                if (sent_.insert(k).second && f) { fputs(k.c_str(), f); fputc('\n', f); }
+                if (sent_.insert(pstr(k)).second && f) { fputs(k.c_str(), f); fputc('\n', f); }
             }
             if (f) fclose(f);
         }
@@ -1304,10 +1304,10 @@ bool App::uiWorked(const std::string& call) {
 
 void App::uiLogTail(size_t max, std::vector<UiLogEntry>& out) {
     std::lock_guard<std::mutex> lk(mtx_);
-    std::vector<std::string> recs;
+    RecVec recs;
     adifReadRecords(logPath(), recs);
     for (size_t i = recs.size(); i > 0 && out.size() < max; i--) {
-        const std::string& r = recs[i - 1];
+        std::string_view r = recs[i - 1];
         UiLogEntry e;
         e.idx = (int)i - 1;
         e.call = adifField(r, "CALL");

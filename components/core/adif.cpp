@@ -69,17 +69,23 @@ std::string adifHeader() {
     return "RigDeck log\n<ADIF_VER:5>3.1.4 <PROGRAMID:7>RigDeck <EOH>\n";
 }
 
-std::string adifField(const std::string& rec, const char* name) {
-    std::string up;
-    for (char c : rec) up += (char)toupper((unsigned char)c);
-    std::string key = std::string("<") + name + ":";
-    size_t p = up.find(key);
-    if (p == std::string::npos) return "";
-    size_t e = rec.find('>', p);
-    if (e == std::string::npos) return "";
-    int len = atoi(rec.c_str() + p + key.size());
-    if (len <= 0 || e + 1 + (size_t)len > rec.size()) return "";
-    return rec.substr(e + 1, len);
+std::string adifField(std::string_view rec, const char* name) {
+    // Case-insensitive search for "<NAME:" that skips field values (a value may contain "<").
+    size_t nl = strlen(name), p = 0;
+    while ((p = rec.find('<', p)) != std::string_view::npos) {
+        size_t e = rec.find('>', p);
+        if (e == std::string_view::npos) return "";
+        size_t c = rec.find(':', p);
+        int len = 0;
+        bool hasLen = c != std::string_view::npos && c < e;
+        if (hasLen) len = atoi(std::string(rec.substr(c + 1, std::min<size_t>(e - c - 1, 9))).c_str());
+        if (hasLen && c - p - 1 == nl && !strncasecmp(rec.data() + p + 1, name, nl)) {
+            if (len <= 0 || e + 1 + (size_t)len > rec.size()) return "";
+            return std::string(rec.substr(e + 1, len));
+        }
+        p = e + 1 + (hasLen && len > 0 ? (size_t)len : 0);
+    }
+    return "";
 }
 
 // WSJT-X NetworkMessage (Qt QDataStream, big-endian): magic, schema, type, client id, then the
@@ -142,13 +148,13 @@ std::vector<uint8_t> wsjtxLoggedAdif(const std::string& id, const std::string& r
 }
 
 // ---- log management ---------------------------------------------------------------------------
-AdifFields adifParse(const std::string& rec) {
+AdifFields adifParse(std::string_view rec) {
     AdifFields out;
     size_t p = 0;
-    while ((p = rec.find('<', p)) != std::string::npos) {
+    while ((p = rec.find('<', p)) != std::string_view::npos) {
         size_t e = rec.find('>', p);
-        if (e == std::string::npos) break;
-        std::string tag = rec.substr(p + 1, e - p - 1);
+        if (e == std::string_view::npos) break;
+        std::string tag(rec.substr(p + 1, e - p - 1));
         size_t c = tag.find(':');
         std::string name = tag.substr(0, c);
         for (auto& ch : name) ch = (char)toupper((unsigned char)ch);
@@ -156,7 +162,7 @@ AdifFields adifParse(const std::string& rec) {
         if (c == std::string::npos) { p = e + 1; continue; }
         int len = atoi(tag.c_str() + c + 1);
         if (len < 0 || e + 1 + (size_t)len > rec.size()) break;
-        out.emplace_back(name, rec.substr(e + 1, len));
+        out.emplace_back(name, std::string(rec.substr(e + 1, len)));
         p = e + 1 + len;
     }
     return out;
@@ -188,26 +194,27 @@ bool adifSetField(AdifFields& f, const std::string& name, const std::string& val
     return true;
 }
 
-bool adifReadRecords(const std::string& path, std::vector<std::string>& recs) {
+bool adifReadRecords(const std::string& path, RecVec& recs) {
     recs.clear();
     FILE* fp = fopen(path.c_str(), "r");
     if (!fp) return false;
-    std::string line;
+    std::string line;                                 // one line at a time; reserved once
+    line.reserve(512);
     int ch;
     while ((ch = fgetc(fp)) != EOF) {
         if (ch != '\n') { line += (char)ch; continue; }
         while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
         size_t n = line.size();
-        if (n >= 5 && !strncasecmp(line.c_str() + n - 5, "<EOR>", 5) && !adifField(line, "CALL").empty()) recs.push_back(line);
+        if (n >= 5 && !strncasecmp(line.c_str() + n - 5, "<EOR>", 5) && !adifField(line, "CALL").empty()) recs.push_back(pstr(line));
         line.clear();
     }
     size_t n = line.size();
-    if (n >= 5 && !strncasecmp(line.c_str() + n - 5, "<EOR>", 5) && !adifField(line, "CALL").empty()) recs.push_back(line);
+    if (n >= 5 && !strncasecmp(line.c_str() + n - 5, "<EOR>", 5) && !adifField(line, "CALL").empty()) recs.push_back(pstr(line));
     fclose(fp);
     return true;
 }
 
-bool adifWriteRecords(const std::string& path, const std::vector<std::string>& recs) {
+bool adifWriteRecords(const std::string& path, const RecVec& recs) {
     std::string tmp = path + ".tmp";
     FILE* fp = fopen(tmp.c_str(), "w");
     if (!fp) return false;
@@ -232,7 +239,7 @@ static int64_t adifTimeMs(const std::string& d, const std::string& t) {
     return ((days * 24 + hh) * 60 + mi) * 60000LL + ss * 1000LL;
 }
 
-QsoRecord adifToQso(const std::string& rec) {
+QsoRecord adifToQso(std::string_view rec) {
     QsoRecord q;
     q.call = adifField(rec, "CALL");
     q.grid = adifField(rec, "GRIDSQUARE");
@@ -242,6 +249,9 @@ QsoRecord adifToQso(const std::string& rec) {
     q.rstRcvd = adifField(rec, "RST_RCVD");
     q.name = adifField(rec, "NAME");
     q.comment = adifField(rec, "COMMENT");
+    q.myCall = adifField(rec, "STATION_CALLSIGN");
+    q.myGrid = adifField(rec, "MY_GRIDSQUARE");
+    q.op = adifField(rec, "OPERATOR");
     q.freqHz = (uint64_t)(atof(adifField(rec, "FREQ").c_str()) * 1e6 + 0.5);
     q.startMs = adifTimeMs(adifField(rec, "QSO_DATE"), adifField(rec, "TIME_ON"));
     q.endMs = adifTimeMs(adifField(rec, "QSO_DATE_OFF"), adifField(rec, "TIME_OFF"));
