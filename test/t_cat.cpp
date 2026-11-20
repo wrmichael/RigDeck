@@ -235,6 +235,22 @@ int main() {
             CHECK(adifField(r1, "RST_SENT") == "59");
             CHECK(adifField(r2, "SUBMODE") == "USB" && adifField(r2, "BAND") == "60m");
         }
+        // FT8 contact cut short: Log QSO logs what we have and goes back to CQ
+        CHECK(!okr(app.command("logdx", {})));                          // nothing in progress
+        CHECK(okr(app.command("dx", {{"call", "K4FADE"}, {"grid", "EM73"}})));
+        CHECK(!okr(app.command("logdx", {})));                          // no report either way
+        app.seq.rptRcvd = -17;
+        CHECK(okr(app.command("logdx", {})));
+        CHECK(app.seq.txMsg == 6 && app.seq.txEnabled && app.seq.dxCall.empty());
+        {
+            FILE* fq = fopen((std::string(dir) + "/log.adi").c_str(), "r");
+            std::string l3; char lb[512];
+            while (fq && fgets(lb, sizeof lb, fq)) l3 += lb;
+            if (fq) fclose(fq);
+            std::string r3 = l3.substr(l3.find("K4FADE"));
+            CHECK(adifField(r3, "RST_RCVD") == "-17" && adifField(r3, "GRIDSQUARE") == "EM73" && adifField(r3, "COMMENT") == "Incomplete");
+            CHECK(r3.substr(0, r3.find("<EOR>")).find("RST_SENT") == std::string::npos);
+        }
         Settings s2; s2.load(std::string(dir) + "/settings.txt");
         CHECK(s2.macro[1] == "Park|{CALL} {REF} {GRID}" && s2.keyWpm == 25);
     }

@@ -376,6 +376,11 @@ for the ESP32-P4.
   "Erase archive and current log" (asks twice) is the only thing that deletes the archive.
   Worked-before (per band) is rebuilt from both files at boot, so clearing does not reset it.
   Storage is about 2 MB, roughly 3,000 contacts across both files.
+- **Log QSO** (touch screen next to CQ, web page in the QSO box) logs the contact in progress
+  straight away, for when the other station fades out before the exchange finishes, then goes
+  back to calling CQ. It needs at least one signal report: one you sent or one you received. With
+  neither, nothing is logged. The missing report is left out of the record and COMMENT says
+  "Incomplete". A contact that was already logged is not logged twice.
 - Optional ADIF fields, set on the Settings tab and written to every contact from then on:
   **OPERATOR** (operator callsign), **MY_SIG_INFO** (for example a park or event reference such
   as US-1234) and, optionally, **MY_SIG** (the programme name, e.g. WWFF; blank by default).

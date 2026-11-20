@@ -211,6 +211,31 @@ int main() {
     q2.onDecodes(D("W9XYZ K1ABC 73", -12), 1);                      // stray 73: no reply
     CHECK(q2.nextTx(0, tx) && tx == "CQ W9XYZ EN37");
 
+    // --- sequencer: logging by hand when the other station fades out ---
+    {
+        Sequencer q;
+        std::vector<QsoLog> fl;
+        q.myCall = "W9XYZ"; q.myGrid = "EN37"; q.opMode = 1; q.txEnabled = true;
+        q.now = q1.now;
+        q.onLog = [&](const QsoLog& l) { fl.push_back(l); };
+        CHECK(q.forceLog() == -1);                                   // nothing in progress
+        q.callStation("K2AAA", "FN20", -7, 0);
+        q.txDone();                                                  // only our grid went out
+        CHECK(q.forceLog() == -2 && fl.empty());                     // no report either way: ignored
+        q.onDecodes(D("W9XYZ K2AAA -14", -6), 0);                    // their report arrived, ours not sent yet
+        CHECK(q.forceLog() == 0 && fl.size() == 1 && fl[0].partial && fl[0].call == "K2AAA" &&
+              fl[0].rptRcvd == -14 && fl[0].rptSent == Sequencer::UNSET);
+        CHECK(q.forceLog() == 1 && fl.size() == 1);                  // not twice
+        q.startCq();
+        q.txDone();
+        q.onDecodes(D("W9XYZ N3BBB FM19", -10), 1);
+        CHECK(q.nextTx(0, tx) && tx == "N3BBB W9XYZ -10");
+        q.txDone();                                                  // our report went out, then they vanished
+        q.onDecodes({}, 1);
+        CHECK(q.forceLog() == 0 && fl.size() == 2 && fl[1].call == "N3BBB" && fl[1].rptSent == -10 &&
+              fl[1].rptRcvd == Sequencer::UNSET && fl[1].grid == "FM19");
+    }
+
     // --- sequencer: auto hunt skips directed CQs, worked stations and our own call ---
     Sequencer q3;
     q3.myCall = "W9XYZ"; q3.myGrid = "EN37"; q3.opMode = 2; q3.txEnabled = true;

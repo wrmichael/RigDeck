@@ -21,6 +21,7 @@ struct QsoLog {
     std::string call, grid;
     int rptSent = 0, rptRcvd = 0;
     int64_t startMs = 0, endMs = 0;
+    bool partial = false;          // logged by hand before the exchange finished; a missing report is UNSET
 };
 
 class Sequencer {
@@ -43,6 +44,7 @@ public:
     std::string dxCall, dxGrid, freeText, lastWorked;
     int rptSent = UNSET, rptRcvd = UNSET;
     bool logged = false;
+    bool sentReport = false;       // a message carrying our report to them has gone out
     int64_t qsoStart = 0, lastWorkedAt = 0;
 
     void onDecodes(const std::vector<Decode>& list, int parity);   // all decodes of one slot
@@ -55,6 +57,9 @@ public:
     void startCq();
     void halt();                                                   // stop transmitting, keep QSO fields
     void clearQso();
+    // Log the contact now, even unfinished (the other station faded out).
+    // Returns 0 logged, 1 already logged, -1 no contact in progress, -2 no report sent or received.
+    int forceLog();
     void setTxMsg(int n);
     void setOpMode(int m);
 

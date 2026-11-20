@@ -189,6 +189,7 @@ void onTune(lv_event_t*) {
 }
 void onCq(lv_event_t*) { cmd("cq"); }
 void onClear(lv_event_t*) { cmd("clear"); }
+void onLogDx(lv_event_t*) { cmd("logdx"); }
 void onParity(lv_event_t*) {
     App::UiState s;
     g_app->uiState(s);
@@ -1481,10 +1482,11 @@ extern "C" void ui_create(void) {
     lv_obj_t* lHalt;
     button(pan, PW / 2 + 4, 8, PW / 2 - 4, 64, "HALT TX", onHalt, &lHalt, 0x7a2020);
     mxOp = matrix(pan, 0, 82, PW, 52, kOpMap, onOp);
-    int bw = (PW - 12) / 3;
+    int bw = (PW - 18) / 4;
     button(pan, 0, 144, bw, 52, "CQ", onCq);
     bTune = button(pan, bw + 6, 144, bw, 52, "Tune", onTune, &lTune);
-    button(pan, 2 * (bw + 6), 144, bw, 52, "Clear", onClear);
+    button(pan, 2 * (bw + 6), 144, bw, 52, "Log QSO", onLogDx, nullptr, 0x1f5a3a);   // log now, even unfinished, then CQ
+    button(pan, 3 * (bw + 6), 144, PW - 3 * (bw + 6), 52, "Clear", onClear);
     lQso = label(pan, 4, 204, f20, TXT, "No QSO in progress");
     lMeters = label(pan, 4, 258, f16, DIM);
     const int qw = (PW - 18) / 4;

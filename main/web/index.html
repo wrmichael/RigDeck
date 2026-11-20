@@ -125,7 +125,7 @@ table.log th{color:var(--dim);font-weight:500}
       </div>
       <div class="pan" id="qsoPane">
         <h3>QSO <span id="qsoinfo" style="text-transform:none;letter-spacing:0"></span></h3>
-        <div class="row"><input id="dxcall" size="9" placeholder="DX call"><input id="dxgrid" size="5" placeholder="Grid"><button id="dxset">Set</button><button id="dxclr">Clear</button><button id="cq">CQ</button></div>
+        <div class="row"><input id="dxcall" size="9" placeholder="DX call"><input id="dxgrid" size="5" placeholder="Grid"><button id="dxset">Set</button><button id="dxclr">Clear</button><button id="logdx" title="Log this contact now, even if it did not finish, then call CQ">Log QSO</button><button id="cq">CQ</button></div>
         <div class="msgs" id="msgs"></div>
         <div class="row"><input id="free" maxlength="13" size="14" placeholder="Free text (13)"><button id="freeb">Send once</button></div>
       </div>
@@ -435,6 +435,7 @@ $("halt").onclick=()=>cmd("halt");
 $("tune").onclick=()=>cmd("tune",{v:S&&S.tx.tune?0:1});
 $("cq").onclick=()=>cmd("cq");
 $("dxclr").onclick=()=>cmd("clear");
+$("logdx").onclick=()=>cmd("logdx");
 $("dxset").onclick=()=>cmd("dx",{call:$("dxcall").value,grid:$("dxgrid").value}).then(j=>{if(j.ok)cmd("txmsg",{n:1});});
 $("freeb").onclick=()=>cmd("free",{text:$("free").value});
 $("txf").onchange=()=>cmd(S&&S.mode==="PSK31"?"pskfreq":"txfreq",{hz:$("txf").value});

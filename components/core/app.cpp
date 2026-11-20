@@ -30,7 +30,8 @@ static std::string arg(const std::map<std::string, std::string>& a, const char* 
     return it == a.end() ? def : it->second;
 }
 static const char* modeName(int m) { return m == DM_FT4 ? "FT4" : (m == DM_PSK31 ? "PSK31" : (m == DM_CW ? "CW" : "FT8")); }
-static std::string rpt(int v) { char b[8]; snprintf(b, sizeof b, "%+03d", v); return b; }
+static std::string rpt(int v) {
+    if (v == Sequencer::UNSET) return ""; char b[8]; snprintf(b, sizeof b, "%+03d", v); return b; }
 
 // "Label|text" -> text with the placeholders filled in. {CALL} is left in place when there is no
 // callsign yet so the caller can refuse to send it.
@@ -91,6 +92,7 @@ void App::begin(const std::string& dataDir) {
         else r.mode = "FT8";
         r.rstSent = rpt(q.rptSent);
         r.rstRcvd = rpt(q.rptRcvd);
+        if (q.partial) r.comment = r.comment.empty() ? "Incomplete" : r.comment + " incomplete";
         r.startMs = q.startMs;
         r.endMs = q.endMs;
         logQso(r);
@@ -723,6 +725,20 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         return ok();
     }
     if (c == "clear") { seq.clearQso(); return ok(); }
+    if (c == "logdx") {                                              // log the contact now, even unfinished, then CQ
+        if (needCall()) return err("Set your callsign and grid in Settings first");
+        std::string call = seq.dxCall;
+        int r = seq.forceLog();
+        if (r == -1) return err("No QSO in progress to log");
+        if (r == -2) return err("No signal report sent or received yet; nothing to log");
+        status(r == 1 ? call + " was already logged; calling CQ" : "Logged " + call + "; calling CQ");
+        syncSeq();
+        seq.startCq();
+        if (txState_ == ST_TX) haltReq_ = true;                     // stop the call to them; CQ in the next slot
+        if (clk::valid()) seq.txEnabled = true;
+        watchdogTripped_ = false;
+        return ok();
+    }
     if (c == "txfreq") {
         if (!cfg.set("txFreq", arg(a, "hz"))) return err("200-2900 Hz");
         return ok();

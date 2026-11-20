@@ -109,6 +109,7 @@ void Sequencer::clearQso() {
     dxGrid.clear();
     rptSent = rptRcvd = UNSET;
     logged = false;
+    sentReport = false;
     retries = 0;
     txMsg = 0;
 }
@@ -119,6 +120,7 @@ void Sequencer::callStation(const std::string& call, const std::string& grid, in
     rptSent = snr;
     rptRcvd = UNSET;
     logged = false;
+    sentReport = false;
     qsoStart = now ? now() : 0;
     txParity = 1 - parity;                                        // answer in the other slot
     txMsg = 1;
@@ -132,6 +134,7 @@ void Sequencer::respondTo(const ParsedMsg& p, int snr, int parity) {
         dxGrid.clear();
         rptSent = snr;
         rptRcvd = UNSET;
+        sentReport = false;
         retries = 0;
         // They missed our RR73 and are repeating: answer again, but do not log twice.
         logged = (p.from == lastWorked && now && now() - lastWorkedAt < 180000);
@@ -163,6 +166,25 @@ void Sequencer::logQso() {
     }
 }
 
+int Sequencer::forceLog() {
+    if (dxCall.empty()) return -1;
+    if (logged) return 1;
+    if (!sentReport && rptRcvd == UNSET) return -2;
+    logged = true;
+    lastWorked = dxCall;
+    lastWorkedAt = now ? now() : 0;
+    if (onLog) {
+        QsoLog q;
+        q.call = dxCall; q.grid = dxGrid;
+        q.rptSent = sentReport ? rptSent : UNSET;
+        q.rptRcvd = rptRcvd;
+        q.startMs = qsoStart; q.endMs = now ? now() : qsoStart;
+        q.partial = true;
+        onLog(q);
+    }
+    return 0;
+}
+
 void Sequencer::finish() {
     clearQso();
     if (opMode == 1 && txEnabled) { txMsg = 6; txParity = cqParity; }
@@ -171,6 +193,7 @@ void Sequencer::finish() {
 
 void Sequencer::txDone() {
     retries++;
+    if (txMsg >= 2 && txMsg <= 4) sentReport = true;
     switch (txMsg) {
     case 4:
         logQso();
