@@ -11,6 +11,14 @@
 
 void *eh_host_port_dma_alloc(size_t n)
 {
+#if CONFIG_EH_HOST_PORT_DMA_PREFER_SPIRAM
+    /* IC7100-FT8 local patch: per-frame TX buffers also go to DMA-capable PSRAM when preferred,
+     * cache-line aligned and padded, so short internal-RAM spells no longer fail Wi-Fi frames and
+     * control messages (seen as "tx_bytes failed" and a dead link on the Waveshare P4 board). */
+    void *ptr = heap_caps_aligned_alloc(64, (n + 63u) & ~(size_t)63u,
+            MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
+    if (ptr) return ptr;
+#endif
     return heap_caps_malloc(n, MALLOC_CAP_DMA);
 }
 

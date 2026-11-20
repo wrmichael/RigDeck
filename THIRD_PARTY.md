@@ -21,3 +21,8 @@ boards), the host now assumes streaming mode instead of falling back to packet m
 the Wi-Fi drops every multi-frame SDIO read and the hotspot does not work. The changed lines are
 marked "IC7100-FT8 local patch". This copy takes precedence over the registry version because it
 sits in the project's `components/` folder.
+
+`port/os/idf/src/eh_host_port_dma.c`: with "Prefer SPIRAM for DMA buffers" on, the per-frame
+`eh_host_port_dma_alloc()` also allocates from DMA-capable PSRAM (64-byte aligned), not only the
+large aggregate buffers. Internal RAM on the P4 is too tight for every Wi-Fi frame; failed
+allocations dropped frames and control messages. Also marked "IC7100-FT8 local patch".

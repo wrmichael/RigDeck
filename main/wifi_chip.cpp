@@ -63,7 +63,12 @@ static void installFromPartition() {
     size_t dl = sizeof done;
     uint8_t tries = 0;
     bool same = nvs_get_blob(nv, "sha", done, &dl) == ESP_OK && dl == 8 && !memcmp(done, sha, 8);
-    nvs_get_u8(nv, "tries", &tries);
+    uint8_t tsha[8] = {};
+    size_t tl = sizeof tsha;
+    if (nvs_get_blob(nv, "tsha", tsha, &tl) == ESP_OK && tl == 8 && !memcmp(tsha, sha, 8))
+        nvs_get_u8(nv, "tries", &tries);              // attempts count per image
+    else
+        nvs_set_blob(nv, "tsha", sha, 8);
     if (same) { nvs_close(nv); return; }               // already installed
     if (tries >= 3) {
         nvs_close(nv);
