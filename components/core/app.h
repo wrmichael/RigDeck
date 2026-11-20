@@ -70,7 +70,7 @@ public:
         uint64_t freq = 0;
         uint32_t decId = 0;
         std::string clkSrc, band, txText, nextText, dx, grid, status, net, call, myGrid, model;
-        std::string staState, staIp, staReason;
+        std::string staState, staIp, staReason, wchipVer;
         int staRssi = 0, txLvl = 0;
     };
     struct UiDecode { uint32_t id; int64_t slotMs; int snr; float dt; int freq; std::string text; bool cq, toMe; };

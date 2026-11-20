@@ -27,6 +27,7 @@ esp_err_t eh_host_cp_ota_begin(void);
 esp_err_t eh_host_cp_ota_write(const uint8_t* ota_data, uint32_t ota_data_len);
 esp_err_t eh_host_cp_ota_end(void);
 esp_err_t eh_host_cp_ota_activate(void);
+bool eh_host_mcu_transport_sdio_sw_aggr_negotiated(void);
 }
 
 static const char* TAG = "wifichip";
@@ -125,6 +126,9 @@ static void versionTask(void*) {
         snprintf(b, sizeof b, "%u.%u.%u", (unsigned)v.major1, (unsigned)v.minor1, (unsigned)v.patch1);
         ver = b;
         s_canActivate = v.major1 > 2 || (v.major1 == 2 && v.minor1 > 5);
+        // How the chip talks to RigDeck: RigDeck's own build streams; Espressif's default build uses
+        // software aggregation, which stalled the link on these boards.
+        ver += eh_host_mcu_transport_sdio_sw_aggr_negotiated() ? " (fast mode - install rigdeck-wifi-chip.bin again)" : " (streaming)";
     } else {
         ver = "old (does not report a version)";
     }

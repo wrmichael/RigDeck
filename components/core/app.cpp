@@ -1281,7 +1281,7 @@ void App::uiState(UiState& u) {
     u.model = radio.connected() ? radio.modelName() : "";
     u.wpm = radio.keySpeed;
     u.txLvl = (int)lroundf(txLevelNow());
-    u.staState = sta_.state; u.staIp = sta_.ip; u.staReason = sta_.reason; u.staRssi = sta_.rssi;
+    u.staState = sta_.state; u.staIp = sta_.ip; u.staReason = sta_.reason; u.staRssi = sta_.rssi; u.wchipVer = wchipVer_;
     u.smeter = radio.smeter; u.po = radio.po; u.swr = radio.swr; u.alc = radio.alc;
     u.slotLen = (int)L; u.slotT = (int)(u.utc % L);
     u.txEn = seq.txEnabled; u.txOn = txState_ == ST_TX; u.tune = tuneReq_; u.wd = watchdogTripped_;

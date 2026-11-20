@@ -1352,7 +1352,7 @@ void refreshSettings(const App::UiState& s) {
     bool noteOn = !noteText.empty() && (int32_t)(noteUntil - lv_tick_get()) > 0;
     setText(sStatus, noteOn ? noteText : s.status);
     setTextColor(sStatus, noteOn ? AMB : DIM);
-    setText(sWifi, staText(s));
+    setText(sWifi, staText(s) + (s.wchipVer.empty() ? "" : "\nWi-Fi chip firmware: " + s.wchipVer));
     setTextColor(sWifi, s.staState == "connected" ? 0x3fcf8e : s.staState == "retrying" ? 0xff6b6b : TXT);
 }
 
