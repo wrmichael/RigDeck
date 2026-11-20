@@ -2,6 +2,9 @@
 # of the esp_hosted component match Espressif's ESP32-P4-Function-EV-Board; other boards may need
 # "idf.py menuconfig" -> Component config -> ESP-Hosted config.
 CONFIG_SPIRAM=y
+# Wi-Fi chip firmware 3.x sends software-aggregated SDIO transfers with ~16 kB buffers. Keep those
+# DMA buffers in PSRAM: in internal RAM they leave too little for the network and the USB radio.
+CONFIG_EH_HOST_PORT_DMA_PREFER_SPIRAM=y
 
 # On-device touch interface: LVGL 9 on the Waveshare 7 inch display (settings as in Waveshare's examples).
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
