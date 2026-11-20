@@ -249,13 +249,33 @@ int main() {
     run(0.5);
     savePpm("test/out/ui/8_logbook.ppm");
     CHECK(state().find("\"log\":{\"n\":5,\"all\":5") != std::string::npos);
+    // Edit: tap the newest contact, clear its grid, save; then delete it.
+    tap(300, 115);
+    run(0.5);
+    savePpm("test/out/ui/8a_edit.ppm");
+    tap(246 + 60, 176 + 27);                          // Grid field
+    tap(935, 304 + 59 * 3 + 30);                      // keyboard "Clear"
+    tap(110, 268);                                    // Save
+    run(0.5);
+    std::string lr = app.command("logread", {{"n", "1"}});
+    printf("after edit: %s\n", lr.c_str());
+    CHECK(lr.find("PA3XYZ") != std::string::npos && lr.find("\"GRIDSQUARE\"") == std::string::npos);
+    tap(300, 115);
+    run(0.5);
+    tap(320, 268);                                    // Delete contact
+    run(0.5);
+    savePpm("test/out/ui/8b_delete_confirm.ppm");
+    tap(CONFIRM_X, CONFIRM_Y);
+    run(0.5);
+    CHECK(state().find("\"log\":{\"n\":4,\"all\":4") != std::string::npos);
+    CHECK(app.command("logread", {{"file", "all"}}).find("PA3XYZ") == std::string::npos);
     tap(120, 562);                                    // Clear current log
     run(0.5);
     savePpm("test/out/ui/9_confirm.ppm");
-    CHECK(state().find("\"log\":{\"n\":5") != std::string::npos);        // nothing cleared before confirming
+    CHECK(state().find("\"log\":{\"n\":4") != std::string::npos);        // nothing cleared before confirming
     tap(CONFIRM_X, CONFIRM_Y);                        // the dialog's "Clear" button
     run(0.5);
-    CHECK(state().find("\"log\":{\"n\":0,\"all\":5") != std::string::npos);
+    CHECK(state().find("\"log\":{\"n\":0,\"all\":4") != std::string::npos);
     savePpm("test/out/ui/10_cleared.ppm");
     tap(70, 32);                                      // Back
     run(0.5);

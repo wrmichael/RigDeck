@@ -9,11 +9,13 @@ global.location={protocol:"http:"};
 global.performance={now:()=>Date.now()};
 let state=fs.readFileSync(process.argv[2],'utf8');
 JSON.parse(state);
-global.fetch=async(u)=>({json:async()=>u.startsWith('/api/spec')?{seq:1,hz:11.7,d:"50".repeat(256)}:JSON.parse(state)});
+const logread={ok:true,total:1,items:[{i:0,f:{CALL:"K1ABC",QSO_DATE:"20261110",TIME_ON:"163000",BAND:"40m",MODE:"FT8",RST_SENT:"-09",RST_RCVD:"-15",GRIDSQUARE:"FN42"}}]};
+global.fetch=async(u,o)=>({json:async()=>u.startsWith('/api/spec')?{seq:1,hz:11.7,d:"50".repeat(256)}:
+  (o&&String(o.body).includes('c=logread'))?logread:JSON.parse(state)});
 global.setInterval=()=>{};global.setTimeout=(f)=>{};global.confirm=()=>true;
 global.URLSearchParams=URLSearchParams;
 const src=/<script>([\s\S]*)<\/script>/.exec(fs.readFileSync('main/web/index.html','utf8'))[1];
-(async()=>{ eval(src+"\n;global._poll=poll;global._spec=pollSpec;"); await new Promise(r=>setImmediate(r)); await global._poll(); await global._spec();
+(async()=>{ eval(src+"\n;global._poll=poll;global._spec=pollSpec;global._lg=lgLoad;"); await new Promise(r=>setImmediate(r)); await global._poll(); await global._spec(); try{const r=await global._lg();}catch(e){console.log("lg err",e)}
   const must=[['freq','7.074'],['mycall','W9XYZ EN37'],['logn','1 contacts'],['dClk','Clock (']];
   let bad=0; for(const [id,t] of must){ const v=(els[id].innerHTML||'')+(els[id].textContent||''); if(!v.includes(t)){bad++;console.log('UI FAIL',id,JSON.stringify(v));} }
   if(!els['logrows'].innerHTML.includes('K1ABC')){bad++;console.log('UI FAIL logrows');}

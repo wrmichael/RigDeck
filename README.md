@@ -408,6 +408,15 @@ for the ESP32-P4.
   "Erase archive and current log" (asks twice) is the only thing that deletes the archive.
   Worked-before (per band) is rebuilt from both files at boot, so clearing does not reset it.
   Storage is about 2 MB, roughly 3,000 contacts across both files.
+- **Editing and deleting contacts:**
+  - Web page, Log tab: pick the current log or the archive, find a call, page through (newest
+    first), press **Edit** on a contact. Every ADIF field of the contact is listed; change or clear
+    any of them, add a field (e.g. STATE), **Save changes**, or **Delete contact**.
+  - Touch screen, Logbook: tap a contact. Change call, date, time, frequency (MHz; the band
+    follows it), mode (USB, LSB, CW, FT8, FT4, PSK31...), reports, grid, name or comment, then
+    **Save**, or **Delete contact** (asks first).
+  - A change is made in both files (current log and archive), and worked-before follows it.
+    Contacts already sent to a logging program are not changed there.
 - **Log QSO** (touch screen next to CQ, web page in the QSO box) logs the contact in progress
   straight away, for when the other station fades out before the exchange finishes, then goes
   back to calling CQ. It needs at least one signal report: one you sent or one you received. With

@@ -169,8 +169,20 @@ table.log th{color:var(--dim);font-weight:500}
       <a id="dlall" class="dl" href="/archive.adi" download="rigdeck-archive.adi">&#11015; Download full archive</a>
       <button id="clrlog">Clear current log</button>
     </div>
-    <table class="log"><thead><tr><th>UTC</th><th>Call</th><th>Grid</th><th>Band</th><th>Mode</th><th>Sent</th><th>Rcvd</th></tr></thead><tbody id="logrows"></tbody></table>
-    <p class="hint">Every contact is written to two files: the current log and the archive. Clearing the current log leaves the archive untouched, so download the current log into your logging program, clear it, and the next download holds only new contacts. The table shows contacts made since power-up or the last clear.</p>
+    <div class="row">
+      <select id="lgFile"><option value="cur">Current log</option><option value="all">Archive (everything)</option></select>
+      <input id="lgQ" size="10" placeholder="Find call">
+      <button id="lgPrev">&lsaquo; Newer</button><span id="lgPage" class="hint"></span><button id="lgNext">Older &rsaquo;</button>
+    </div>
+    <table class="log"><thead><tr><th>Date</th><th>UTC</th><th>Call</th><th>Band</th><th>Mode</th><th>Sent</th><th>Rcvd</th><th>Grid</th><th></th></tr></thead><tbody id="logrows"></tbody></table>
+    <div id="lgEdit" class="pan hide" style="margin-top:10px">
+      <h3 id="lgEditT">Edit contact</h3>
+      <div id="lgFields" class="form"></div>
+      <div class="row"><input id="lgNewN" size="14" placeholder="New field (e.g. STATE)"><input id="lgNewV" size="16" placeholder="Value"><button id="lgAdd">Add field</button></div>
+      <div class="row"><button id="lgSave" class="on">Save changes</button><button id="lgCancel">Cancel</button><button id="lgDel" class="danger">Delete contact</button><span id="lgMsg" class="hint"></span></div>
+      <p class="hint">Times are UTC (HHMM or HHMMSS), dates YYYYMMDD, frequency in MHz (the band follows it). Clear a box to remove that field. Changes apply to both the current log and the archive.</p>
+    </div>
+    <p class="hint">Every contact is written to two files: the current log and the archive. Clearing the current log leaves the archive untouched, so download the current log into your logging program, clear it, and the next download holds only new contacts. Edit or Delete fixes a contact in both files.</p>
     <div class="row"><button id="eraseall" class="danger">Erase archive and current log</button></div>
   </div>
 </section>
@@ -334,7 +346,7 @@ function render(){
   const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
   $("dlcur").download=`rigdeck-current-${stamp}.adi`;$("dlall").download=`rigdeck-archive-${stamp}.adi`;
   $("fwd").textContent=(S.log.ok||S.log.fail)?`forwarded ${S.log.ok}, failed attempts ${S.log.fail}`:"";
-  $("logrows").innerHTML=S.log.last.slice().reverse().map(l=>`<tr><td>${hhmmss(l.t)}</td><td>${esc(l.call)}</td><td>${esc(l.grid)}</td><td>${esc(l.band)}</td><td>${esc(l.mode)}</td><td>${esc(l.rs)}</td><td>${esc(l.rr)}</td></tr>`).join("");
+  if(typeof LG!=="undefined"&&(S.log.n!==LG.cn||S.log.all!==LG.all)&&!LG.edit){LG.cn=S.log.n;LG.all=S.log.all;if(!$("tab-log").classList.contains("hide"))lgLoad();}
   $("clkinfo").textContent=S.clk.ok?`Source: ${S.clk.src}, set ${S.clk.age} s ago`:"Clock not set";
   $("netinfo").textContent=S.net+(S.ver?"  ·  RigDeck "+S.ver:"");
   if(S.sta){const t=S.sta, q=t.rssi>=-60?"strong":t.rssi>=-70?"good":t.rssi>=-80?"fair":"weak", el=$("staInfo");
@@ -419,6 +431,7 @@ document.querySelector("nav").addEventListener("click",e=>{
   const t=e.target.dataset.tab; if(!t) return;
   document.querySelectorAll("nav button").forEach(b=>b.className=b.dataset.tab===t?"on":"");
   ["op","qlog","log","set"].forEach(x=>$("tab-"+x).classList.toggle("hide",x!==t));
+  if(t==="log"&&!LG.edit) lgLoad();
 });
 document.body.addEventListener("click",e=>{
   const b=e.target.closest("button,tr"); if(!b) return; const d=b.dataset;
@@ -471,6 +484,50 @@ $("qlCall").oninput=()=>{const c=$("qlCall").value.trim().toUpperCase();$("qlDup
 $("reboot").onclick=()=>{if(confirm("Restart the device now?"))cmd("reboot");};
 $("staCon").onclick=async()=>{await $("save").onclick();cmd("wifi",{do:"connect"});};
 $("staDis").onclick=()=>cmd("wifi",{do:"disconnect"});
+// ---- log management: list, edit, delete ----
+var LG={from:0,n:25,total:0,items:[],edit:null,cn:-1,all:-1};
+const LG_MAIN=["CALL","QSO_DATE","TIME_ON","FREQ","BAND","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","NAME","COMMENT"];
+async function lgLoad(){
+  if(demo) return;
+  const j=await cmd("logread",{file:$("lgFile").value,from:LG.from,n:LG.n,q:$("lgQ").value.trim()});
+  if(!j||!j.ok) return;
+  LG.total=j.total;LG.items=j.items;
+  $("lgPage").textContent=j.total?`${LG.from+1}–${Math.min(LG.from+LG.n,j.total)} of ${j.total}`:"no contacts";
+  $("lgPrev").disabled=LG.from===0;$("lgNext").disabled=LG.from+LG.n>=j.total;
+  const d=s=>s&&s.length===8?`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6)}`:"", t=s=>s?`${s.slice(0,2)}:${s.slice(2,4)}`:"";
+  $("logrows").innerHTML=j.items.map((it,k)=>{const f=it.f;return `<tr><td>${d(f.QSO_DATE)}</td><td>${t(f.TIME_ON)}</td><td>${esc(f.CALL||"")}</td><td>${esc(f.BAND||"")}</td><td>${esc(f.SUBMODE||f.MODE||"")}</td><td>${esc(f.RST_SENT||"")}</td><td>${esc(f.RST_RCVD||"")}</td><td>${esc(f.GRIDSQUARE||"")}</td><td><button data-lgedit="${k}">Edit</button></td></tr>`;}).join("");
+}
+function lgOpen(k){
+  const it=LG.items[k]; if(!it) return;
+  LG.edit={i:it.i,call:it.f.CALL,f:Object.assign({},it.f),file:$("lgFile").value};
+  const names=LG_MAIN.concat(Object.keys(it.f).filter(n=>!LG_MAIN.includes(n)));
+  $("lgFields").innerHTML=names.map(n=>`<label for="lgf_${n}">${n}</label><input id="lgf_${n}" data-f="${n}" value="${esc(it.f[n]||"")}">`).join("");
+  $("lgEditT").textContent=`Edit contact: ${it.f.CALL}`;$("lgMsg").textContent="";
+  $("lgEdit").classList.remove("hide");$("lgEdit").scrollIntoView({behavior:"smooth"});
+}
+function lgClose(){LG.edit=null;$("lgEdit").classList.add("hide");lgLoad();}
+$("logrows").addEventListener("click",e=>{const b=e.target.closest("[data-lgedit]");if(b)lgOpen(+b.dataset.lgedit);});
+$("lgFile").onchange=()=>{LG.from=0;lgLoad();};
+$("lgQ").oninput=()=>{LG.from=0;clearTimeout(LG.qt);LG.qt=setTimeout(lgLoad,300);};
+$("lgPrev").onclick=()=>{LG.from=Math.max(0,LG.from-LG.n);lgLoad();};
+$("lgNext").onclick=()=>{if(LG.from+LG.n<LG.total){LG.from+=LG.n;lgLoad();}};
+$("lgCancel").onclick=lgClose;
+$("lgAdd").onclick=()=>{const n=$("lgNewN").value.trim().toUpperCase().replace(/[^A-Z0-9_]/g,""),v=$("lgNewV").value;
+  if(!n)return;let el=document.getElementById("lgf_"+n);
+  if(!el){$("lgFields").insertAdjacentHTML("beforeend",`<label for="lgf_${n}">${n}</label><input id="lgf_${n}" data-f="${n}">`);el=document.getElementById("lgf_"+n);}
+  el.value=v;$("lgNewN").value="";$("lgNewV").value="";};
+$("lgSave").onclick=async()=>{
+  const E=LG.edit;if(!E)return;const args={file:E.file,i:E.i,call:E.call};let n=0;
+  document.querySelectorAll("#lgFields [data-f]").forEach(el=>{const k=el.dataset.f,v=el.value.trim();if(v!==(E.f[k]||"")){args["f."+k]=v;n++;}});
+  if(!n){$("lgMsg").textContent="Nothing changed";return;}
+  const j=await cmd("logedit",args);if(j&&j.ok)lgClose();else $("lgMsg").textContent=(j&&j.err)||"Not saved";
+};
+$("lgDel").onclick=async()=>{
+  const E=LG.edit;if(!E)return;
+  if(!confirm(`Delete the contact with ${E.call} from the current log and the archive? This cannot be undone.`))return;
+  const j=await cmd("logdel",{file:E.file,i:E.i,call:E.call});if(j&&j.ok)lgClose();else $("lgMsg").textContent=(j&&j.err)||"Not deleted";
+};
+
 var wcBusy=false;   // var: render() may run before this line
 $("wcGo").onclick=()=>{
   const f=$("wcFile").files[0], m=$("wcMsg");

@@ -77,7 +77,7 @@ public:
     void uiDecodes(uint32_t since, std::vector<UiDecode>& out);
     void uiSpectrum(uint8_t out[Spectrum::BINS], uint32_t& seq) { spec_.snapshot(out, seq); }
 
-    struct UiLogEntry { std::string when, call, grid, band, mode, sent, rcvd; };
+    struct UiLogEntry { std::string when, call, grid, band, mode, sent, rcvd, date, time, freq, name, comment; int idx = -1; };
     void uiLogTail(size_t max, std::vector<UiLogEntry>& out);
     bool uiWorked(const std::string& call);                        // already in the log on the band the radio is on      // newest first, from the current log file
 
@@ -172,6 +172,10 @@ private:
     int logCount_ = 0, archiveCount_ = 0;
     bool archiveBehind_ = false;                     // a QSO is in the current log but not in the archive
     int scanLog(const std::string& path);
+    void logReload();                                  // worked-before, counts and recent list from the files
+    std::string logChange(bool archive, int idx, const std::string& expectCall,
+                          const std::map<std::string, std::string>* fields);   // nullptr = delete; returns error or ""
+    std::string logReadJson(bool archive, int from, int n, const std::string& filter);
     std::mutex netMtx_;
     std::condition_variable netCv_;
     std::deque<std::pair<std::string, QsoRecord>> netQ_;   // ADIF record and the contact

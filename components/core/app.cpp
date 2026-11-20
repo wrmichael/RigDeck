@@ -98,8 +98,7 @@ void App::begin(const std::string& dataDir) {
     };
     syncSeq();
     // Worked-before comes from the archive (all QSOs) as well as the current log.
-    archiveCount_ = scanLog(archivePath());
-    logCount_ = scanLog(logPath());
+    logReload();
     archiveBehind_ = logCount_ > archiveCount_;
 }
 
@@ -121,6 +120,97 @@ int App::scanLog(const std::string& path) {
     }
     fclose(f);
     return count;
+}
+
+// After the files changed (edit, delete): worked-before, counts and the recent list from scratch.
+void App::logReload() {
+    worked_.clear();
+    archiveCount_ = scanLog(archivePath());
+    logCount_ = scanLog(logPath());
+    recent_.clear();
+    std::vector<std::string> recs;
+    adifReadRecords(logPath(), recs);
+    for (size_t i = recs.size() > 30 ? recs.size() - 30 : 0; i < recs.size(); i++) recent_.push_back(adifToQso(recs[i]));
+}
+
+// Edit (fields) or delete (fields == nullptr) record idx of the current log or the archive. The
+// same record in the other file (identical text) changes with it, so the two stay in step.
+// expectCall guards against the list having changed since it was read.
+std::string App::logChange(bool archive, int idx, const std::string& expectCall,
+                           const std::map<std::string, std::string>* fields) {
+    std::string path = archive ? archivePath() : logPath(), other = archive ? logPath() : archivePath();
+    std::vector<std::string> recs;
+    if (!adifReadRecords(path, recs) || idx < 0 || idx >= (int)recs.size()) return "That contact is no longer in the log; reload the list";
+    if (!expectCall.empty() && strcasecmp(adifField(recs[idx], "CALL").c_str(), expectCall.c_str()))
+        return "The log changed since the list was read; reload it";
+    std::string orig = recs[idx], repl;
+    if (fields) {
+        AdifFields f = adifParse(orig);
+        bool bandSet = false, freqSet = false;
+        for (auto& kv : *fields) {
+            std::string name = upperTrim(kv.first), v = kv.second;
+            if (name.empty() || name.size() > 40 || name.find_first_of("<>: ") != std::string::npos) return "Bad field name: " + kv.first;
+            if (v.find('\n') != std::string::npos || v.find("<EOR>") != std::string::npos || v.find("<eor>") != std::string::npos) return "Bad value for " + name;
+            while (!v.empty() && v.back() == ' ') v.pop_back();
+            while (!v.empty() && v.front() == ' ') v.erase(0, 1);
+            if (name == "CALL" || name == "GRIDSQUARE" || name == "MODE" || name == "SUBMODE" || name == "BAND" ||
+                name == "STATION_CALLSIGN" || name == "OPERATOR" || name == "MY_GRIDSQUARE") v = upperTrim(v);
+            if (name == "BAND") { for (auto& c : v) c = (char)tolower((unsigned char)c); bandSet = true; }
+            if (name == "CALL" && !validCall(v)) return "Not a valid callsign: " + v;
+            if (name == "FREQ" && !v.empty()) {
+                double mhz = atof(v.c_str());
+                if (mhz < 0.1 || mhz > 1300) return "Frequency is in MHz, e.g. 14.074";
+                char b[24]; snprintf(b, sizeof b, "%.6f", mhz); v = b;
+                freqSet = true;
+            }
+            if ((name == "QSO_DATE" || name == "QSO_DATE_OFF") && !v.empty() && (v.size() != 8 || v.find_first_not_of("0123456789") != std::string::npos))
+                return name + " is YYYYMMDD";
+            if ((name == "TIME_ON" || name == "TIME_OFF") && !v.empty() && ((v.size() != 4 && v.size() != 6) || v.find_first_not_of("0123456789") != std::string::npos))
+                return name + " is HHMM or HHMMSS (UTC)";
+            adifSetField(f, name, v);
+        }
+        if (freqSet && !bandSet) {                    // keep BAND matching a changed frequency
+            for (auto& kv : f) if (kv.first == "FREQ") adifSetField(f, "BAND", bandName((uint64_t)(atof(kv.second.c_str()) * 1e6 + 0.5)));
+        }
+        if (adifField(adifBuild(f), "CALL").empty()) return "A contact needs a callsign";
+        repl = adifBuild(f);
+        if (repl == orig) return "";
+        recs[idx] = repl;
+    } else {
+        recs.erase(recs.begin() + idx);
+    }
+    if (!adifWriteRecords(path, recs)) return "Could not save the log (storage full?)";
+    std::vector<std::string> o;
+    if (adifReadRecords(other, o)) {
+        for (size_t i = o.size(); i > 0; i--) {
+            if (o[i - 1] != orig) continue;
+            if (fields) o[i - 1] = repl;
+            else o.erase(o.begin() + (i - 1));
+            adifWriteRecords(other, o);
+            break;
+        }
+    }
+    logReload();
+    return "";
+}
+
+// One page of a log, newest first: {"total":N,"items":[{"i":index,"f":{"CALL":"..",..}}]}.
+// filter (optional) matches the callsign (contains, any case).
+std::string App::logReadJson(bool archive, int from, int n, const std::string& filter) {
+    std::vector<std::string> recs;
+    adifReadRecords(archive ? archivePath() : logPath(), recs);
+    std::string flt = upperTrim(filter);
+    std::vector<int> idx;
+    for (int i = (int)recs.size() - 1; i >= 0; i--)
+        if (flt.empty() || upperTrim(adifField(recs[i], "CALL")).find(flt) != std::string::npos) idx.push_back(i);
+    std::string o = "{\"ok\":true,\"total\":" + jnum((long long)idx.size()) + ",\"items\":[";
+    for (int k = std::max(0, from); k < (int)idx.size() && k < from + n; k++) {
+        o += std::string(k > from ? "," : "") + "{\"i\":" + jnum(idx[k]) + ",\"f\":{";
+        bool first = true;
+        for (auto& kv : adifParse(recs[idx[k]])) { o += std::string(first ? "" : ",") + jstr(kv.first) + ":" + jstr(kv.second); first = false; }
+        o += "}}";
+    }
+    return o + "]}";
 }
 
 void App::syncSeq() {
@@ -871,6 +961,22 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         status("Current log cleared");
         return ok();
     }
+    if (c == "logread") {                                            // a page of the log for editing, newest first
+        int from = atoi(arg(a, "from").c_str()), n = atoi(arg(a, "n", "50").c_str());
+        return logReadJson(arg(a, "file") == "all", from, std::max(1, std::min(n, 200)), arg(a, "q"));
+    }
+    if (c == "logedit" || c == "logdel") {                           // file=cur|all, i=index, call=expected call, f.NAME=value
+        bool archive = arg(a, "file") == "all";
+        if (arg(a, "i").empty()) return err("i required");
+        std::map<std::string, std::string> f;
+        for (auto& kv : a) if (kv.first.size() > 2 && !kv.first.compare(0, 2, "f.")) f[kv.first.substr(2)] = kv.second;
+        if (c == "logedit" && f.empty()) return err("nothing to change");
+        std::string call = arg(a, "call");
+        std::string e = logChange(archive, atoi(arg(a, "i").c_str()), call, c == "logedit" ? &f : nullptr);
+        if (!e.empty()) return err(e);
+        status(c == "logedit" ? "Contact updated" : "Contact " + call + " deleted");
+        return ok();
+    }
     if (c == "eraselogs") {                                          // current log and archive, and worked-before with them
         if (arg(a, "confirm") != "yes") return err("confirm=yes required");
         remove(logPath().c_str());
@@ -949,27 +1055,20 @@ bool App::uiWorked(const std::string& call) {
 
 void App::uiLogTail(size_t max, std::vector<UiLogEntry>& out) {
     std::lock_guard<std::mutex> lk(mtx_);
-    FILE* f = fopen(logPath().c_str(), "r");
-    if (!f) return;
-    // Records are one per line; only the end of a long file is read.
-    const long window = (long)max * 400 + 400;
-    if (fseek(f, 0, SEEK_END) == 0 && ftell(f) > window) fseek(f, -window, SEEK_END);
-    else rewind(f);
-    std::vector<std::string> lines;
-    char line[512];
-    while (fgets(line, sizeof line, f)) if (strstr(line, "<EOR>") || strstr(line, "<eor>")) lines.emplace_back(line);
-    fclose(f);
-    for (size_t i = lines.size(); i > 0 && out.size() < max; i--) {
-        const std::string& r = lines[i - 1];
+    std::vector<std::string> recs;
+    adifReadRecords(logPath(), recs);
+    for (size_t i = recs.size(); i > 0 && out.size() < max; i--) {
+        const std::string& r = recs[i - 1];
         UiLogEntry e;
+        e.idx = (int)i - 1;
         e.call = adifField(r, "CALL");
-        if (e.call.empty()) continue;                 // a record cut in half by the read window
-        std::string d = adifField(r, "QSO_DATE"), t = adifField(r, "TIME_ON");
-        if (d.size() == 8 && t.size() >= 4) e.when = d.substr(4, 2) + "-" + d.substr(6, 2) + " " + t.substr(0, 2) + ":" + t.substr(2, 2);
+        e.date = adifField(r, "QSO_DATE"); e.time = adifField(r, "TIME_ON");
+        if (e.date.size() == 8 && e.time.size() >= 4) e.when = e.date.substr(4, 2) + "-" + e.date.substr(6, 2) + " " + e.time.substr(0, 2) + ":" + e.time.substr(2, 2);
         e.grid = adifField(r, "GRIDSQUARE"); e.band = adifField(r, "BAND");
         e.mode = adifField(r, "SUBMODE");
         if (e.mode.empty()) e.mode = adifField(r, "MODE");
         e.sent = adifField(r, "RST_SENT"); e.rcvd = adifField(r, "RST_RCVD");
+        e.freq = adifField(r, "FREQ"); e.name = adifField(r, "NAME"); e.comment = adifField(r, "COMMENT");
         out.push_back(e);
     }
 }

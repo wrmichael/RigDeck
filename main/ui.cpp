@@ -251,8 +251,10 @@ void onTableDraw(lv_event_t* e) {
 }
 
 // ---- logbook screen ---------------------------------------------------------------------------
+std::vector<App::UiLogEntry> gLogRows;             // what the logbook table shows, newest first
 void fillLogTable() {
-    std::vector<App::UiLogEntry> e;
+    std::vector<App::UiLogEntry>& e = gLogRows;
+    e.clear();
     g_app->uiLogTail(60, e);
     lv_table_set_row_count(logTable, (uint32_t)e.size() + 1);
     static const char* head[7] = {"UTC", "Call", "Grid", "Band", "Mode", "Sent", "Rcvd"};
@@ -280,22 +282,30 @@ void onOpenLog(lv_event_t*) {
 }
 void onCloseLog(lv_event_t*) { lv_screen_load(scrMain); }
 
-// Confirmation dialog: runs `command` with confirm=yes when the operator presses the action button.
-struct Confirm { lv_obj_t* box; const char* command; };
-Confirm g_confirm = {nullptr, nullptr};
+// Confirmation dialog: runs `command` (with its arguments and confirm=yes) when the operator presses the action button.
+struct Confirm { lv_obj_t* box; const char* command; std::map<std::string, std::string> args; };
+Confirm g_confirm = {nullptr, nullptr, {}};
+lv_obj_t* scrLogEdit = nullptr;
 void onConfirmNo(lv_event_t*) {
     if (g_confirm.box) lv_msgbox_close(g_confirm.box);
     g_confirm.box = nullptr;
 }
 void onConfirmYes(lv_event_t*) {
     const char* c = g_confirm.command;
+    std::map<std::string, std::string> args = g_confirm.args;
+    args["confirm"] = "yes";
     onConfirmNo(nullptr);
-    if (c && cmd(c, {{"confirm", "yes"}})) { fillLogTable(); shownLogN = -1; }
+    if (c && cmd(c, args)) {
+        fillLogTable();
+        shownLogN = -1;
+        if (lv_screen_active() == scrLogEdit) lv_screen_load(scrLog);   // the contact that was open is gone
+    }
 }
-void confirm(const char* title, const std::string& text, const char* action, const char* command) {
+void confirm(const char* title, const std::string& text, const char* action, const char* command,
+             const std::map<std::string, std::string>& args = {}) {
     if (g_confirm.box) return;
     lv_obj_t* m = lv_msgbox_create(nullptr);
-    g_confirm = {m, command};
+    g_confirm = {m, command, args};
     lv_obj_set_width(m, 560);
     lv_obj_set_style_text_font(m, &lv_font_montserrat_20, 0);
     lv_msgbox_add_title(m, title);
@@ -320,6 +330,138 @@ void onEraseAll(lv_event_t*) {
     g_app->uiState(s);
     confirm("Erase everything", "Erase the archive (" + num(s.logAll) + " contacts) AND the current log?\n"
             "Download them from the web page first. This cannot be undone.", "Erase all", "eraselogs");
+}
+
+extern const lv_buttonmatrix_ctrl_t kLogKeyCtrl[];   // logger keyboard layout (defined with the logger)
+// ---- edit one contact (tap it in the logbook) ----------------------------------------------------
+lv_obj_t *eField[10], *eKb, *eTitle, *eMsg;
+int eFocus = 0;
+App::UiLogEntry eRec;                                 // the contact as it was when opened
+// Call, date, time, MHz, mode, sent, rcvd, grid, name, comment
+const char* const kEditAdif[10] = {"CALL", "QSO_DATE", "TIME_ON", "FREQ", "", "RST_SENT", "RST_RCVD", "GRIDSQUARE", "NAME", "COMMENT"};
+const char* kEditKeys[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", LV_SYMBOL_BACKSPACE, "\n",
+                           "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "/", "\n",
+                           "A", "S", "D", "F", "G", "H", "J", "K", "L", "+", "-", "\n",
+                           "Z", "X", "C", "V", "B", "N", "M", ",", ".", "Clear", "\n",
+                           "Next", " ", LV_SYMBOL_LEFT, LV_SYMBOL_RIGHT, "SAVE", ""};
+std::string eOrig(int i) {
+    const App::UiLogEntry& r = eRec;
+    const std::string* v[10] = {&r.call, &r.date, &r.time, &r.freq, &r.mode, &r.sent, &r.rcvd, &r.grid, &r.name, &r.comment};
+    return *v[i];
+}
+void editFocus(int i) {
+    eFocus = i;
+    lv_keyboard_set_textarea(eKb, eField[i]);
+    for (int k = 0; k < 10; k++) lv_obj_set_style_border_color(eField[k], C(k == i ? AMB : LINE), 0);
+}
+void editSave() {
+    std::map<std::string, std::string> a = {{"file", "cur"}, {"i", num(eRec.idx)}, {"call", eRec.call}};
+    for (int i = 0; i < 10; i++) {
+        std::string v = lv_textarea_get_text(eField[i]);
+        if (v == eOrig(i)) continue;
+        if (i == 4) {                                 // mode as shown (USB, FT8, FT4, CW...) -> MODE + SUBMODE
+            std::string m, sm;
+            adifModeFromText(v, m, sm);
+            a["f.MODE"] = m;
+            a["f.SUBMODE"] = sm;
+        } else a[std::string("f.") + kEditAdif[i]] = v;
+    }
+    if (a.size() == 3) { lv_screen_load(scrLog); return; }   // nothing changed
+    if (!cmd("logedit", a)) { setText(eMsg, "Not saved - see the message at the top"); return; }
+    fillLogTable();
+    shownLogN = -1;
+    lv_screen_load(scrLog);
+}
+void onEditField(lv_event_t* e) { editFocus((int)(intptr_t)lv_event_get_user_data(e)); }
+void onEditKey(lv_event_t* e) {
+    lv_obj_t* kb = (lv_obj_t*)lv_event_get_target(e);
+    uint32_t id = lv_buttonmatrix_get_selected_button(kb);
+    if (id == LV_BUTTONMATRIX_BUTTON_NONE) return;
+    const char* t = lv_buttonmatrix_get_button_text(kb, id);
+    if (!t) return;
+    if (!strcmp(t, "Next")) editFocus((eFocus + 1) % 10);
+    else if (!strcmp(t, "SAVE")) editSave();
+    else if (!strcmp(t, "Clear")) lv_textarea_set_text(eField[eFocus], "");
+    else lv_keyboard_def_event_cb(e);
+}
+void onEditSave(lv_event_t*) { editSave(); }
+void onEditBack(lv_event_t*) { lv_screen_load(scrLog); }
+void onEditDelete(lv_event_t*) {
+    confirm("Delete contact", "Delete the contact with " + eRec.call + (eRec.when.empty() ? "" : " (" + eRec.when + ")") +
+            "\nfrom the current log and the archive? This cannot be undone.", "Delete", "logdel",
+            {{"file", "cur"}, {"i", num(eRec.idx)}, {"call", eRec.call}});
+}
+void openLogEdit(const App::UiLogEntry& r) {
+    cmd("ping");
+    eRec = r;
+    for (int i = 0; i < 10; i++) lv_textarea_set_text(eField[i], eOrig(i).c_str());
+    setText(eTitle, "Edit contact: " + r.call);
+    setText(eMsg, "");
+    editFocus(0);
+    lv_screen_load(scrLogEdit);
+}
+void onLogTable(lv_event_t* e) {
+    uint32_t row = LV_TABLE_CELL_NONE, col = LV_TABLE_CELL_NONE;
+    lv_table_get_selected_cell((lv_obj_t*)lv_event_get_target(e), &row, &col);
+    if (row == LV_TABLE_CELL_NONE || row == 0 || row > gLogRows.size()) return;
+    openLogEdit(gLogRows[row - 1]);
+}
+
+void buildLogEditScreen() {
+    const lv_font_t *f16 = &lv_font_montserrat_16, *f20 = &lv_font_montserrat_20, *f28 = &lv_font_montserrat_28;
+    scrLogEdit = lv_obj_create(nullptr);
+    lv_obj_set_style_bg_color(scrLogEdit, C(BG), 0);
+    lv_obj_set_style_bg_opa(scrLogEdit, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(scrLogEdit, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* head = box(scrLogEdit, 0, 0, W, 64, PAN);
+    button(head, 10, 8, 130, 48, LV_SYMBOL_LEFT "  Back", onEditBack);
+    eTitle = label(head, 160, 16, f28, TXT, "Edit contact");
+    static const struct { const char* hint; int x, y, w, max; const char* chars; } fd[10] = {
+        {"Callsign", 10, 92, 230, 11, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/"},
+        {"Date YYYYMMDD", 248, 92, 190, 8, "0123456789"},
+        {"UTC HHMM", 446, 92, 140, 6, "0123456789"},
+        {"MHz", 594, 92, 170, 11, "0123456789."},
+        {"Mode", 772, 92, 242, 8, nullptr},
+        {"Sent", 10, 176, 110, 6, nullptr}, {"Rcvd", 128, 176, 110, 6, nullptr},
+        {"Grid", 246, 176, 130, 8, nullptr},
+        {"Name", 384, 176, 230, 30, nullptr}, {"Comment", 622, 176, 392, 80, nullptr}};
+    static const char* cap[10] = {"Call", "Date (UTC)", "Time", "Frequency", "Mode", "Sent", "Rcvd", "Grid", "Name", "Comment"};
+    for (int i = 0; i < 10; i++) {
+        label(scrLogEdit, fd[i].x + 2, fd[i].y - 22, f16, DIM, cap[i]);
+        lv_obj_t* ta = lv_textarea_create(scrLogEdit);
+        lv_obj_set_pos(ta, fd[i].x, fd[i].y);
+        lv_obj_set_size(ta, fd[i].w, 54);
+        lv_textarea_set_one_line(ta, true);
+        lv_textarea_set_max_length(ta, (uint32_t)fd[i].max);
+        if (fd[i].chars) lv_textarea_set_accepted_chars(ta, fd[i].chars);
+        lv_textarea_set_placeholder_text(ta, fd[i].hint);
+        lv_obj_set_style_text_font(ta, f20, 0);
+        lv_obj_set_style_pad_ver(ta, 12, 0);
+        lv_obj_set_style_bg_color(ta, C(0x0b1014), 0);
+        lv_obj_set_style_text_color(ta, C(TXT), 0);
+        lv_obj_set_style_border_color(ta, C(LINE), 0);
+        lv_obj_set_style_border_width(ta, 2, 0);
+        lv_obj_set_style_radius(ta, 8, 0);
+        lv_obj_add_event_cb(ta, onEditField, LV_EVENT_CLICKED, (void*)(intptr_t)i);
+        eField[i] = ta;
+    }
+    lv_obj_t* lSave;
+    button(scrLogEdit, 10, 240, 200, 56, "Save", onEditSave, &lSave, 0x1f6b45);
+    button(scrLogEdit, 220, 240, 200, 56, "Delete contact", onEditDelete, nullptr, 0x7a2020);
+    eMsg = label(scrLogEdit, 436, 248, f16, DIM, "");
+    lv_obj_set_width(eMsg, W - 446);
+    label(scrLogEdit, 436, 272, f16, DIM, "Changes apply to the current log and the archive.");
+    eKb = lv_keyboard_create(scrLogEdit);
+    lv_keyboard_set_map(eKb, LV_KEYBOARD_MODE_USER_1, kEditKeys, kLogKeyCtrl);
+    lv_keyboard_set_mode(eKb, LV_KEYBOARD_MODE_USER_1);
+    lv_obj_set_size(eKb, W, 296);
+    lv_obj_align(eKb, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_style_text_font(eKb, f20, 0);
+    lv_obj_set_style_bg_color(eKb, C(PAN), 0);
+    lv_obj_set_style_bg_color(eKb, C(PAN2), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(eKb, C(TXT), LV_PART_ITEMS);
+    lv_obj_remove_event_cb(eKb, lv_keyboard_def_event_cb);
+    lv_obj_add_event_cb(eKb, onEditKey, LV_EVENT_VALUE_CHANGED, nullptr);
 }
 
 void buildLogScreen() {
@@ -350,6 +492,7 @@ void buildLogScreen() {
     lv_obj_set_style_pad_ver(logTable, 5, LV_PART_ITEMS);
     lv_obj_set_style_pad_hor(logTable, 10, LV_PART_ITEMS);
     lv_obj_add_event_cb(logTable, onLogDraw, LV_EVENT_DRAW_TASK_ADDED, nullptr);
+    lv_obj_add_event_cb(logTable, onLogTable, LV_EVENT_VALUE_CHANGED, nullptr);   // tap a contact to edit it
     lv_obj_add_flag(logTable, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
 
     lv_obj_t* bot = box(scrLog, 0, H - 76, W, 76, PAN);
@@ -1312,7 +1455,7 @@ void refresh(lv_timer_t*) {
             snprintf(b, sizeof b, "Current log: %d      Archive: %d", s.logN, s.logAll);
             setText(lLogCounts, b);
         }
-        std::string info = "Download logs from the web page (Log tab).  " + s.net;
+        std::string info = "Tap a contact to edit or delete it. Download logs from the web page (Log tab).  " + s.net;
         if (s.netOk || s.netFail) { snprintf(b, sizeof b, "\nSent to logger: %d, failed attempts: %d", s.netOk, s.netFail); info += b; }
         setText(lLogInfo, info);
     }
@@ -1508,6 +1651,7 @@ extern "C" void ui_create(void) {
     mxBand = matrix(bot, 258, 8, W - 258 - 10, BOT_H - 16, kBandMap, onBand);
 
     buildLogScreen();
+    buildLogEditScreen();
     buildRadioScreen();
     buildLoggerScreen();
     buildSettingsScreen();

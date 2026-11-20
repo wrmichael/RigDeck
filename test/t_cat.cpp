@@ -252,6 +252,35 @@ int main() {
             CHECK(adifField(r3, "QSO_DATE") != "19700101");
             CHECK(r3.substr(0, r3.find("<EOR>")).find("RST_SENT") == std::string::npos);
         }
+        // log management: list, edit (both files), delete
+        {
+            auto slurpF = [&](const char* n) { std::string s; FILE* fq = fopen((std::string(dir) + n).c_str(), "r"); char lb[512];
+                                               while (fq && fgets(lb, sizeof lb, fq)) s += lb; if (fq) fclose(fq); return s; };
+            App::UiState u0; app.uiState(u0);
+            std::string js = app.command("logread", {{"n", "2"}});
+            CHECK(js.find("\"total\":" + std::to_string(u0.logN)) != std::string::npos && js.find("K4FADE") != std::string::npos);
+            size_t ip = js.find("\"i\":");
+            int idx = atoi(js.c_str() + ip + 4);                         // newest = K4FADE
+            CHECK(!okr(app.command("logedit", {{"i", std::to_string(idx)}, {"call", "W1XYZ"}, {"f.RST_SENT", "-05"}})));   // guard
+            CHECK(!okr(app.command("logedit", {{"i", std::to_string(idx)}, {"call", "K4FADE"}, {"f.CALL", "not a call"}})));
+            CHECK(okr(app.command("logedit", {{"i", std::to_string(idx)}, {"call", "K4FADE"}, {"f.RST_SENT", "-05"},
+                                               {"f.FREQ", "7.074"}, {"f.COMMENT", "faded"}, {"f.GRIDSQUARE", ""}})));
+            std::string cur = slurpF("/log.adi"), all = slurpF("/archive.adi");
+            std::string rc = cur.substr(cur.find("K4FADE")), ra = all.substr(all.find("K4FADE"));
+            CHECK(adifField(rc, "RST_SENT") == "-05" && adifField(rc, "BAND") == "40m" && adifField(rc, "FREQ") == "7.074000" &&
+                  adifField(rc, "COMMENT") == "faded" && adifField(rc, "GRIDSQUARE").empty());
+            CHECK(rc.substr(0, rc.find('\n')) == ra.substr(0, ra.find('\n')));   // archive changed the same way
+            CHECK(cur.find("<EOH>") != std::string::npos && cur.find("N0USB") != std::string::npos);
+            App::UiState u1; app.uiState(u1);
+            CHECK(u1.logN == u0.logN && u1.logAll == u0.logAll);
+            CHECK(okr(app.command("logdel", {{"i", std::to_string(idx)}, {"call", "K4FADE"}})));
+            cur = slurpF("/log.adi"); all = slurpF("/archive.adi");
+            CHECK(cur.find("K4FADE") == std::string::npos && all.find("K4FADE") == std::string::npos);
+            App::UiState u2; app.uiState(u2);
+            CHECK(u2.logN == u0.logN - 1 && u2.logAll == u0.logAll - 1);
+            CHECK(app.command("logread", {{"file", "all"}, {"q", "usb"}}).find("\"total\":1") != std::string::npos);
+            CHECK(!okr(app.command("logdel", {{"i", "999"}})));
+        }
         Settings s2; s2.load(std::string(dir) + "/settings.txt");
         CHECK(s2.macro[1] == "Park|{CALL} {REF} {GRID}" && s2.keyWpm == 25);
     }
