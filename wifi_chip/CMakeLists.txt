@@ -3,5 +3,6 @@
 #     idf.py set-target esp32c6 build
 # then send build/rigdeck_wifi_chip.bin to the board from the web page (Settings > Wi-Fi chip).
 cmake_minimum_required(VERSION 3.16)
+set(PROJECT_VER "esp-hosted-3.1.0")                 # shown on RigDeck's page after an update
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(rigdeck_wifi_chip)
