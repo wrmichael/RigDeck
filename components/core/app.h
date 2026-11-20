@@ -109,6 +109,7 @@ public:
     // Wi-Fi chip (co-processor): firmware version ("" = unknown) and the result of the last update
     void setWifiChip(const std::string& ver, const std::string& upd);
     void setWifiChipUpd(const std::string& upd);
+    void note(const std::string& msg);                 // status line message from platform code
     StaStatus staStatus();
     std::function<void(bool connect)> wifiControl;    // set by the platform: (re)join with saved settings / leave
     int mode() const { return mode_.load(); }

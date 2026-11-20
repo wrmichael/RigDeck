@@ -345,6 +345,11 @@ void App::setWifiChip(const std::string& ver, const std::string& upd) {
     wchipVer_ = ver;
     wchipUpd_ = upd;
 }
+void App::note(const std::string& msg) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    status_ = msg;
+    if (logFn) logFn(msg.c_str());
+}
 void App::setWifiChipUpd(const std::string& upd) {
     std::lock_guard<std::mutex> lk(mtx_);
     wchipUpd_ = upd;

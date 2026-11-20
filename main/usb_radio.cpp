@@ -176,16 +176,19 @@ static void serialTask(void*) {
             // The GPS port: when it cannot be opened (on the IC-705 the USB host often has no endpoint
             // memory left next to CI-V and audio), back off instead of retrying every second; each
             // failed attempt costs memory and floods the log.
-            if (s_app->usbSerial && s_app->cfg.gpsClock && !s_gps && esp_timer_get_time() >= gpsNextUs &&
+            if (s_app->usbSerial && s_app->cfg.gpsClock && !s_gps && gpsFails < 3 && esp_timer_get_time() >= gpsNextUs &&
                 usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) == ESP_OK) {
                 openGpsPort(addrs, n);
                 if (s_gps) gpsFails = 0;
                 else {
-                    static const int kWaitS[] = {5, 30, 120, 600};
-                    int w = kWaitS[gpsFails < 3 ? gpsFails : 3];
+                    // Each failed open can leave USB host memory behind that the audio streams need when
+                    // they restart, so give up after 3 tries until the radio is plugged in again.
+                    static const int kWaitS[] = {5, 30, 120};
+                    int w = kWaitS[gpsFails < 2 ? gpsFails : 2];
                     gpsFails++;
                     gpsNextUs = esp_timer_get_time() + (int64_t)w * 1000000;
-                    ESP_LOGW(TAG, "radio's GPS port could not be opened (attempt %d); next try in %d s", gpsFails, w);
+                    if (gpsFails < 3) ESP_LOGW(TAG, "radio's GPS port could not be opened (attempt %d); next try in %d s", gpsFails, w);
+                    else ESP_LOGW(TAG, "radio's GPS port could not be opened; not trying again until the radio is reconnected");
                 }
             }
             continue;
@@ -355,6 +358,13 @@ static bool startStream(uac_host_device_handle_t h, const uac_host_stream_config
                  what, esp_err_to_name(e), s_startFails,
                  (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
                  (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024));
+    // About 20 s without the stream (it ran before, so the radio is there): what the operator would
+    // do by hand - restart RigDeck - but not while transmitting and not right after a start.
+    if (s_startFails == 12 && esp_timer_get_time() > 120LL * 1000000 && !s_app->txActive()) {
+        s_app->note(std::string("Audio ") + what + " would not restart (USB memory); restarting RigDeck");
+        vTaskDelay(pdMS_TO_TICKS(3000));
+        s_app->rebootReq = true;
+    }
     return false;
 }
 
