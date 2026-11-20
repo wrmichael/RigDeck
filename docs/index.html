@@ -55,9 +55,12 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
         <div slot="not-allowed" class="note">Flashing needs a secure (https) page. Open this page from its GitHub Pages address.</div>
       </esp-web-install-button>
       <a class="btn alt" id="dl" href="firmware/rigdeck.bin" download>Download .bin</a>
+      <a class="btn alt" id="wc" href="firmware/rigdeck-wifi-chip.bin" download style="display:none">Wi-Fi chip firmware</a>
     </div>
     <div class="warn">Download your log from the RigDeck web page (Log tab) before installing, just in case. Ticking "Erase device" deletes the log, settings and Wi-Fi name.</div>
   </div>
+
+  <p id="wcnote" style="display:none">Wi-Fi drops? Update the board's Wi-Fi chip too: download the Wi-Fi chip firmware above, then on the RigDeck web page open Settings, <b>Wi-Fi chip</b>, and press Update (do not flash this file with the installer).</p>
 
   <h2>Other ways to flash</h2>
   <p>The .bin above is a complete image that goes at address <code>0x0</code>. With esptool:</p>
@@ -75,6 +78,9 @@ fetch("manifest.json").then(r => r.json()).then(m => {
   document.getElementById("ver").textContent = m.version;
   document.getElementById("dl").setAttribute("download", "rigdeck-" + m.version + ".bin");
 }).catch(() => { document.getElementById("ver").textContent = "(not released yet)"; });
+fetch("firmware/rigdeck-wifi-chip.bin", {method: "HEAD"}).then(r => {
+  if (r.ok) { document.getElementById("wc").style.display = ""; document.getElementById("wcnote").style.display = ""; }
+}).catch(() => {});
 </script>
 </body>
 </html>

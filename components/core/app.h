@@ -103,6 +103,9 @@ public:
     // Home-network (station) link, reported by the platform and controlled from Settings.
     struct StaStatus { std::string state = "off", ssid, ip, reason; int rssi = 0; };
     void setStaStatus(const StaStatus& s);
+    // Wi-Fi chip (co-processor): firmware version ("" = unknown) and the result of the last update
+    void setWifiChip(const std::string& ver, const std::string& upd);
+    void setWifiChipUpd(const std::string& upd);
     StaStatus staStatus();
     std::function<void(bool connect)> wifiControl;    // set by the platform: (re)join with saved settings / leave
     int mode() const { return mode_.load(); }
@@ -192,7 +195,7 @@ private:
     void alcLoad();
     void alcSave();
     uint32_t ppsUsed_ = 0;
-    std::string status_, netInfo_;
+    std::string status_, netInfo_, wchipVer_, wchipUpd_;
     StaStatus sta_;
     int64_t lastUiMono_ = 0, bandReqHz_ = 0;
     bool watchdogTripped_ = false, wasConn_ = false;

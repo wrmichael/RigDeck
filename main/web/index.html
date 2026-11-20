@@ -220,6 +220,10 @@ table.log th{color:var(--dim);font-weight:500}
     </div>
     <div class="row" style="margin-top:12px"><button id="save" class="on">Save settings</button><button id="reboot">Restart device</button><span id="saveinfo" class="hint"></span></div>
     <p class="hint">Hotspot name/password, CI-V baud and GPS changes take effect after a restart; the home network is joined right away.</p>
+    <h3 style="margin-top:16px">Wi-Fi chip</h3>
+    <div class="row"><span id="wcVer">Firmware: …</span></div>
+    <div class="row"><input type="file" id="wcFile" accept=".bin"><button id="wcGo">Update Wi-Fi chip</button><span id="wcMsg" class="hint"></span></div>
+    <p class="hint">Updates the firmware of the board's Wi-Fi chip with <b>rigdeck-wifi-chip.bin</b> (from the RigDeck release, or build it with build_wifi_chip.bat). Join the RigDeck hotspot and use 192.168.4.1 for this, keep the board powered, and allow about a minute. The chip keeps its old firmware unless the new one arrives complete, and RigDeck restarts when it is done.</p>
     <h3 style="margin-top:16px">Clock</h3>
     <div class="row"><span id="clkinfo"></span><button data-trim="-100">-0.1 s</button><button data-trim="-20">-20 ms</button><button data-trim="20">+20 ms</button><button data-trim="100">+0.1 s</button></div>
     <p class="hint">Without internet or GPS the clock follows this browser's clock each time the page is open. If most stations show the same DT offset, nudge the clock until DT is near zero. With GPS on, change "GPS sentence delay" instead: lower it if DT values are mostly negative, raise it if they are mostly positive.</p>
@@ -336,6 +340,7 @@ function render(){
   if(S.sta){const t=S.sta, q=t.rssi>=-60?"strong":t.rssi>=-70?"good":t.rssi>=-80?"fair":"weak", el=$("staInfo");
     el.textContent=t.state==="off"?"Home network: not set up":t.state==="connected"?`Home network: connected to "${t.ssid}", address ${t.ip}${t.rssi?`, signal ${t.rssi} dBm (${q})`:""}`:`Home network: ${t.state}${t.reason?" - "+t.reason:""}`;
     el.style.color=t.state==="connected"?"var(--rx)":t.state==="retrying"?"var(--tx)":"";}
+  if(S.wchip){$("wcVer").textContent="Firmware: "+(S.wchip.ver||"checking…");if(S.wchip.upd&&!wcBusy)$("wcMsg").textContent=S.wchip.upd;}
   if(S.msg&&S.msg!==render.lastMsg){render.lastMsg=S.msg;banner(S.msg);}
   if(tx.wd) banner("TX watchdog stopped automatic transmission. Press Enable TX to resume.");
   if(S.cfg&&!cfgLoaded){
@@ -466,6 +471,21 @@ $("qlCall").oninput=()=>{const c=$("qlCall").value.trim().toUpperCase();$("qlDup
 $("reboot").onclick=()=>{if(confirm("Restart the device now?"))cmd("reboot");};
 $("staCon").onclick=async()=>{await $("save").onclick();cmd("wifi",{do:"connect"});};
 $("staDis").onclick=()=>cmd("wifi",{do:"disconnect"});
+var wcBusy=false;   // var: render() may run before this line
+$("wcGo").onclick=()=>{
+  const f=$("wcFile").files[0], m=$("wcMsg");
+  if(!f){m.textContent="Choose rigdeck-wifi-chip.bin first";return;}
+  if(!confirm(`Update the Wi-Fi chip with ${f.name}? RigDeck stops transmitting and restarts afterwards.`))return;
+  wcBusy=true;$("wcGo").disabled=true;
+  const x=new XMLHttpRequest();let sentAll=false;
+  x.open("POST","/api/wifichip");x.timeout=300000;
+  x.upload.onprogress=e=>{if(e.lengthComputable){m.textContent=`Sending ${Math.round(e.loaded*100/e.total)} %`;sentAll=e.loaded>=e.total;}};
+  const end=t=>{m.textContent=t;wcBusy=false;$("wcGo").disabled=false;};
+  x.onload=()=>{let j={};try{j=JSON.parse(x.responseText);}catch(e){}
+    end(j.ok?j.msg:(j.err||"Update failed"));};
+  x.onerror=x.ontimeout=()=>end(sentAll?"The connection dropped at the end: the Wi-Fi chip is probably restarting with the new firmware. Reconnect in a minute and check the version above.":"Upload failed: connection lost. The Wi-Fi chip keeps its old firmware.");
+  x.send(f);
+};
 $("save").onclick=async()=>{
   const a={};
   document.querySelectorAll("#form input,#form select").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=e.value;});

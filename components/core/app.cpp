@@ -142,6 +142,15 @@ void App::setStaStatus(const StaStatus& s) {
     std::lock_guard<std::mutex> lk(mtx_);
     sta_ = s;
 }
+void App::setWifiChip(const std::string& ver, const std::string& upd) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    wchipVer_ = ver;
+    wchipUpd_ = upd;
+}
+void App::setWifiChipUpd(const std::string& upd) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    wchipUpd_ = upd;
+}
 App::StaStatus App::staStatus() {
     std::lock_guard<std::mutex> lk(mtx_);
     return sta_;
@@ -1085,7 +1094,8 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     o += "]}";
     o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) +
          ",\"sta\":{\"state\":" + jstr(sta_.state) + ",\"ssid\":" + jstr(sta_.ssid) + ",\"ip\":" + jstr(sta_.ip) +
-         ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}";
+         ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}" +
+         ",\"wchip\":{\"ver\":" + jstr(wchipVer_) + ",\"upd\":" + jstr(wchipUpd_) + "}";
     if (withCfg) o += ",\"cfg\":" + cfg.json();
     return o + "}";
 }

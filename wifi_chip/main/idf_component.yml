@@ -1,0 +1,6 @@
+dependencies:
+  espressif/esp_hosted:
+    version: '*'
+    override_path: '../../components/espressif__esp_hosted'   # the same copy RigDeck's main chip uses
+  idf:
+    version: '>=5.5'

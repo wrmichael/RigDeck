@@ -10,6 +10,9 @@
 | Waveshare ESP32-P4-WIFI6-Touch-LCD-7B BSP | fetched at build time | Apache-2.0 | |
 | PSK31 varicode table | `components/core/varicode.inc` | public alphabet by G3PLX | |
 
+`wifi_chip/` builds the Wi-Fi chip (ESP32-C6) firmware from the same ESP-Hosted copy, using
+Espressif's co-processor example settings (`examples/wifi/sta/cp`, Apache-2.0).
+
 ## Change to ESP-Hosted
 
 `host/mcu/eh_host_mcu_transport/src/eh_host_mcu_transport_init_event.c`: when the ESP32-C6

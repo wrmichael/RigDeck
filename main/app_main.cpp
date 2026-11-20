@@ -94,6 +94,9 @@ extern "C" void app_main(void) {
 
     net_start(s_app);
     web_start(s_app);
+#if CONFIG_IDF_TARGET_ESP32P4
+    wifichip_start(s_app);
+#endif
     usbradio_start(s_app);
     gps_module_start(s_app);
 #if CONFIG_IC7100_DISPLAY

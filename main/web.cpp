@@ -9,6 +9,9 @@
 #include "esp_log.h"
 
 static const char* TAG = "web";
+#if CONFIG_IDF_TARGET_ESP32P4
+void wifichip_register(httpd_handle_t srv);          // wifi_chip.cpp: firmware upload for the Wi-Fi chip
+#endif
 static App* s_app;
 extern const char index_html_start[] asm("_binary_index_html_start");
 extern const char index_html_end[] asm("_binary_index_html_end");
@@ -108,7 +111,8 @@ void web_start(App& app) {
     s_app = &app;
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 10240;
-    cfg.max_uri_handlers = 8;
+    cfg.max_uri_handlers = 10;
+    cfg.recv_wait_timeout = 30;                      // a firmware upload pauses while the Wi-Fi chip erases
     cfg.lru_purge_enable = true;
     httpd_handle_t srv = nullptr;
     if (httpd_start(&srv, &cfg) != ESP_OK) { ESP_LOGE(TAG, "HTTP server failed to start"); return; }
@@ -121,4 +125,7 @@ void web_start(App& app) {
         {"/archive.adi", HTTP_GET, hLog, (void*)1},
     };
     for (auto& u : uris) httpd_register_uri_handler(srv, &u);
+#if CONFIG_IDF_TARGET_ESP32P4
+    wifichip_register(srv);
+#endif
 }

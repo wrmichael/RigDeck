@@ -348,6 +348,29 @@ boards and similar, about $10-15) gives timing to within a few milliseconds.
 - Keep the board within a few metres of the phone or laptop; the antenna is on the board's edge.
 - If the hotspot itself disappears (the network is gone from the list), send the monitor log: the
   Wi-Fi chip on these boards runs older firmware, and the log shows whether that is the cause.
+- While joined, RigDeck checks every 20 s that the router still answers; after a minute of silence
+  it leaves and joins again.
+
+## Updating the Wi-Fi chip
+
+The board has two chips: the ESP32-P4 runs RigDeck, and an ESP32-C6 does the Wi-Fi. Boards ship
+with old Wi-Fi chip firmware (it reports version 0.0.0 or none), which is the likely cause of
+dropped connections. RigDeck can update it over the link between the two chips; no cables or
+buttons.
+
+1. Get `rigdeck-wifi-chip.bin`: from the release page, or build it by double-clicking
+   `build_wifi_chip.bat` (ESP-IDF installed as for RigDeck; the result is
+   `docs\firmware\rigdeck-wifi-chip.bin`). It is built from the same ESP-Hosted version RigDeck
+   uses (`wifi_chip/`), so the two always match.
+2. Join the **RigDeck hotspot** and open http://192.168.4.1 (more reliable than the home network
+   for this). Settings tab > **Wi-Fi chip** shows the current firmware.
+3. Choose the file and press **Update Wi-Fi chip**. Transmitting stops, the file is sent (about a
+   minute), the chip checks it, and RigDeck restarts. Reconnect and check the version.
+
+The new firmware is written to the chip's spare slot; the chip only switches to it once it has
+arrived complete and checked, so an interrupted upload leaves the old firmware running. If the
+page says the chip **refused** the update, its old firmware cannot be updated this way and nothing
+was changed. Keep the board powered during the update.
 
 ## Clock from a GPS on the radio
 

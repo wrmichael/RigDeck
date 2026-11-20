@@ -1,4 +1,9 @@
 set(srcs "app_main.cpp" "usb_radio.cpp" "net.cpp" "web.cpp" "gps_module.cpp")
+if(IDF_TARGET STREQUAL "esp32p4")
+    # Wi-Fi chip (ESP32-C6 co-processor) version and firmware update over ESP-Hosted
+    # (a dependency in idf_component.yml, so its headers are already available here).
+    list(APPEND srcs "wifi_chip.cpp")
+endif()
 if(CONFIG_IC7100_DISPLAY)
     # On-device touch interface (LVGL) for the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B.
     list(APPEND srcs "ui.cpp" "display.c")
