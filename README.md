@@ -272,6 +272,10 @@ of these controllers). Select **CW** on the touch screen or **FT-CW** on the web
   signal about 1.5 kHz higher). These are only a starting point: tune anywhere you both agree
   on with the Radio screen, and check they suit your licence and band plan.
 
+- The decoder follows the radio path: its decision level tracks fading (QSB), and it reads each
+  element by its length as well as on a fixed dot grid, so a sender whose audio clock is slightly
+  off, or a short glitch in the USB audio, no longer loses the whole message (0.9.26).
+
 ## Radio screen (control head)
 
 **Radio** on the operating screen opens a front panel for the transceiver:

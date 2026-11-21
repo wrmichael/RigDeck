@@ -225,6 +225,56 @@ static bool cellsToMessage(const std::vector<uint8_t>& bits, std::string& msg, i
     return tryText();
 }
 
+// Same as cellsToMessage, but from key-down/up decisions every quarter dot, reading each run by its
+// length the way an operator does. Follows a sender whose timing drifts or jumps (a glitch in a USB
+// audio stream), which a fixed dot grid cannot.
+static bool runsToMessage(const std::vector<uint8_t>& q, std::string& msg, int& startQ) {
+    const int n = (int)q.size();
+    std::vector<uint8_t> v(q);
+    for (int i = 1; i + 1 < n; i++) if (v[i] != v[i - 1] && v[i] != v[i + 1]) v[i] = v[i - 1];   // 1-sample spikes
+    std::string text, code;
+    int start = -1;
+    auto endChar = [&]() {
+        if (code.empty()) return;
+        char ch = code.size() <= 6 ? charOf(code.c_str()) : 0;
+        text += ch ? ch : '#';
+        code.clear();
+    };
+    auto tryText = [&]() -> bool {
+        endChar();
+        while (!text.empty() && text.back() == ' ') text.pop_back();
+        std::string m;
+        bool ok = text.find('#') == std::string::npos && cwUnframe(text, m);
+        if (ok) {
+            ParsedMsg p;
+            ok = parseMsg(m, p) && validCall(p.from) && (p.kind == K_CQ || validCall(p.to)) && p.kind != K_OTHER;
+        }
+        if (ok) { msg = m; startQ = start; }
+        text.clear();
+        return ok;
+    };
+    bool any = false;
+    int i = 0;
+    while (i < n) {
+        int j = i;
+        while (j < n && v[j] == v[i]) j++;
+        int len = j - i;                                          // quarter dots
+        if (v[i]) {
+            if (!any) start = i;
+            any = true;
+            if (len <= 7) code += '.';                            // 1 unit = 4
+            else if (len <= 18) code += '-';                      // 3 units = 12
+            else code += "#######";
+        } else if (any) {
+            if (j >= n || len >= 40) { if (tryText()) return true; start = -1; any = false; }
+            else if (len >= 20) { endChar(); text += ' '; }      // word gap: 7 units = 28
+            else if (len >= 8) endChar();                         // character gap: 3 units = 12
+        }
+        i = j;
+    }
+    return any && tryText();
+}
+
 // Decodes whatever is keyed on one frequency bin. Levels are in 0.5 dB steps.
 bool CwMonitor::decodeBin(int b, int noise, Decode& d) const {
     int hist[256] = {0};
@@ -232,61 +282,97 @@ bool CwMonitor::decodeBin(int b, int noise, Decode& d) const {
     auto pct = [&](float p) { int acc = 0, want = (int)(frames_ * p); for (int v = 0; v < 256; v++) { acc += hist[v]; if (acc > want) return v; } return 255; };
     int sig = pct(0.93f);
     if (sig < noise + 12) return false;                           // key-down level under 6 dB above the noise: not copyable
-    int thr = std::max(sig - 11, noise + 5);                     // decide at about half amplitude
+    int thr0 = std::max(sig - 11, noise + 5);                    // decide at about half amplitude
 
-    int order[4] = {0, 1, 2, 3};
-    long score[4];
-    for (int p = 0; p < 4; p++) {
-        long s = 0;
-        for (int t = p; t < frames_; t += 4) s += labs((long)mag_[(size_t)t * nbins_ + b] - thr);
-        score[p] = s;
+    // Second pass: the decision level follows the signal - half the key-down level seen within
+    // +-0.35 s (a few characters) - so a fade does not drop whole characters below one fixed level.
+    // The key-down level is the second highest 3-frame average in that window (one noise spike
+    // cannot set it); never below noise + 2.5 dB.
+    const int W = std::max(8, (int)(0.35f * 12000 / hop_));
+    std::vector<int> sm(frames_), thrAt(frames_);
+    for (int t = 0; t < frames_; t++) {
+        int a = mag_[(size_t)std::max(0, t - 1) * nbins_ + b], c = mag_[(size_t)t * nbins_ + b], e = mag_[(size_t)std::min(frames_ - 1, t + 1) * nbins_ + b];
+        sm[t] = (a + c + e) / 3;
     }
-    std::sort(order, order + 4, [&](int a, int c) { return score[a] > score[c]; });
-
-    for (int oi = 0; oi < 2; oi++) {                              // the two best timing phases
-        int p = order[oi];
-        int ncell = (frames_ - p + 3) / 4;
-        std::vector<uint8_t> bits(ncell);
-        std::vector<int> margin(ncell);
-        for (int i = 0; i < ncell; i++) {
-            int v = mag_[(size_t)(p + 4 * i) * nbins_ + b];
-            bits[i] = v > thr;
-            margin[i] = abs(v - thr);
+    for (int t = 0; t < frames_; t++) {
+        int m1 = 0, m2 = 0;
+        for (int k = std::max(0, t - W); k <= std::min(frames_ - 1, t + W); k++) {
+            int s = sm[k];
+            if (s > m1) { m2 = m1; m1 = s; } else if (s > m2) m2 = s;
         }
-        int startCell = -1;
-        bool found = cellsToMessage(bits, d.text, startCell);
-        if (!found) {
-            // The check group lets us repair a marginal copy: flip the one or two cells that were
-            // closest to the decision threshold and see whether a valid message appears.
-            const int K = 14;
-            std::vector<int> weak(ncell);
-            for (int i = 0; i < ncell; i++) weak[i] = i;
-            int k = std::min(K, ncell);
-            std::partial_sort(weak.begin(), weak.begin() + k, weak.end(), [&](int a, int c) { return margin[a] < margin[c]; });
-            for (int i = 0; i < k && !found; i++) {
-                bits[weak[i]] ^= 1;
-                found = cellsToMessage(bits, d.text, startCell);
-                for (int j = i + 1; j < k && !found; j++) {
-                    bits[weak[j]] ^= 1;
-                    found = cellsToMessage(bits, d.text, startCell);
-                    bits[weak[j]] ^= 1;
-                }
-                bits[weak[i]] ^= 1;
+        thrAt[t] = (m2 < noise + 12) ? 255 : std::max(m2 - 11, noise + 5);   // nothing keyed nearby: all key-up
+    }
+
+    std::vector<int> thrFix(frames_, thr0);
+    int startHop = -1, pUsed = 0, startCell = -1;
+    const std::vector<int>* thrUsed = nullptr;
+    bool found = false;
+    // Pass 1: one level for the slot (best for weak, steady signals). Pass 2: the level that
+    // follows fading. In each: the fixed dot grid at the two best timing phases (with repair of
+    // marginal cells), then reading by run lengths (follows timing drift and audio glitches).
+    for (int pass = 0; pass < 2 && !found; pass++) {
+        const std::vector<int>& T = pass ? thrAt : thrFix;
+        int order[4] = {0, 1, 2, 3};
+        long score[4];
+        for (int p = 0; p < 4; p++) {
+            long sc = 0;
+            for (int t = p; t < frames_; t += 4) sc += labs((long)mag_[(size_t)t * nbins_ + b] - std::min(T[t], 254));
+            score[p] = sc;
+        }
+        std::sort(order, order + 4, [&](int a, int c) { return score[a] > score[c]; });
+        for (int oi = 0; oi < 2 && !found; oi++) {
+            int p = order[oi];
+            int ncell = (frames_ - p + 3) / 4;
+            std::vector<uint8_t> bits(ncell);
+            std::vector<int> margin(ncell);
+            for (int i = 0; i < ncell; i++) {
+                int t = p + 4 * i, v = mag_[(size_t)t * nbins_ + b];
+                bits[i] = v > T[t];
+                margin[i] = abs(v - std::min(T[t], 255));
             }
+            found = cellsToMessage(bits, d.text, startCell);
+            if (!found) {
+                // The check group lets us repair a marginal copy: flip the one or two cells that were
+                // closest to the decision threshold and see whether a valid message appears.
+                const int K = 14;
+                std::vector<int> weak(ncell);
+                for (int i = 0; i < ncell; i++) weak[i] = i;
+                int k = std::min(K, ncell);
+                std::partial_sort(weak.begin(), weak.begin() + k, weak.end(), [&](int a, int c) { return margin[a] < margin[c]; });
+                for (int i = 0; i < k && !found; i++) {
+                    bits[weak[i]] ^= 1;
+                    found = cellsToMessage(bits, d.text, startCell);
+                    for (int j = i + 1; j < k && !found; j++) {
+                        bits[weak[j]] ^= 1;
+                        found = cellsToMessage(bits, d.text, startCell);
+                        bits[weak[j]] ^= 1;
+                    }
+                    bits[weak[i]] ^= 1;
+                }
+            }
+            if (found) { pUsed = p; thrUsed = &T; }
         }
-        if (!found) continue;
-        d.dt = (float)(p + 4 * startCell) * hop_ / 12000.0f - 0.5f;
-        // Signal level: mean power of the key-down cells (signal + noise) minus the noise mean.
-        double onSum = 0;
-        int onCnt = 0;
-        for (int i = 0; i < ncell; i++) if (bits[i]) { onSum += pow(10.0, (mag_[(size_t)(p + 4 * i) * nbins_ + b] - 240) / 20.0); onCnt++; }
-        float nLin = powf(10, (noise - 240) / 20.0f), sLin = onCnt ? (float)(onSum / onCnt) : nLin;
-        float enbw = 1.234f * 12000.0f / dot_;                      // noise bandwidth of the half-sine window
-        float snr = 10 * log10f(std::max(sLin - nLin, nLin * 0.01f) / nLin) - 10 * log10f(2500.0f / enbw) + SNR_CAL;
-        d.snr = (int)lroundf(snr < -24 ? -24 : (snr > 40 ? 40 : snr));
-        return true;
+        if (!found) {
+            std::vector<uint8_t> q(frames_);
+            for (int t = 0; t < frames_; t++) q[t] = mag_[(size_t)t * nbins_ + b] > T[t];
+            found = runsToMessage(q, d.text, startHop);
+            if (found) thrUsed = &T;
+        }
     }
-    return false;
+    if (!found) return false;
+    d.dt = (startHop >= 0 ? (float)startHop : (float)(pUsed + 4 * startCell)) * hop_ / 12000.0f - 0.5f;
+    // Signal level: mean power of the key-down frames (signal + noise) minus the noise mean.
+    double onSum = 0;
+    int onCnt = 0;
+    for (int t = 0; t < frames_; t++) {
+        int v = mag_[(size_t)t * nbins_ + b];
+        if (v > (*thrUsed)[t]) { onSum += pow(10.0, (v - 240) / 20.0); onCnt++; }
+    }
+    float nLin = powf(10, (noise - 240) / 20.0f), sLin = onCnt ? (float)(onSum / onCnt) : nLin;
+    float enbw = 1.234f * 12000.0f / dot_;                      // noise bandwidth of the half-sine window
+    float snr = 10 * log10f(std::max(sLin - nLin, nLin * 0.01f) / nLin) - 10 * log10f(2500.0f / enbw) + SNR_CAL;
+    d.snr = (int)lroundf(snr < -24 ? -24 : (snr > 40 ? 40 : snr));
+    return true;
 }
 
 int CwMonitor::decode(std::vector<Decode>& out) {
