@@ -430,6 +430,9 @@ for the ESP32-P4.
   without adding it to RigDeck's log. The line below it shows the last attempt (sent or not,
   where to, when). The first packet to a new address is preceded by a short probe so it is not
   lost while the network looks the address up.
+- **Directed CQ:** Settings, Station, **Call CQ as**: plain CQ, CQ DX, CQ POTA, CQ SOTA, CQ WWFF,
+  CQ NA, CQ EU, CQ TEST (on the web page any 1-4 letters or 3 digits). The CQ then goes out as
+  e.g. "CQ POTA AC9HP EM69"; everything else stays the same.
 - **Log QSO** (touch screen next to CQ, web page in the QSO box) logs the contact in progress
   straight away, for when the other station fades out before the exchange finishes, then goes
   back to calling CQ. It needs at least one signal report: one you sent or one you received. With

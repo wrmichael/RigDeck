@@ -29,6 +29,7 @@ public:
     static const int UNSET = -99;
     // configuration (copied from Settings by the app)
     std::string myCall, myGrid;
+    std::string cqTag;                  // "CQ POTA AC9HP EM69" when set
     int opMode = 0, maxRetries = 5, cqParity = 0;
     bool useRR73 = true;
     // hooks

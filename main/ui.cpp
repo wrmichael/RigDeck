@@ -1061,6 +1061,7 @@ const SField kSet[] = {
     {"op", "Operator (ADIF OPERATOR)", 0, SK_UPPER, 11, nullptr, nullptr, "optional"},
     {"mySigInfo", "Reference (MY_SIG_INFO)", 0, SK_UPPER, 40, nullptr, nullptr, "e.g. US-1234, empty = none"},
     {"mySig", "Programme (MY_SIG)", 0, SK_UPPER, 12, nullptr, nullptr, "optional, e.g. WWFF"},
+    {"cqTag", "Call CQ as", 0, SK_DROP, 0, "CQ\nCQ DX\nCQ POTA\nCQ SOTA\nCQ WWFF\nCQ NA\nCQ EU\nCQ TEST", "|DX|POTA|SOTA|WWFF|NA|EU|TEST", nullptr},
     {"txLevel", "TX audio level % (maximum)", 1, SK_NUM, 3, nullptr, nullptr, "1 - 100"},
     {"autoAlc", "Lower audio when ALC shows", 1, SK_DROP, 0, "On (recommended)\nOff", "1|0", nullptr},
     {"rfPower", "RF power %", 1, SK_NUM, 3, nullptr, nullptr, "-1 = leave the radio's"},

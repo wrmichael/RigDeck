@@ -6,6 +6,7 @@
 #include "clock.h"
 #include "nmea.h"
 #include "app.h"
+#include "ftx.h"
 #include <cstdio>
 #include <cstring>
 
@@ -210,6 +211,24 @@ int main() {
     CHECK(q2.nextTx(0, tx) && tx == "CQ W9XYZ EN37" && logs.size() == 1);   // gave up after maxRetries
     q2.onDecodes(D("W9XYZ K1ABC 73", -12), 1);                      // stray 73: no reply
     CHECK(q2.nextTx(0, tx) && tx == "CQ W9XYZ EN37");
+
+    // --- directed CQ: setting and message ---
+    {
+        Settings s;
+        CHECK(s.set("cqTag", "pota") && s.cqTag == "POTA");
+        CHECK(s.set("cqTag", "CQ DX") && s.cqTag == "DX");
+        CHECK(s.set("cqTag", "291") && s.cqTag == "291");
+        CHECK(!s.set("cqTag", "PARKS") && !s.set("cqTag", "P1") && !s.set("cqTag", "12") && s.cqTag == "291");
+        CHECK(s.set("cqTag", "") && s.cqTag.empty());
+        Sequencer q;
+        q.myCall = "AC9HP"; q.myGrid = "EM69TS";
+        q.cqTag = "POTA"; q.txEnabled = true;
+        q.startCq();
+        std::string t;
+        CHECK(q.nextTx(0, t) && t == "CQ POTA AC9HP EM69");
+        std::vector<uint8_t> tones;
+        CHECK(ftxEncode(t, false, tones));
+    }
 
     // --- sequencer: logging by hand when the other station fades out ---
     {

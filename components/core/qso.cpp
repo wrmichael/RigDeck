@@ -69,7 +69,10 @@ std::string Sequencer::compose(int n) const {
     case 3: if (dxCall.empty()) return ""; snprintf(b, sizeof b, "%s %s R%+03d", dxCall.c_str(), myCall.c_str(), r); break;
     case 4: if (dxCall.empty()) return ""; snprintf(b, sizeof b, "%s %s %s", dxCall.c_str(), myCall.c_str(), useRR73 ? "RR73" : "RRR"); break;
     case 5: if (dxCall.empty()) return ""; snprintf(b, sizeof b, "%s %s 73", dxCall.c_str(), myCall.c_str()); break;
-    case 6: snprintf(b, sizeof b, "CQ %s %s", myCall.c_str(), g.c_str()); break;
+    case 6:
+        if (cqTag.empty()) snprintf(b, sizeof b, "CQ %s %s", myCall.c_str(), g.c_str());
+        else snprintf(b, sizeof b, "CQ %s %s %s", cqTag.c_str(), myCall.c_str(), g.c_str());
+        break;
     case 7: return freeText;
     default: return "";
     }

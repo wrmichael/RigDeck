@@ -202,6 +202,7 @@ table.log th{color:var(--dim);font-weight:500}
       <label for="s_op">Operator callsign (ADIF OPERATOR)</label><input id="s_op" maxlength="11" placeholder="optional">
       <label for="s_mySigInfo">Park / reference (ADIF MY_SIG_INFO)</label><input id="s_mySigInfo" maxlength="40" placeholder="e.g. US-1234, empty = none">
       <label for="s_mySig">Programme (ADIF MY_SIG)</label><input id="s_mySig" maxlength="12" placeholder="optional, e.g. WWFF">
+      <label for="s_cqTag">Call CQ as</label><input id="s_cqTag" maxlength="4" size="6" list="cqTags" placeholder="plain CQ"><datalist id="cqTags"><option value="DX"><option value="POTA"><option value="SOTA"><option value="WWFF"><option value="NA"><option value="EU"><option value="TEST"></datalist>
       <label for="s_txLevel">TX audio level % (maximum)</label><input id="s_txLevel" inputmode="numeric">
       <label for="s_autoAlc">Lower the audio automatically when the radio shows ALC</label><select id="s_autoAlc"><option value="1">On (recommended)</option><option value="0">Off</option></select>
       <label for="s_rfPower">RF power % (-1 = leave)</label><input id="s_rfPower" inputmode="numeric">

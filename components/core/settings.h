@@ -11,6 +11,7 @@ struct Settings {
     std::string grid;                    // 4 or 6 character locator
     std::string op;                      // ADIF OPERATOR: who is at the key, if different from the station callsign
     std::string mySig;                   // ADIF MY_SIG: the programme the reference below belongs to (optional, e.g. WWFF)
+    std::string cqTag;                   // directed CQ: "" plain, or DX / POTA / SOTA / NA ... (1-4 letters) or 3 digits
     std::string mySigInfo;               // ADIF MY_SIG_INFO: e.g. a park reference such as US-1234 (empty = not logged)
     std::string apSsid = "RigDeck";
     std::string apPass = "ft8ft8ft8";    // WPA2 needs >= 8 chars; change it in the Settings tab

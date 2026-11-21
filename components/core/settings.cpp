@@ -51,6 +51,15 @@ bool Settings::set(const std::string& k, const std::string& v) {
         (k == "mySig" ? mySig : mySigInfo) = t;
         return true;
     }
+    if (k == "cqTag") {                                   // what FT8 can carry after CQ: 1-4 letters or 3 digits
+        std::string t = upperTrim(v);
+        if (t.size() > 3 && t.compare(0, 3, "CQ ") == 0) t = upperTrim(t.substr(3));
+        bool letters = !t.empty() && t.size() <= 4 && t.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ") == std::string::npos;
+        bool digits = t.size() == 3 && t.find_first_not_of("0123456789") == std::string::npos;
+        if (!t.empty() && !letters && !digits) return false;
+        cqTag = t;
+        return true;
+    }
     if (k == "apSsid") { if (v.empty() || v.size() > 32) return false; apSsid = v; return true; }
     if (k == "apPass") { if (!v.empty() && (v.size() < 8 || v.size() > 63)) return false; apPass = v; return true; }
     if (k == "staSsid") { if (v.size() > 32) return false; staSsid = v; return true; }
@@ -94,7 +103,7 @@ std::string Settings::serialize(bool secrets) const {
     std::string s;
     auto S = [&](const char* k, const std::string& v) { s += k; s += '='; s += v; s += '\n'; };
     auto I = [&](const char* k, int v) { snprintf(b, sizeof b, "%d", v); S(k, b); };
-    S("call", call); S("grid", grid); S("op", op); S("mySig", mySig); S("mySigInfo", mySigInfo); S("apSsid", apSsid); S("staSsid", staSsid); S("logHost", logHost);
+    S("call", call); S("grid", grid); S("op", op); S("mySig", mySig); S("mySigInfo", mySigInfo); S("cqTag", cqTag); S("apSsid", apSsid); S("staSsid", staSsid); S("logHost", logHost);
     if (secrets) { S("apPass", apPass); S("staPass", staPass); }
     I("radioType", radioType); I("catBaud", catBaud); I("keyWpm", keyWpm);
     for (int i = 0; i < 6; i++) { snprintf(b, sizeof b, "macro%d", i + 1); S(b, macro[i]); }

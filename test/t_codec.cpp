@@ -59,7 +59,7 @@ static void run(bool ft4, std::vector<Sig> sigs, float noiseRms) {
 int main() {
     run(false, {{"CQ K1ABC FN42", 1000, 0, 0}, {"K1ABC W9XYZ EN37", 1500.5f, -10, 0.3f}, {"W9XYZ K1ABC -12", 2200, -16, -0.2f},
                 {"K1ABC W9XYZ R-07", 600, 10, 0}, {"W9XYZ K1ABC RR73", 2700, -5, 0.1f}, {"CQ DX VK2ABC QF56", 350, -18, 0}}, 0.05f);
-    run(true, {{"CQ K1ABC FN42", 1000, 0, 0}, {"K1ABC W9XYZ -05", 1800, -8, 0.2f}, {"W9XYZ K1ABC 73", 2500, 6, 0}}, 0.05f);
+    run(true, {{"CQ K1ABC FN42", 1000, 0, 0}, {"K1ABC W9XYZ -05", 1800, -8, 0.2f}, {"W9XYZ K1ABC 73", 2500, 6, 0}, {"CQ POTA AC9HP EM69", 1250, 0, 0}}, 0.05f);
     // Late start: first 1.3 s of the transmission missing (decoder ran long) must still decode.
     {
         std::vector<uint8_t> tones;

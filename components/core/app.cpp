@@ -324,6 +324,7 @@ std::string App::logReadJson(bool archive, int from, int n, const std::string& f
 void App::syncSeq() {
     seq.myCall = cfg.call;
     seq.myGrid = cfg.grid;
+    seq.cqTag = cfg.cqTag;
     seq.opMode = cfg.opMode;
     seq.maxRetries = cfg.maxRetries;
     seq.cqParity = cfg.cqParity;
