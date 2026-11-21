@@ -297,11 +297,16 @@ commands serve the IC-7100 and IC-705 (the attenuator is 12 dB on one and 20 dB 
 
 Driving the radio's ALC into the red compresses the audio, which widens an FT8 signal and spreads
 splatter over other stations. With Settings > Operating > "Lower audio when ALC shows" **On** (the
-default), RigDeck reads the radio's ALC meter about every 0.4 s while transmitting and turns its own
-audio down whenever ALC goes past the ALC zone. A transmission that stays well inside the zone lets
-the level rise again, never above the "TX audio level (maximum)" setting or past the level that last
-went into the red. The level found is kept for each radio and band (file `alc.txt` with the log), so
-it survives restarts; changing the maximum or turning the feature off starts it fresh.
+default), RigDeck reads the radio's ALC meter about every 0.4 s while transmitting. At the end of
+each FT8/FT4 transmission it looks at the upper quarter of those readings: above the ALC zone the
+audio goes down a step (a reading deep in the red twice in a row lowers it at once); well inside the
+zone it rises again, never above the "TX audio level (maximum)" setting. Single jumpy readings do not
+move it. If lowering the audio does not lower the ALC (the radio's own settings hold it up: RF power,
+compressor, USB MOD level), RigDeck stops lowering and says so on the status line rather than turning
+the audio down to nothing. FT-CW and PSK31 use the level learned with FT8 on that band without
+changing it (Morse keying makes the ALC jump on every element). The level is kept for each radio and
+band (file `alc.txt` with the log), so it survives restarts; changing the maximum or turning the
+feature off starts it fresh.
 
 - Set the radio's power as you want it (e.g. 5 W on the IC-705); the audio level only removes ALC.
 - The level in use shows as "audio NN %" next to Po/ALC while transmitting.

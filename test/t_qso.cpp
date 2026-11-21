@@ -27,6 +27,7 @@ struct Station {
     bool ptt = false;
     uint64_t freq = 14074000;
     int dataMode = 0;
+    int alcFixed = -1;                                           // >= 0: the radio's ALC reads this whatever the audio
     struct Ev { int64_t utc; bool on; };
     std::vector<Ev> pttLog;
     int16_t txBuf[960];
@@ -69,6 +70,7 @@ struct Station {
             else if (f.cmd == 0x15 && f.data.size() >= 1 && f.data[0] == 0x13) {
                 // ALC: none up to 10 % audio, then rising steeply (top of the zone, 120, at 25 %)
                 int a = ptt ? std::max(0, (int)((app.txLevelNow() - 10.0f) * 8.0f)) : 0;
+                if (ptt && alcFixed >= 0) a = alcFixed;
                 if (a > 255) a = 255;
                 reply(0x15, {0x13, (uint8_t)(a / 100), (uint8_t)((((a / 10) % 10) << 4) | (a % 10))});
             }
@@ -187,10 +189,15 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
     auto count = [](const std::string& s) { int n = 0; for (size_t p = 0; (p = s.find("<EOR>", p)) != std::string::npos; p++) n++; return n; };
     CHECK(count(la) == 1 && count(lb) == 1);                     // one QSO each, no duplicates, no re-calling
     // automatic level: Settings 30 % puts ALC in the red (170); it settles inside the zone, not at zero
-    printf("auto TX level A %.1f %%, B %.1f %%\n", A.app.txLevelNow(), B.app.txLevelNow());
+    printf("auto TX level A %.1f %%, B %.1f %% (%s)\n", A.app.txLevelNow(), B.app.txLevelNow(), mode);
+    bool steady = !strcmp(mode, "FT8") || !strcmp(mode, "FT4");
+    if (!steady) {                                               // FT-CW / PSK31 never move the level
+        CHECK(A.app.txLevelNow() == 30.0f && B.app.txLevelNow() == 30.0f);
+    } else {
     CHECK(A.app.txLevelNow() >= 18.0f && A.app.txLevelNow() <= 24.4f);
     CHECK(B.app.txLevelNow() >= 18.0f && B.app.txLevelNow() <= 24.4f);
-    {   // the learned level survives a restart
+    }
+    if (steady) {   // the learned level survives a restart
         App again;
         again.begin(da);
         std::string saved = slurp(da + "/alc.txt");
@@ -305,6 +312,29 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
     simMs += 60; A.app.tick();
     CHECK(!A.ptt && A.pttLog.size() == before + 2);
     CHECK(!A.app.txActive());
+    if (!strcmp(mode, "FT8") && !slowB) {
+        // A radio whose ALC stays high whatever the audio (its own settings hold it up): RigDeck
+        // lowers a little, sees no effect, then holds instead of running the audio down to nothing.
+        float start = A.app.txLevelNow();
+        A.alcFixed = 150;
+        A.app.command("txen", {{"v", "1"}});
+        A.app.command("cq", {});
+        size_t keyed0 = A.pttLog.size();
+        float mid = 0;
+        for (int i = 0; i < 12; i++) {
+            runSim(A, B, 15, slotLen, slowB);
+            A.app.stateJson(0, 0, false);
+            if (i == 5) mid = A.app.txLevelNow();
+        }
+        CHECK(A.pttLog.size() >= keyed0 + 8);                    // it did call CQ several times
+        A.app.command("halt", {});
+        runSim(A, B, 15, slotLen, slowB);
+        float end = A.app.txLevelNow();
+        printf("ALC stuck at 150: audio %.1f %% -> %.1f %%\n", start, end);
+        CHECK(end >= start * 0.75f && end >= 30 * 0.12f);
+        CHECK(end == mid);                                       // and then holds
+        A.alcFixed = -1;
+    }
 
     // Nobody watching for longer than the watchdog time: automatic transmit must switch itself off.
     CHECK(A.app.command("txen", {{"v", "1"}}).find("true") != std::string::npos);

@@ -508,9 +508,19 @@ void App::alcStartTx() {
     alcMax_ = 0;
     poMax_ = 0;
     alcReads_ = 0;
+    alcHot_ = 0;
     alcCut_ = false;
+    alcRd_.clear();
+    if (!alcAdjusts()) return;                                     // FT-CW / PSK31: the band's FT8 level, unchanged
 }
 
+// Automatic TX audio level. The radio's ALC meter is read about every 0.4 s while transmitting.
+// Decisions are made once per transmission from the whole set of readings (its upper quartile),
+// not on single readings: one jumpy reading - or the spikes that Morse keying makes on every
+// key-down - must not move the level. Only a reading deep in the red twice in a row cuts at once.
+// FT-CW and PSK31 have no steady envelope, so they use the FT8 level learned for the band and do
+// not change it. If lowering the audio does not lower the ALC (the radio's own settings hold it
+// up, e.g. a low RF power setting), RigDeck stops lowering and says so instead of going to zero.
 void App::alcTick(int64_t mono) {
     if (!txOn_ || mono - pttOnMono_ < 800) return;
     uint32_t seq = radio.alcSeq.load();
@@ -521,32 +531,69 @@ void App::alcTick(int64_t mono) {
     alcMax_ = std::max(alcMax_, a);
     poMax_ = std::max(poMax_, radio.po.load());
     alcReads_++;
-    if (!cfg.autoAlc || radio.proto.load() == RP_QMX) return;
-    float g = txGain_.load(), f = a > 180 ? 0.8f : a > 130 ? 0.9f : a > 115 ? 0.97f : 1.0f;
-    if (f < 1.0f) {
+    if (alcRd_.size() < 128) alcRd_.push_back(a);
+    if (!alcAdjusts()) return;
+    alcHot_ = a > 180 ? alcHot_ + 1 : 0;
+    if (alcHot_ >= 2 && !alcCut_) {                                // deep in the red: do not wait for the end
         auto& L = alcLevel_[alcBand_];
-        L.ceiling = g * 0.97f;
-        txGain_ = std::max(1.0f, g * f);
-        alcCut_ = true;
+        if (!L.stuck) {
+            float g = txGain_.load();
+            txGain_ = std::max(alcFloor(), g * 0.8f);
+            alcCut_ = true;
+        }
     }
 }
 
+bool App::alcAdjusts() const {
+    int m = mode_.load();
+    return cfg.autoAlc && radio.proto.load() != RP_QMX && (m == DM_FT8 || m == DM_FT4);
+}
+float App::alcFloor() const { return std::max(2.0f, cfg.txLevel * 0.12f); }
+
 void App::alcEndTx() {
+    std::vector<int> r = alcRd_;
+    alcRd_.clear();
+    int q75 = 0;
+    if (!r.empty()) { std::sort(r.begin(), r.end()); q75 = r[(r.size() * 3) / 4]; }
     if (logFn) {
-        char b[160];
-        snprintf(b, sizeof b, "TX end %s: audio %.1f %% (max %d %%, auto %s), ALC max %d/255 over %d readings, Po max %d/255",
-                 alcBand_.c_str(), txLevelNow(), cfg.txLevel, cfg.autoAlc ? "on" : "off", alcMax_, alcReads_, poMax_);
+        char b[200];
+        snprintf(b, sizeof b, "TX end %s: audio %.1f %% (max %d %%, auto %s), ALC max %d, upper quartile %d /255 over %d readings, Po max %d/255",
+                 alcBand_.c_str(), txLevelNow(), cfg.txLevel, cfg.autoAlc ? "on" : "off", alcMax_, q75, alcReads_, poMax_);
         logFn(b);
     }
-    if (!cfg.autoAlc || radio.proto.load() == RP_QMX || alcBand_.empty()) return;
+    if (!alcAdjusts() || alcBand_.empty() || !genStarted_ || r.size() < 5) return;
     auto& L = alcLevel_[alcBand_];
-    if (L.ceiling <= 0) L.ceiling = (float)cfg.txLevel;
-    float g = txGain_.load();
-    if (!alcCut_ && alcMax_ < 70 && genStarted_) g = std::min({g * 1.06f, L.ceiling, (float)cfg.txLevel});
-    bool changed = fabsf(L.level - g) >= 0.5f || alcCut_;
+    float mx = (float)cfg.txLevel;
+    if (L.ceiling <= 0) L.ceiling = mx;
+    float g = txGain_.load(), before = L.level > 0 ? L.level : g;
+    std::string note;
+    if (q75 > 115 && !L.stuck) {
+        // Did the last cut do anything? If the audio went down 10 % or more and the ALC stayed
+        // about where it was, the ALC is not following the audio: stop lowering.
+        if (L.cutFrom > 0 && g <= L.cutFrom * 0.9f && q75 >= L.cutAlc - 8) {
+            L.stuck = true;
+            note = "The radio's ALC stays high whatever the TX audio level (check its RF power, compressor and USB MOD level); audio kept at " +
+                   std::to_string((int)lroundf(g)) + " %";
+        } else {
+            float f = q75 > 180 ? 0.8f : q75 > 140 ? 0.88f : 0.94f;
+            if (L.cutFrom <= 0) { L.cutFrom = before; L.cutAlc = q75; }   // where this run of cuts started
+            if (!alcCut_) g = std::max(alcFloor(), g * f);         // (otherwise a mid-transmission cut already happened)
+            L.ceiling = std::min(L.ceiling, before);
+            note = "TX audio lowered to " + std::to_string((int)lroundf(g)) + " % to keep the radio's ALC out of the red";
+        }
+    } else if (q75 > 115) {
+        g = before;                                                // stuck: hold the level
+    } else {
+        if (q75 < 70 && !alcCut_) g = std::min({g * 1.06f, L.ceiling, mx});
+        L.cutFrom = 0;
+        L.stuck = false;
+        L.ceiling = std::min(mx, L.ceiling * 1.02f + 0.1f);       // a ceiling can recover
+    }
+    txGain_ = g;
+    bool changed = fabsf(L.level - g) >= 0.5f || !note.empty();
     L.level = g;
     if (changed) alcSave();                                        // kept across restarts (only when it moved, to spare the flash)
-    if (alcCut_) status("TX audio lowered to " + std::to_string((int)lroundf(g)) + " % to keep the radio's ALC out of the red");
+    if (!note.empty()) { status(note); if (logFn) logFn(note.c_str()); }
 }
 
 // Learned levels: one line per radio and band, "<radio> <band>|<level>|<ceiling>".

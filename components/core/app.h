@@ -202,13 +202,16 @@ private:
     float gpsErr_ = 0;
     void gpsTime(int64_t utcNow, int64_t mono, const char* src);
     // automatic TX audio level (ALC)
-    struct AlcLevel { float level = 0, ceiling = 0; };
+    struct AlcLevel { float level = 0, ceiling = 0; float cutFrom = 0; int cutAlc = 0; bool stuck = false; };
     std::map<std::string, AlcLevel> alcLevel_;
     std::atomic<float> txGain_{50.0f};
     std::string alcBand_;
     uint32_t alcSeen_ = 0;
-    int alcMax_ = 0, poMax_ = 0, alcReads_ = 0;
+    int alcMax_ = 0, poMax_ = 0, alcReads_ = 0, alcHot_ = 0;
     bool alcCut_ = false;
+    std::vector<int> alcRd_;                           // ALC readings of this transmission
+    bool alcAdjusts() const;                           // FT8/FT4 with auto level on (not QMX)
+    float alcFloor() const;
     void alcStartTx();
     void alcTick(int64_t mono);
     void alcEndTx();
