@@ -6,6 +6,7 @@
 // logging never waits for the card and the card driver's own messages cannot loop.
 #include "sdlog.h"
 #include "clock.h"
+#include "adif.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdarg>
@@ -89,7 +90,6 @@ static void purgeOld() {                       // console files dated more than 
 // Buffers in PSRAM: internal RAM is kept for the USB host (CAT, audio), the Wi-Fi link and the display.
 static const size_t CHUNK = 4096;
 static char* s_chunk;
-static char* s_fbuf;
 
 static void writerTask(void*) {
     char* chunk = s_chunk;
@@ -115,7 +115,6 @@ static void writerTask(void*) {
             struct stat st;
             if (!valid && stat(path.c_str(), &st) == 0 && st.st_size > 5 * 1024 * 1024) remove(path.c_str());
             f = fopen(path.c_str(), "a");
-            if (f) setvbuf(f, s_fbuf, _IOFBF, CHUNK);                 // not stdio's own buffer (internal RAM)
             day = today;
             clockAtOpen = valid;
             lastMark = 0;
@@ -142,7 +141,7 @@ static void writerTask(void*) {
             portEXIT_CRITICAL(&s_mux);
             if (dropped) fprintf(f, "[console log: %u messages lost, buffer full]\n", dropped);
             if (!n) break;
-            fwrite(chunk, 1, n, f);
+            fileWrite(f, chunk, n);                                // via internal RAM (see adif.h)
         }
         fflush(f);
         if (++sinceSync >= 10) { sinceSync = 0; fsync(fileno(f)); }   // on the card every ~5 s
@@ -162,8 +161,7 @@ void sdlog_pause(bool pause) {
 void sdlog_start(const char* dir) {
     if (!s_ring) return;
     s_chunk = (char*)heap_caps_malloc(CHUNK, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    s_fbuf = (char*)heap_caps_malloc(CHUNK, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!s_chunk || !s_fbuf) return;
+    if (!s_chunk) return;
     s_dir = dir;
     mkdir(s_dir.c_str(), 0777);
     xTaskCreate(writerTask, "sdlog", 3584, nullptr, 2, nullptr);
@@ -210,13 +208,11 @@ static esp_err_t hFile(httpd_req_t* req) {
     std::string disp = std::string("attachment; filename=\"") + f + "\"";
     httpd_resp_set_hdr(req, "Content-Disposition", disp.c_str());
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    char* buf = (char*)heap_caps_malloc(2048, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!buf) { fclose(fp); return ESP_FAIL; }
+    alignas(64) char buf[1024];                 // internal RAM: the card's DMA reads into it (see adif.h)
     size_t n;
     esp_err_t r = ESP_OK;
-    while (r == ESP_OK && (n = fread(buf, 1, 2048, fp)) > 0) r = httpd_resp_send_chunk(req, buf, n);
+    while (r == ESP_OK && (n = fread(buf, 1, sizeof buf, fp)) > 0) r = httpd_resp_send_chunk(req, buf, n);
     fclose(fp);
-    heap_caps_free(buf);
     if (r != ESP_OK) return ESP_FAIL;
     return httpd_resp_send_chunk(req, nullptr, 0);
 }

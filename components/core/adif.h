@@ -6,6 +6,7 @@
 #include <utility>
 #include <string_view>
 #include <functional>
+#include <cstdio>
 #include "psalloc.h"
 
 struct QsoRecord {
@@ -33,6 +34,11 @@ bool adifWriteRecords(const std::string& path, const RecVec& recs);   // header 
 // fn(rec, index, endOffset) for each record in file order; return false to stop. start = a byte
 // offset from an earlier endOffset (index then counts from there). false = no such file.
 using AdifRecFn = std::function<bool(std::string_view rec, int idx, long endOff)>;
+// File I/O through a small buffer on the stack (internal RAM). On the ESP32-P4 the SD card
+// controller moves data by DMA straight to / from the caller's buffer; buffers in PSRAM went wrong
+// there (reads came back empty until a restart), so file data never goes to or from PSRAM directly.
+size_t fileRead(FILE* f, char* dst, size_t n);
+bool fileWrite(FILE* f, const char* src, size_t n);
 bool adifForEach(const std::string& path, const AdifRecFn& fn, long start = 0);
 // Rewrites a file through a temp file: fn(rec, index, out) returns true to keep the record, or false
 // to write out in its place (empty = drop it; several lines are fine). tail (record lines) goes at

@@ -227,6 +227,32 @@ bool adifWriteRecords(const std::string& path, const RecVec& recs) {
     return rename(tmp.c_str(), path.c_str()) == 0;
 }
 
+size_t fileRead(FILE* f, char* dst, size_t n) {
+    alignas(64) char tmp[512];
+    size_t got = 0;
+    while (got < n) {
+        size_t want = n - got < sizeof tmp ? n - got : sizeof tmp;
+        size_t k = fread(tmp, 1, want, f);
+        if (k == 0) break;
+        memcpy(dst + got, tmp, k);
+        got += k;
+        if (k < want) break;
+    }
+    return got;
+}
+
+bool fileWrite(FILE* f, const char* src, size_t n) {
+    alignas(64) char tmp[256];
+    while (n) {
+        size_t k = n < sizeof tmp ? n : sizeof tmp;
+        memcpy(tmp, src, k);
+        if (fwrite(tmp, 1, k, f) != k) return false;
+        src += k;
+        n -= k;
+    }
+    return true;
+}
+
 static std::string_view recLine(std::string_view l) {     // a record line, trimmed, or "" if not one
     while (!l.empty() && (l.back() == '\r' || l.back() == ' ' || l.back() == '\n')) l.remove_suffix(1);
     size_t n = l.size();
@@ -245,7 +271,7 @@ bool adifForEach(const std::string& path, const AdifRecFn& fn, long start) {
     int idx = 0;
     bool stop = false;
     size_t n;
-    while (!stop && (n = fread(&buf[0], 1, buf.size(), fp)) > 0) {
+    while (!stop && (n = fileRead(fp, &buf[0], buf.size())) > 0) {
         size_t p = 0;
         while (p < n) {
             const char* nl = (const char*)memchr(buf.data() + p, '\n', n - p);
@@ -276,7 +302,7 @@ int adifRewrite(const std::string& path, const AdifEditFn& fn, const std::string
     int kept = 0;
     std::string repl;
     auto put = [&](std::string_view s) {
-        ok = ok && fwrite(s.data(), 1, s.size(), out) == s.size() && fputc('\n', out) != EOF;
+        ok = ok && fileWrite(out, s.data(), s.size()) && fputc('\n', out) != EOF;
     };
     adifForEach(path, [&](std::string_view r, int i, long) {
         repl.clear();
@@ -305,7 +331,7 @@ bool adifTail(const std::string& path, size_t max, RecVec& out, int& firstIdx) {
         PStr buf;
         buf.resize((size_t)(size - from));
         fseek(fp, from, SEEK_SET);
-        size_t n = fread(&buf[0], 1, buf.size(), fp);
+        size_t n = fileRead(fp, &buf[0], buf.size());
         buf.resize(n);
         RecVec recs;
         size_t p = 0;

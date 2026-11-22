@@ -136,7 +136,7 @@ static bool moveInto(const std::string& src, const std::string& dst, bool adif) 
     if (adif) {
         if (fresh) ok = fputs(adifHeader().c_str(), out) >= 0;
         adifForEach(src, [&](std::string_view r, int, long) {
-            ok = ok && fwrite(r.data(), 1, r.size(), out) == r.size() && fputc('\n', out) != EOF;
+            ok = ok && fileWrite(out, r.data(), r.size()) && fputc('\n', out) != EOF;
             return ok;
         });
     } else {
@@ -1498,7 +1498,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
             bool okw = true;
             adifForEach(logPath(), [&](std::string_view r, int, long) {
                 if (inArchive.contains(sentKey(r))) return true;
-                okw = okw && fwrite(r.data(), 1, r.size(), f) == r.size() && fputc('\n', f) != EOF;
+                okw = okw && fileWrite(f, r.data(), r.size()) && fputc('\n', f) != EOF;
                 copied++;
                 return okw;
             });
