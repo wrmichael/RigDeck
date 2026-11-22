@@ -329,6 +329,27 @@ int main() {
         CHECK(!o.waitNext && o.txMsg == 6);
     }
 
+    // --- dead man's switch: no new QSO, the one in progress is finished, then TX off ---
+    {
+        Sequencer s;
+        s.myCall = "W9XYZ"; s.myGrid = "EN37"; s.opMode = 1; s.txEnabled = true;
+        s.now = q1.now;
+        s.onLog = [](const QsoLog&) {};
+        s.startCq();
+        auto one = [&](const char* m, int par) { std::vector<Decode> l(1); l[0].text = m; l[0].snr = -5; s.onDecodes(l, par); };
+        one("W9XYZ K1ABC FN42", 1);
+        CHECK(s.dxCall == "K1ABC");
+        s.autoStop = true;                                            // internet lost mid-QSO
+        s.txDone();
+        one("W9XYZ K1ABC R-07", 1);
+        CHECK(s.txMsg == 4 && s.txEnabled);                           // the QSO carries on
+        s.txDone();
+        CHECK(!s.txEnabled);                                          // ... and then TX is off
+        s.txEnabled = true; s.startCq();
+        one("W9XYZ N2BBB EN61", 1);                                   // a new caller is not answered
+        CHECK(s.dxCall.empty());
+    }
+
     printf(fails ? "t_units: %d of %d FAILED\n" : "t_units: all %d checks passed\n", fails ? fails : checks, checks);
     return fails ? 1 : 0;
 }

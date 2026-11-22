@@ -1112,6 +1112,8 @@ const SField kSet[] = {
     {"apPass", "Hotspot password", 5, SK_PASS, 63, nullptr, nullptr, "unchanged"},
     {"staSsid", "Home network name", 5, SK_TEXT, 32, nullptr, nullptr, "optional, 2.4 GHz"},
     {"staPass", "Home network password", 5, SK_PASS, 63, nullptr, nullptr, "unchanged"},
+    {"deadman", "Dead man's switch", 5, SK_DROP, 0, "Off\nOn: no internet = stop auto", "0|1", nullptr},
+    {"deadmanHost", "Internet check address", 5, SK_TEXT, 60, nullptr, nullptr, "1.1.1.1:53"},
     {"gpsClock", "Clock from the radio's GPS", 6, SK_DROP, 0, "Off\nOn (Icom: GPS Out to USB)", "0|1", nullptr},
     {"gpsBaud", "Radio's GPS Out baud", 6, SK_DROP, 0, "4800\n9600", "4800|9600", nullptr},
     {"gpsDelayMs", "GPS sentence delay, ms", 6, SK_NUM, 4, nullptr, nullptr, "used without PPS"},

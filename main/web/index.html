@@ -236,6 +236,8 @@ table.log th{color:var(--dim);font-weight:500}
       <label for="s_apPass">Hotspot password</label><input id="s_apPass" type="password" placeholder="unchanged" autocomplete="new-password">
       <label for="s_staSsid">Home network name</label><input id="s_staSsid" maxlength="32" placeholder="optional, 2.4 GHz">
       <label for="s_staPass">Home network password</label><input id="s_staPass" type="password" placeholder="unchanged" autocomplete="new-password">
+      <label for="s_deadman">Dead man's switch</label><select id="s_deadman"><option value="0">Off</option><option value="1">On: no internet = finish the QSO, then stop Auto CQ / hunt</option></select>
+      <label for="s_deadmanHost">Internet check address (host or IP, :port)</label><input id="s_deadmanHost" placeholder="1.1.1.1:53">
       <div style="grid-column:1/-1"><span id="staInfo">Home network: …</span> <button type="button" id="staCon" class="on">Save + connect</button> <button type="button" id="staDis">Disconnect</button><br><span class="hint">The home network must be 2.4 GHz. It is joined right away; no restart needed.</span></div>
     </div>
     <div class="row" style="margin-top:12px"><button id="save" class="on">Save settings</button><button id="reboot">Restart device</button><span id="saveinfo" class="hint"></span></div>

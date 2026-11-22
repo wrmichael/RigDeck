@@ -559,6 +559,7 @@ void App::syncSeq() {
     seq.myGrid = cfg.grid;
     seq.cqTag = cfg.cqTag;
     seq.confirmEach = cfg.confirmQso != 0;
+    seq.autoStop = cfg.deadman && inet_ == 0;
     if (!seq.confirmEach && seq.waitNext) seq.nextQso();          // switched off while waiting: carry on
     seq.opMode = cfg.opMode;
     seq.maxRetries = cfg.maxRetries;
@@ -910,6 +911,13 @@ void App::tick() {
         cfg.save(dir_ + "/settings.txt");
     }
     alcTick(mono);
+    // Dead man's switch: no internet - no new QSO; once none is in progress, Auto CQ / hunt stop.
+    seq.autoStop = cfg.deadman && inet_ == 0;
+    if (seq.autoStop && seq.txEnabled && (seq.opMode == 1 || seq.opMode == 2) && seq.dxCall.empty() && txState_ != ST_TX) {
+        seq.txEnabled = false;
+        seq.waitNext = false;
+        status("No internet: automatic operation stopped (dead man's switch). Enable TX again when it is back.");
+    }
     if (seq.waitNext && !waitShown_) status("QSO finished. Press Next QSO to start the next one (POTA mode)");
     waitShown_ = seq.waitNext;
     bool conn = radio.connected();
@@ -1190,15 +1198,45 @@ bool App::netOnce() {
     return ok;
 }
 
+// Dead man's switch: can the internet be reached? (Settings: deadman, deadmanHost "host[:port]",
+// TCP port 53 by default.) Runs on the network thread; up to 3 s per check.
+void App::inetCheck() {
+    inetCheckMono_ = clk::monoMs();
+    std::string host;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (!cfg.deadman) { inet_ = -1; inetMiss_ = 0; return; }
+        host = cfg.deadmanHost;
+    }
+    int port = 53;
+    size_t c = host.rfind(':');
+    if (c != std::string::npos && c + 1 < host.size()) { port = atoi(host.c_str() + c + 1); host = host.substr(0, c); }
+    if (port <= 0 || port > 65535) port = 53;
+    bool ok = netReachable(host, port, 3000);
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (ok) {
+        inetMiss_ = 0;
+        if (inet_ == 0) status("Internet is back (" + host + "). Automatic operation stays off until you enable TX.");
+        inet_ = 1;
+    } else if (++inetMiss_ >= 3 && inet_ != 0) {
+        inet_ = 0;
+        if (logFn) logFn(("dead man's switch: " + host + ":" + std::to_string(port) + " not reachable 3 times in a row").c_str());
+        if (seq.txEnabled && (seq.opMode == 1 || seq.opMode == 2))
+            status(seq.dxCall.empty() ? "No internet: stopping automatic operation (dead man's switch)"
+                                      : "No internet: finishing the QSO with " + seq.dxCall + ", then stopping (dead man's switch)");
+    }
+}
+
 void App::netLoop() {
     for (;;) {
         bool work;
         {
             std::unique_lock<std::mutex> nl(netMtx_);
-            netCv_.wait_for(nl, std::chrono::seconds(30), [this] { return !netQ_.empty() || syncPending_.load(); });
+            netCv_.wait_for(nl, std::chrono::seconds(10), [this] { return !netQ_.empty() || syncPending_.load(); });
             work = !netQ_.empty();
         }
         if (clk::monoMs() - storMono_ >= 30000) storRefresh();
+        if (clk::monoMs() - inetCheckMono_ >= 20000) inetCheck();
         if (!work) {
             if (syncPending_) { std::lock_guard<std::mutex> lk(mtx_); syncRefill(); }
             continue;
@@ -1885,6 +1923,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) +
          ",\"sta\":{\"state\":" + jstr(sta_.state) + ",\"ssid\":" + jstr(sta_.ssid) + ",\"ip\":" + jstr(sta_.ip) +
          ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}" +
+         ",\"inet\":" + jnum(cfg.deadman ? inet_.load() : -2) +
          ",\"wchip\":{\"ver\":" + jstr(wchipVer_) + ",\"upd\":" + jstr(wchipUpd_) + "}" +
          ",\"stor\":{\"sd\":" + jbool(logOnSd_) + ",\"station\":" + jstr(station_) + ",\"sdInfo\":" + jstr(sdInfo) +
          ",\"intT\":" + jnum((long long)intTotal_.load()) + ",\"intU\":" + jnum((long long)intUsed_.load()) +

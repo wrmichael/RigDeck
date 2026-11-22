@@ -103,6 +103,15 @@ bool Settings::set(const std::string& k, const std::string& v) {
     if (k == "contrast") return toInt(v, 50, 150, contrast);
     if (k == "consoleLog") return toInt(v, 0, 1, consoleLog);
     if (k == "confirmQso") return toInt(v, 0, 1, confirmQso);
+    if (k == "deadman") return toInt(v, 0, 1, deadman);
+    if (k == "deadmanHost") {
+        std::string h = v;
+        while (!h.empty() && h.back() == ' ') h.pop_back();
+        while (!h.empty() && h.front() == ' ') h.erase(0, 1);
+        if (h.empty() || h.size() > 60 || h.find_first_of(" /\\") != std::string::npos) return false;
+        deadmanHost = h;
+        return true;
+    }
     return false;
 }
 
@@ -120,7 +129,7 @@ std::string Settings::serialize(bool secrets) const {
     I("watchdogMin", watchdogMin); I("rfPower", rfPower); I("logProto", logProto); I("logPort", logPort);
     I("cwWpm", cwWpm); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);
     I("gpsModule", gpsModule); I("gpsModBaud", gpsModBaud); I("gpsRxPin", gpsRxPin); I("gpsPpsPin", gpsPpsPin);
-    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("confirmQso", confirmQso);
+    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("confirmQso", confirmQso); I("deadman", deadman); S("deadmanHost", deadmanHost);
     return s;
 }
 

@@ -200,6 +200,7 @@ int Sequencer::forceLog() {
 
 void Sequencer::finish() {
     clearQso();
+    if (autoStop && (opMode == 1 || opMode == 2)) { txEnabled = false; return; }               // dead man's switch
     if (confirmEach && (opMode == 1 || opMode == 2) && txEnabled) { waitNext = true; return; }   // POTA mode
     if (opMode == 1 && txEnabled) { txMsg = 6; txParity = cqParity; }
     else if (opMode == 0) txEnabled = false;                      // manual: one QSO, then stand by
@@ -259,7 +260,7 @@ void Sequencer::onDecodes(const std::vector<Decode>& list, int parity) {
         }
     }
     if (forMe) { respondTo(forMeP, forMe->snr, parity); return; }
-    if (waitNext) {                                                // POTA mode: nothing new until the operator says so,
+    if (waitNext || (autoStop && dxCall.empty())) {                // POTA mode / no internet: nothing new on its own,
         if (caller && callerP.from == lastWorked && callerP.kind != K_73) respondTo(callerP, caller->snr, parity);   // except the last station repeating
         return;
     }

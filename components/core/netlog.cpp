@@ -72,3 +72,35 @@ bool netSendTcp(const std::string& host, int port, const uint8_t* data, size_t l
     freeaddrinfo(ai);
     return ok;
 }
+
+// Is this host reachable? A TCP connection attempt (opened and closed at once) is used instead of
+// ping, which many networks block: an answer of any kind - connected, or refused - means the path
+// is there; no answer within the timeout (or no DNS) means it is not.
+bool netReachable(const std::string& host, int port, int timeoutMs) {
+    struct addrinfo* ai = resolve(host, port, SOCK_STREAM);
+    if (!ai) return false;
+    int s = socket(ai->ai_family, SOCK_STREAM, 0);
+    bool ok = false;
+    if (s >= 0) {
+        int fl = fcntl(s, F_GETFL, 0);
+        fcntl(s, F_SETFL, fl | O_NONBLOCK);
+        int r = connect(s, ai->ai_addr, ai->ai_addrlen);
+        if (r == 0) ok = true;
+        else if (errno == ECONNREFUSED) ok = true;
+        else if (errno == EINPROGRESS) {
+            fd_set wf;
+            FD_ZERO(&wf);
+            FD_SET(s, &wf);
+            struct timeval tv = {timeoutMs / 1000, (timeoutMs % 1000) * 1000};
+            if (select(s + 1, nullptr, &wf, nullptr, &tv) == 1) {
+                int err = 0;
+                socklen_t el = sizeof err;
+                getsockopt(s, SOL_SOCKET, SO_ERROR, &err, &el);
+                ok = err == 0 || err == ECONNREFUSED;
+            }
+        }
+        close(s);
+    }
+    freeaddrinfo(ai);
+    return ok;
+}

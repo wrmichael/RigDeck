@@ -259,4 +259,10 @@ private:
     int64_t lastUiMono_ = 0, bandReqHz_ = 0;
     bool watchdogTripped_ = false, wasConn_ = false;
     bool waitShown_ = false;                           // the "press Next QSO" note was shown
+    // Dead man's switch: internet reachability (-1 not checked, 0 lost, 1 there), checked every
+    // 20 s by the network thread; lost after 3 failed checks in a row.
+    std::atomic<int> inet_{-1};
+    int inetMiss_ = 0;
+    int64_t inetCheckMono_ = -100000;
+    void inetCheck();
 };

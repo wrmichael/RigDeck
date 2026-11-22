@@ -307,6 +307,12 @@ of these controllers). Select **CW** on the touch screen or **FT-CW** on the web
   Log QSO) and the status line says so; press it to call CQ again or to answer the next CQ heard.
   The station just worked can still repeat its last message and get an answer. Applies to FT8, FT4
   and FT-CW. Enabling TX, CQ, or tapping a station to call also start a QSO.
+- **Dead man's switch** (Settings, Wi-Fi; off by default): for unattended or remote operation.
+  RigDeck checks every 20 s that the internet can be reached (a TCP connection attempt to the
+  "Internet check address", default `1.1.1.1:53`; any `host:port` or IP will do, port 53 if none is
+  given). After 3 failed checks in a row (about a minute) it starts no new QSO, finishes the one in
+  progress, then turns off TX in Auto CQ / Auto hunt, and says so on the status line. It does not
+  restart by itself when the internet comes back: enable TX again. Manual operation is not affected.
 - On the air it is machine-timed Morse on an audio tone, radio in USB-D like FT8: for example
   `CQ AC9HP EM69 7Q`. The last two characters are a check group; a copy that does not match it
   (or does not read as a standard message) is discarded, and the decoder uses it to repair one or

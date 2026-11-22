@@ -35,6 +35,9 @@ public:
     // POTA mode (Settings "Confirm each new QSO"): in Auto CQ / Auto hunt, once a QSO ends (logged or given
     // up) nothing new starts until the operator presses Next QSO; waitNext is set meanwhile.
     bool confirmEach = false;
+    // Dead man's switch: set while internet is lost. No new QSO is started; when the one in progress
+    // ends, transmitting stops (Auto CQ / Auto hunt).
+    bool autoStop = false;
     // hooks
     std::function<void(const QsoLog&)> onLog;
     std::function<bool(const std::string&)> workedBefore;
