@@ -100,6 +100,7 @@ void Sequencer::setOpMode(int m) {
 
 void Sequencer::startCq() {
     clearQso();
+    waitNext = false;
     txMsg = 6;
     txParity = cqParity;
     retries = 0;
@@ -117,7 +118,13 @@ void Sequencer::clearQso() {
     txMsg = 0;
 }
 
+void Sequencer::nextQso() {
+    waitNext = false;
+    if (opMode == 1) startCq();                                    // Auto CQ: call CQ again; Auto hunt: the next CQ heard
+}
+
 void Sequencer::callStation(const std::string& call, const std::string& grid, int snr, int parity) {
+    waitNext = false;
     dxCall = call;
     dxGrid = grid;
     rptSent = snr;
@@ -131,6 +138,7 @@ void Sequencer::callStation(const std::string& call, const std::string& grid, in
 }
 
 void Sequencer::respondTo(const ParsedMsg& p, int snr, int parity) {
+    waitNext = false;
     bool same = (p.from == dxCall);
     if (!same) {
         dxCall = p.from;
@@ -192,6 +200,7 @@ int Sequencer::forceLog() {
 
 void Sequencer::finish() {
     clearQso();
+    if (confirmEach && (opMode == 1 || opMode == 2) && txEnabled) { waitNext = true; return; }   // POTA mode
     if (opMode == 1 && txEnabled) { txMsg = 6; txParity = cqParity; }
     else if (opMode == 0) txEnabled = false;                      // manual: one QSO, then stand by
 }
@@ -217,7 +226,7 @@ void Sequencer::txDone() {
 }
 
 bool Sequencer::nextTx(int parity, std::string& text) {
-    if (!txEnabled || txMsg == 0 || parity != txParity) return false;
+    if (!txEnabled || waitNext || txMsg == 0 || parity != txParity) return false;
     text = compose(txMsg);
     return !text.empty();
 }
@@ -250,6 +259,10 @@ void Sequencer::onDecodes(const std::vector<Decode>& list, int parity) {
         }
     }
     if (forMe) { respondTo(forMeP, forMe->snr, parity); return; }
+    if (waitNext) {                                                // POTA mode: nothing new until the operator says so,
+        if (caller && callerP.from == lastWorked && callerP.kind != K_73) respondTo(callerP, caller->snr, parity);   // except the last station repeating
+        return;
+    }
     bool freeToAnswer = dxCall.empty() || txMsg == 6 || txMsg == 0;
     if (caller && freeToAnswer && txEnabled) {
         // A 73 from someone we are not working needs no reply.

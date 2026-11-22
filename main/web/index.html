@@ -125,7 +125,7 @@ table.log th{color:var(--dim);font-weight:500}
       </div>
       <div class="pan" id="qsoPane">
         <h3>QSO <span id="qsoinfo" style="text-transform:none;letter-spacing:0"></span></h3>
-        <div class="row"><input id="dxcall" size="9" placeholder="DX call"><input id="dxgrid" size="5" placeholder="Grid"><button id="dxset">Set</button><button id="dxclr">Clear</button><button id="logdx" title="Log this contact now, even if it did not finish, then call CQ">Log QSO</button><button id="cq">CQ</button></div>
+        <div class="row"><input id="dxcall" size="9" placeholder="DX call"><input id="dxgrid" size="5" placeholder="Grid"><button id="dxset">Set</button><button id="dxclr">Clear</button><button id="logdx" title="Log this contact now, even if it did not finish, then call CQ">Log QSO</button><button id="cq">CQ</button><button id="nextqso" class="hide on" title="POTA mode: start the next QSO">Next QSO</button></div>
         <div class="msgs" id="msgs"></div>
         <div class="row"><input id="free" maxlength="13" size="14" placeholder="Free text (13)"><button id="freeb">Send once</button></div>
       </div>
@@ -208,6 +208,7 @@ table.log th{color:var(--dim);font-weight:500}
       <label for="s_useRR73">Sign off with</label><select id="s_useRR73"><option value="1">RR73</option><option value="0">RRR, then 73</option></select>
       <label for="s_maxRetries">Repeats before giving up</label><input id="s_maxRetries" inputmode="numeric">
       <label for="s_watchdogMin">TX watchdog, minutes</label><input id="s_watchdogMin" inputmode="numeric">
+      <label for="s_confirmQso">POTA mode: confirm each QSO</label><select id="s_confirmQso"><option value="0">Off</option><option value="1">On: Auto CQ / Auto hunt wait for Next QSO after each contact</option></select>
       <label for="s_radioType">Radio</label><select id="s_radioType"><option value="0">Find automatically</option><option value="1">Icom (CI-V): IC-7100, IC-705, IC-7300, IC-9700, IC-7610, IC-905</option><option value="2">Yaesu: FTX-1, FTDX10, FT-991A, FT-710, FTDX101</option><option value="3">QRP Labs QMX / QMX+</option><option value="4">Kenwood / Elecraft: TS-2000, TS-480, TS-590, K2, K3</option><option value="5">No CAT: SignaLink or other sound card</option></select>
       <label for="s_pttMethod">PTT</label><select id="s_pttMethod"><option value="0">CAT command</option><option value="1">Serial port RTS (Digirig)</option><option value="2">Serial port DTR</option><option value="3">VOX (the sound card keys the radio)</option></select>
       <label for="s_catBaud">CAT rate tried first (4800, 9600, 19200, 38400 are tried too)</label><select id="s_catBaud"><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select>
@@ -339,6 +340,7 @@ function render(){
   lastTx=tx.on?tx.text:"";
   // buttons
   $("txen").className=tx.en?"txon":"";$("txen").textContent=tx.en?"TX enabled":"Enable TX";
+  $("nextqso").classList.toggle("hide",!tx.wait);$("cq").classList.toggle("hide",!!tx.wait);
   $("tune").className=tx.tune?"txon":"";
   document.querySelectorAll("[data-mode]").forEach(b=>b.className=b.dataset.mode===S.mode?"on":"");
   document.querySelectorAll("[data-op]").forEach(b=>b.className=+b.dataset.op===S.op?"on":"");
@@ -488,6 +490,7 @@ $("txen").onclick=()=>cmd("txen",{v:S&&S.tx.en?0:1});
 $("halt").onclick=()=>cmd("halt");
 $("tune").onclick=()=>cmd("tune",{v:S&&S.tx.tune?0:1});
 $("cq").onclick=()=>cmd("cq");
+$("nextqso").onclick=()=>cmd("nextqso");
 $("dxclr").onclick=()=>cmd("clear");
 $("logdx").onclick=()=>cmd("logdx");
 $("dxset").onclick=()=>cmd("dx",{call:$("dxcall").value,grid:$("dxgrid").value}).then(j=>{if(j.ok)cmd("txmsg",{n:1});});

@@ -558,6 +558,8 @@ void App::syncSeq() {
     seq.myCall = cfg.call;
     seq.myGrid = cfg.grid;
     seq.cqTag = cfg.cqTag;
+    seq.confirmEach = cfg.confirmQso != 0;
+    if (!seq.confirmEach && seq.waitNext) seq.nextQso();          // switched off while waiting: carry on
     seq.opMode = cfg.opMode;
     seq.maxRetries = cfg.maxRetries;
     seq.cqParity = cfg.cqParity;
@@ -908,6 +910,8 @@ void App::tick() {
         cfg.save(dir_ + "/settings.txt");
     }
     alcTick(mono);
+    if (seq.waitNext && !waitShown_) status("QSO finished. Press Next QSO to start the next one (POTA mode)");
+    waitShown_ = seq.waitNext;
     bool conn = radio.connected();
     if (conn && !wasConn_ && cfg.keyWpm > 0) radio.setKeySpeed(cfg.keyWpm);
     wasConn_ = conn;
@@ -1303,6 +1307,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         if (on && needCall()) return err("Set your callsign and grid in Settings first");
         if (on && !clk::valid()) return err("Clock not set yet");
         seq.txEnabled = on;
+        if (on) seq.waitNext = false;                               // enabling TX starts things: no extra prompt
         watchdogTripped_ = false;
         syncSeq();
         if (on && cfg.opMode == OP_AUTO_CQ && seq.dxCall.empty()) seq.startCq();
@@ -1327,6 +1332,16 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         if (needCall()) return err("Set your callsign and grid in Settings first");
         syncSeq();
         seq.startCq();
+        return ok();
+    }
+    if (c == "nextqso") {                                            // POTA mode: start the next QSO
+        if (needCall()) return err("Set your callsign and grid in Settings first");
+        syncSeq();
+        seq.nextQso();
+        if (clk::valid()) seq.txEnabled = true;
+        watchdogTripped_ = false;
+        lastUiMono_ = clk::monoMs();
+        status(seq.opMode == 2 ? "Next QSO: answering the next CQ heard" : "Next QSO: calling CQ");
         return ok();
     }
     if (c == "call") {                                               // work the sender of a decoded message
@@ -1368,8 +1383,15 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         int r = seq.forceLog();
         if (r == -1) return err("No QSO in progress to log");
         if (r == -2) return err("No signal report sent or received yet; nothing to log");
-        status(r == 1 ? call + " was already logged; calling CQ" : "Logged " + call + "; calling CQ");
         syncSeq();
+        if (seq.confirmEach && (seq.opMode == 1 || seq.opMode == 2)) {   // POTA mode: the operator starts the next one
+            seq.clearQso();
+            seq.waitNext = true;
+            status((r == 1 ? call + " was already logged" : "Logged " + call) + "; press Next QSO to start the next one");
+            if (txState_ == ST_TX) haltReq_ = true;
+            return ok();
+        }
+        status(r == 1 ? call + " was already logged; calling CQ" : "Logged " + call + "; calling CQ");
         seq.startCq();
         if (txState_ == ST_TX) haltReq_ = true;                     // stop the call to them; CQ in the next slot
         if (clk::valid()) seq.txEnabled = true;
@@ -1696,6 +1718,7 @@ void App::uiState(UiState& u) {
     u.smeter = radio.smeter; u.po = radio.po; u.swr = radio.swr; u.alc = radio.alc;
     u.slotLen = (int)L; u.slotT = (int)(u.utc % L);
     u.txEn = seq.txEnabled; u.txOn = txState_ == ST_TX; u.tune = tuneReq_; u.wd = watchdogTripped_;
+    u.waitNext = seq.waitNext;
     u.txMsg = seq.txMsg; u.txPar = seq.txParity; u.txFreq = cfg.txFreq; u.tries = seq.retries;
     u.txText = u.txOn ? (gen_ == GEN_TUNE ? "TUNE" : (gen_ == GEN_PSK ? "PSK31" : txText_)) : "";
     u.nextText = seq.compose(seq.txMsg);
@@ -1829,7 +1852,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     o += ",\"swr\":" + jnum(radio.swr.load()) + ",\"alc\":" + jnum(radio.alc.load()) + ",\"ng\":" + jnum(radio.ng.load());
     o += ",\"proto\":" + jnum(radio.proto.load()) + ",\"wpm\":" + jnum(radio.keySpeed.load()) + "}";
     o += ",\"slot\":{\"len\":" + jnum(L) + ",\"t\":" + jnum(now % L) + ",\"par\":" + jnum((now / L) & 1) + "}";
-    o += std::string(",\"tx\":{\"en\":") + jbool(seq.txEnabled) + ",\"on\":" + jbool(txState_ == ST_TX) + ",\"msg\":" + jnum(seq.txMsg) + ",\"par\":" + jnum(seq.txParity);
+    o += std::string(",\"tx\":{\"en\":") + jbool(seq.txEnabled) + ",\"wait\":" + jbool(seq.waitNext) + ",\"on\":" + jbool(txState_ == ST_TX) + ",\"msg\":" + jnum(seq.txMsg) + ",\"par\":" + jnum(seq.txParity);
     o += ",\"text\":" + jstr(txState_ == ST_TX ? (gen_ == GEN_TUNE ? "TUNE" : (gen_ == GEN_PSK ? "PSK31" : txText_)) : "") + ",\"last\":" + jstr(lastTx_);
     o += ",\"freq\":" + jnum(cfg.txFreq) + ",\"lvl\":" + jnum(cfg.txLevel) + ",\"txLvl\":" + jnum((int)lroundf(txLevelNow())) + std::string(",\"tune\":") + jbool(tuneReq_) + std::string(",\"wd\":") + jbool(watchdogTripped_) + "}";
     o += ",\"qso\":{\"dx\":" + jstr(seq.dxCall) + ",\"grid\":" + jstr(seq.dxGrid) + ",\"rs\":" + jnum(seq.rptSent) + ",\"rr\":" + jnum(seq.rptRcvd) + ",\"try\":" + jnum(seq.retries) + ",\"m\":[";

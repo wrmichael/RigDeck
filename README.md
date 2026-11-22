@@ -301,6 +301,12 @@ of these controllers). Select **CW** on the touch screen or **FT-CW** on the web
   archive, any mode). Directed CQs (CQ DX, CQ NA, CQ SOTA ...) are left to you, except parks:
   **CQ POTA** and **CQ WWFF** are answered once per UTC day, band and mode, as park activations
   count. A station that did not answer after the set number of calls is skipped for 10 minutes.
+- **POTA mode: confirm each QSO** (Settings, Operating; off by default): with Auto CQ or Auto hunt,
+  when a contact ends (logged, or given up after the set repeats) RigDeck does not start another on
+  its own. The CQ button turns into **Next QSO** (amber on the touch screen; on the web page next to
+  Log QSO) and the status line says so; press it to call CQ again or to answer the next CQ heard.
+  The station just worked can still repeat its last message and get an answer. Applies to FT8, FT4
+  and FT-CW. Enabling TX, CQ, or tapping a station to call also start a QSO.
 - On the air it is machine-timed Morse on an audio tone, radio in USB-D like FT8: for example
   `CQ AC9HP EM69 7Q`. The last two characters are a check group; a copy that does not match it
   (or does not read as a standard message) is discarded, and the decoder uses it to repair one or

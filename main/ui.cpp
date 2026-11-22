@@ -50,6 +50,7 @@ int modeIndex(int mode) { return mode == DM_CW ? 2 : (mode == DM_FT8 || mode == 
 const char* kOpMap[] = {"Manual", "Auto CQ", "Auto hunt", ""};   // hunt = answer CQs automatically
 
 // widgets
+lv_obj_t *bCq, *lCq;
 lv_obj_t *lFreq, *lSub, *barS, *lS, *barLvl, *lLvl, *lDot[4], *lClock, *lCall, *barSlot, *canvas, *marker, *lTx, *lStatus;
 lv_obj_t *table, *bTxEn, *lTxEn, *bTune, *lTune, *mxOp, *mxMode, *mxBand, *lQso, *lMeters, *bPar, *lPar, *lLogBtn, *lPsk;
 lv_obj_t *scrMain, *scrLog, *scrLogger, *logTable, *lLogCounts, *lLogInfo;        // second screen: logbook
@@ -198,7 +199,8 @@ void onTune(lv_event_t*) {
     g_app->uiState(s);
     cmd("tune", {{"v", s.tune ? "0" : "1"}});
 }
-void onCq(lv_event_t*) { cmd("cq"); }
+bool gWaitNext = false;
+void onCq(lv_event_t*) { cmd(gWaitNext ? "nextqso" : "cq"); }   // POTA mode: the CQ button becomes Next QSO
 void onClear(lv_event_t*) { cmd("clear"); }
 void onLogDx(lv_event_t*) { cmd("logdx"); }
 void onParity(lv_event_t*) {
@@ -1090,6 +1092,7 @@ const SField kSet[] = {
     {"maxRetries", "Repeats before giving up", 1, SK_NUM, 2, nullptr, nullptr, ""},
     {"watchdogMin", "TX watchdog, minutes", 1, SK_NUM, 3, nullptr, nullptr, ""},
     {"cwWpm", "FT-CW speed, wpm", 1, SK_NUM, 2, nullptr, nullptr, "20 - 50, same at both stations"},
+    {"confirmQso", "POTA mode: confirm each QSO", 1, SK_DROP, 0, "Off\nOn: press Next QSO after each", "0|1", nullptr},
     {"radioType", "Radio", 2, SK_DROP, 0, "Find automatically\nIcom (CI-V)\nYaesu (FTX-1, FTDX10, FT-991A...)\nQRP Labs QMX / QMX+\nKenwood / Elecraft (TS-2000, K2...)\nNo CAT (SignaLink / sound card)", "0|1|2|3|4|5", nullptr},
     {"pttMethod", "PTT", 2, SK_DROP, 0, "CAT command\nSerial RTS (Digirig)\nSerial DTR\nVOX (sound card keys it)", "0|1|2|3", nullptr},
     {"catBaud", "CAT rate tried first", 2, SK_DROP, 0, "4800\n9600\n19200\n38400\n115200", "4800|9600|19200|38400|115200", nullptr},
@@ -1497,6 +1500,11 @@ void refresh(lv_timer_t*) {
     g_app->uiState(s);
     char b[96];
 
+    if (s.waitNext != gWaitNext) {                       // POTA mode: CQ button <-> Next QSO
+        gWaitNext = s.waitNext;
+        setText(lCq, gWaitNext ? "Next QSO" : "CQ");
+        lv_obj_set_style_bg_color(bCq, C(gWaitNext ? 0xb07800 : PAN2), 0);
+    }
     // header
     if (s.freq) {
         snprintf(b, sizeof b, "%u.%03u.%03u", (unsigned)(s.freq / 1000000), (unsigned)(s.freq / 1000 % 1000), (unsigned)(s.freq % 1000));
@@ -1762,7 +1770,7 @@ extern "C" void ui_create(void) {
     button(pan, PW / 2 + 4, 8, PW / 2 - 4, 64, "HALT TX", onHalt, &lHalt, 0x7a2020);
     mxOp = matrix(pan, 0, 82, PW, 52, kOpMap, onOp);
     int bw = (PW - 18) / 4;
-    button(pan, 0, 144, bw, 52, "CQ", onCq);
+    bCq = button(pan, 0, 144, bw, 52, "CQ", onCq, &lCq);
     bTune = button(pan, bw + 6, 144, bw, 52, "Tune", onTune, &lTune);
     button(pan, 2 * (bw + 6), 144, bw, 52, "Log QSO", onLogDx, nullptr, 0x1f5a3a);   // log now, even unfinished, then CQ
     button(pan, 3 * (bw + 6), 144, PW - 3 * (bw + 6), 52, "Clear", onClear);

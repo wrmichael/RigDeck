@@ -32,6 +32,9 @@ public:
     std::string cqTag;                  // "CQ POTA AC9HP EM69" when set
     int opMode = 0, maxRetries = 5, cqParity = 0;
     bool useRR73 = true;
+    // POTA mode (Settings "Confirm each new QSO"): in Auto CQ / Auto hunt, once a QSO ends (logged or given
+    // up) nothing new starts until the operator presses Next QSO; waitNext is set meanwhile.
+    bool confirmEach = false;
     // hooks
     std::function<void(const QsoLog&)> onLog;
     std::function<bool(const std::string&)> workedBefore;
@@ -48,6 +51,7 @@ public:
     int rptSent = UNSET, rptRcvd = UNSET;
     bool logged = false;
     bool sentReport = false;       // a message carrying our report to them has gone out
+    bool waitNext = false;         // POTA mode: a QSO ended; waiting for the operator to start the next
     int64_t qsoStart = 0, lastWorkedAt = 0;
 
     void onDecodes(const std::vector<Decode>& list, int parity);   // all decodes of one slot
@@ -58,6 +62,7 @@ public:
     void callStation(const std::string& call, const std::string& grid, int snr, int parity);
     void respondTo(const ParsedMsg& p, int snr, int parity);       // a message addressed to us
     void startCq();
+    void nextQso();                                                // the operator starts the next QSO (POTA mode)
     void halt();                                                   // stop transmitting, keep QSO fields
     void clearQso();
     // Log the contact now, even unfinished (the other station faded out).

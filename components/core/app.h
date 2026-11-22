@@ -82,6 +82,7 @@ public:
         long left = -1;
         std::string station, sdInfo;
         int bright = 100, contrast = 100;
+        bool waitNext = false;                         // POTA mode: a QSO ended, Next QSO starts the next
         int staRssi = 0, txLvl = 0;
     };
     struct UiDecode { uint32_t id; int64_t slotMs; int snr; float dt; int freq; std::string text; bool cq, toMe; };
@@ -257,4 +258,5 @@ private:
     StaStatus sta_;
     int64_t lastUiMono_ = 0, bandReqHz_ = 0;
     bool watchdogTripped_ = false, wasConn_ = false;
+    bool waitShown_ = false;                           // the "press Next QSO" note was shown
 };

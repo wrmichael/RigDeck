@@ -56,6 +56,7 @@ struct Settings {
     int gpsPpsPin = 4;                   // board GPIO the module's PPS goes to, -1 = not wired
     int bright = 100;                    // display backlight, % (5 - 100)
     int contrast = 100;                  // display colour contrast, % (50 - 150; 100 = as designed)
+    int confirmQso = 0;                  // POTA mode: Auto CQ / hunt wait for "Next QSO" after each QSO
     int consoleLog = 1;                  // 1 = copy the console log to the microSD card (RigDeck/logs)
 
     bool set(const std::string& key, const std::string& value);   // false = unknown key / bad value

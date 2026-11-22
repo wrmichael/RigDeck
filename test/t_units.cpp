@@ -287,6 +287,48 @@ int main() {
         CHECK(q6.dxCall == "K4PRK");
     }
 
+    // --- POTA mode: after a QSO, wait for Next QSO ---
+    {
+        Sequencer s;
+        s.myCall = "W9XYZ"; s.myGrid = "EN37"; s.opMode = 1; s.txEnabled = true; s.confirmEach = true;
+        s.now = q1.now;
+        int logs = 0;
+        s.onLog = [&logs](const QsoLog&) { logs++; };
+        s.startCq();
+        std::string tx2;
+        CHECK(s.nextTx(s.txParity, tx2) && tx2 == "CQ W9XYZ EN37");
+        auto one = [&](const char* m, int par) { std::vector<Decode> l(1); l[0].text = m; l[0].snr = -5; s.onDecodes(l, par); };
+        one("W9XYZ K1ABC FN42", 1);                                   // an answer to our CQ: worked automatically
+        CHECK(s.dxCall == "K1ABC" && s.txMsg == 2);
+        s.txDone();
+        one("W9XYZ K1ABC R-07", 1);
+        CHECK(s.txMsg == 4);
+        s.txDone();                                                   // RR73 sent: logged, done
+        CHECK(logs == 1 && s.waitNext && !s.nextTx(s.cqParity, tx2));  // no new CQ on its own
+        one("W9XYZ N2BBB EN61", 1);                                   // a new caller: not answered while waiting
+        CHECK(s.dxCall.empty() && s.waitNext);
+        one("W9XYZ K1ABC R-07", 1);                                   // the last station repeating: answered
+        CHECK(s.dxCall == "K1ABC" && !s.waitNext);
+        s.txDone();
+        CHECK(s.waitNext && logs == 1);                               // not logged twice
+        s.nextQso();
+        CHECK(!s.waitNext && s.nextTx(s.cqParity, tx2) && tx2 == "CQ W9XYZ EN37");
+        // Auto hunt: after the QSO it does not call the next CQ until Next QSO
+        Sequencer h = s; h.clearQso(); h.opMode = 2; h.waitNext = true;
+        std::vector<Decode> cq(1); cq[0].text = "CQ G4AAA IO91"; cq[0].snr = -3;
+        h.onDecodes(cq, 0);
+        CHECK(h.dxCall.empty());
+        h.nextQso();
+        h.onDecodes(cq, 0);
+        CHECK(h.dxCall == "G4AAA");
+        // off (the default): straight back to CQ
+        Sequencer o = s; o.confirmEach = false; o.startCq();
+        o.onDecodes(std::vector<Decode>{[]{ Decode d; d.text = "W9XYZ K3CCC FM19"; return d; }()}, 1);
+        o.txDone(); o.onDecodes(std::vector<Decode>{[]{ Decode d; d.text = "W9XYZ K3CCC R-09"; return d; }()}, 1);
+        o.txDone();
+        CHECK(!o.waitNext && o.txMsg == 6);
+    }
+
     printf(fails ? "t_units: %d of %d FAILED\n" : "t_units: all %d checks passed\n", fails ? fails : checks, checks);
     return fails ? 1 : 0;
 }
