@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <cstring>
 #include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
 #include <string>
 #include <vector>
 #include "app.h"
@@ -90,6 +92,17 @@ struct FakeText {
 
 static void run(Radio& r, int ms) { for (int i = 0; i < ms; i += 10) { simMs += 10; r.poll(); } }
 static bool sent(const FakeText& f, const std::string& c) { for (auto& l : f.log) if (l == c) return true; return false; }
+static void cleanDir(const char* d) {                  // remove every file in a test directory
+    if (DIR* dp = opendir(d)) {
+        std::vector<std::string> names;
+        while (struct dirent* e = readdir(dp)) if (e->d_name[0] != '.') names.push_back(e->d_name);
+        closedir(dp);
+        for (auto& n : names) remove((std::string(d) + "/" + n).c_str());
+    }
+}
+static std::string slurpP(const std::string& p) { std::string s; FILE* f = fopen(p.c_str(), "r"); char b[1024]; while (f && fgets(b, sizeof b, f)) s += b; if (f) fclose(f); return s; }
+static int nrec(const std::string& s) { int n = 0; for (size_t p = 0; (p = s.find("<EOR>", p)) != std::string::npos; p++) n++; return n; }
+static bool exists(const std::string& p) { struct stat st; return stat(p.c_str(), &st) == 0; }
 static std::string trimRight(std::string s) { while (!s.empty() && s.back() == ' ') s.pop_back(); return s; }
 
 int main() {
@@ -175,7 +188,7 @@ int main() {
     {   // ---------------- logger: macros and manual entries through the app
         const char* dir = "test/out/cat";
         mkdir(dir, 0755);
-        for (const char* n : {"/log.adi", "/archive.adi", "/settings.txt", "/deleted.adi", "/alc.txt"}) remove((std::string(dir) + n).c_str());
+        cleanDir(dir);
         App app; FakeText f; f.r = &app.radio; f.yaesu = false; f.mode = '2'; f.freq = 14250000;
         app.radio.write = [&f](const uint8_t* d, size_t n) { f.rx(d, n); return true; };
         app.begin(dir);
@@ -206,7 +219,7 @@ int main() {
         CHECK(okr(app.command("logqso", {{"call", "K1ABC"}, {"mode", "CW"}, {"rs", "579"}})));
         CHECK(okr(app.command("set", {{"macro2", "Park|{CALL} {REF} {GRID}"}})) && !okr(app.command("set", {{"macro2", "no label"}})));
         CHECK(app.expandMacro(app.cfg.macro[1], "N0P", "599") == "N0P US-1234 EM69");
-        FILE* fp = fopen((std::string(dir) + "/log.adi").c_str(), "r");
+        FILE* fp = fopen(app.logPath().c_str(), "r");
         std::string all; char buf[512];
         while (fp && fgets(buf, sizeof buf, fp)) all += buf;
         if (fp) fclose(fp);
@@ -226,7 +239,7 @@ int main() {
         CHECK(okr(app.command("logqso", {{"call", "N0USB"}, {"mode", "SSB"}, {"freq", "5.357"}})));
         CHECK(!okr(app.command("logqso", {{"call", "N0BAD"}, {"mode", "SSB"}, {"freq", "fourteen"}})));
         {
-            FILE* fq = fopen((std::string(dir) + "/log.adi").c_str(), "r");
+            FILE* fq = fopen(app.logPath().c_str(), "r");
             std::string l2; char lb[512];
             while (fq && fgets(lb, sizeof lb, fq)) l2 += lb;
             if (fq) fclose(fq);
@@ -243,7 +256,7 @@ int main() {
         CHECK(okr(app.command("logdx", {})));
         CHECK(app.seq.txMsg == 6 && app.seq.txEnabled && app.seq.dxCall.empty());
         {
-            FILE* fq = fopen((std::string(dir) + "/log.adi").c_str(), "r");
+            FILE* fq = fopen(app.logPath().c_str(), "r");
             std::string l3; char lb[512];
             while (fq && fgets(lb, sizeof lb, fq)) l3 += lb;
             if (fq) fclose(fq);
@@ -254,7 +267,7 @@ int main() {
         }
         // log management: list, edit (both files), delete
         {
-            auto slurpF = [&](const char* n) { std::string s; FILE* fq = fopen((std::string(dir) + n).c_str(), "r"); char lb[512];
+            auto slurpF = [&](const char* n) { std::string s; FILE* fq = fopen((!strcmp(n, "/log.adi") ? app.logPath() : app.archivePath()).c_str(), "r"); char lb[512];
                                                while (fq && fgets(lb, sizeof lb, fq)) s += lb; if (fq) fclose(fq); return s; };
             App::UiState u0; app.uiState(u0);
             std::string js = app.command("logread", {{"n", "2"}});
@@ -302,6 +315,99 @@ int main() {
         }
         Settings s2; s2.load(std::string(dir) + "/settings.txt");
         CHECK(s2.macro[1] == "Park|{CALL} {REF} {GRID}" && s2.keyWpm == 25);
+    }
+    {   // ---------------- log storage: per-station files, older files moved in, the card, big logs
+        std::string in = "test/out/stor", sd = "test/out/stor/sd";
+        mkdir(in.c_str(), 0755);
+        cleanDir(sd.c_str()); rmdir(sd.c_str()); cleanDir(in.c_str());
+        auto okr = [](const std::string& s) { return s.find("\"ok\":true") != std::string::npos; };
+        auto put = [](const std::string& p, const std::string& body) { FILE* f = fopen(p.c_str(), "w"); fputs(body.c_str(), f); fclose(f); };
+        std::string rec1 = "<CALL:5>K1OLD <QSO_DATE:8>20260101 <TIME_ON:4>1200 <BAND:3>20m <MODE:3>FT8 <EOR>\n";
+        put(in + "/settings.txt", "call=AC9HP\ngrid=EM69\n");
+        put(in + "/log.adi", "<ADIF_VER:5>3.1.4 <EOH>\n" + rec1);
+        put(in + "/archive.adi", "<EOH>\n" + rec1);
+        put(in + "/sent.txt", "K1OLD|20260101|1200|20m|FT8|\n");
+        clk::setUtcMs(1794328740000LL, "test");
+        {
+            App app;
+            app.begin(in);
+            CHECK(app.logPath() == in + "/AC9HP_log.adi" && app.archivePath() == in + "/AC9HP_archive.adi");
+            CHECK(!exists(in + "/log.adi") && !exists(in + "/sent.txt") && nrec(slurpP(app.logPath())) == 1 && nrec(slurpP(app.archivePath())) == 1);
+            app.radio.freq = 14074000;
+            CHECK(app.seq.workedBefore("K1OLD"));
+            CHECK(app.stateJson(0, 0, false).find("\"unsent\":0") != std::string::npos);   // sent.txt came along
+            // another callsign has its own log; switching back finds the first one again
+            CHECK(okr(app.command("set", {{"call", "W1AW/P"}})));
+            CHECK(app.logPath() == in + "/W1AW-P_log.adi" && !app.seq.workedBefore("K1OLD"));
+            CHECK(okr(app.command("logqso", {{"call", "N0NEW"}, {"mode", "SSB"}, {"freq", "14.250"}})));
+            CHECK(okr(app.command("set", {{"call", "AC9HP"}})));
+            CHECK(app.seq.workedBefore("K1OLD") && !app.seq.workedBefore("N0NEW"));
+            CHECK(app.stateJson(0, 0, false).find("\"station\":\"AC9HP\"") != std::string::npos);
+            // internal store: a cleared log is gone (the archive keeps the contacts)
+            CHECK(okr(app.command("clearlog", {{"confirm", "yes"}})) && !exists(app.logPath()));
+        }
+        {   // with a card: what was logged internally moves onto it
+            App app;
+            app.sdInfo = "test card";
+            uint64_t fakeT = 4000000000ULL;
+            app.fsInfo = [](bool sdc, uint64_t& t, uint64_t& u) { t = sdc ? 4000000000ULL : 2000000; u = sdc ? 1000 : 1990000; return true; };
+            (void)fakeT;
+            app.begin(in, sd);
+            CHECK(app.logPath() == sd + "/AC9HP_log.adi" && !exists(in + "/AC9HP_archive.adi") && nrec(slurpP(app.archivePath())) == 1);
+            CHECK(exists(in + "/W1AW-P_archive.adi"));                    // other stations stay where they are until used
+            std::string js = app.stateJson(0, 0, false);
+            CHECK(js.find("\"stor\":{\"sd\":true") != std::string::npos && js.find("\"sdT\":4000000000") != std::string::npos);
+            // a big log: 3000 contacts, streamed rather than read whole
+            char call[12];
+            for (int i = 0; i < 3000; i++) {
+                snprintf(call, sizeof call, "W%d%c%c%c", i % 10, 'A' + (i / 10) % 26, 'A' + (i / 260) % 26, 'A' + i % 7);
+                app.command("logqso", {{"call", call}, {"mode", "SSB"}, {"freq", "14.250"}, {"rs", std::to_string(i)}});
+            }
+            App::UiState u; app.uiState(u);
+            CHECK(u.logN == 3000 && u.logAll == 3001 && u.logSd && u.station == "AC9HP");
+            std::string pg = app.command("logread", {{"n", "3"}, {"from", "0"}});
+            CHECK(pg.find("\"total\":3000") != std::string::npos && pg.find("{\"i\":2999,") != std::string::npos && pg.find("\"RST_SENT\":\"2999\"") != std::string::npos);
+            pg = app.command("logread", {{"file", "all"}, {"n", "2"}, {"from", "3000"}});
+            CHECK(pg.find("{\"i\":0,") != std::string::npos && pg.find("K1OLD") != std::string::npos);
+            std::vector<App::UiLogEntry> tail;
+            app.uiLogTail(2, tail);
+            CHECK(tail.size() == 2 && tail[0].idx == 2999 && tail[1].idx == 2998 && tail[0].sent == "2999");
+            // delete on the card: kept in AC9HP_deleted.adi for good; restore still works
+            CHECK(okr(app.command("logdel", {{"i", "1500"}})));
+            CHECK(nrec(slurpP(sd + "/AC9HP_deleted.adi")) == 1 && app.command("logtrash", {}).find("\"keep\":true") != std::string::npos);
+            app.uiState(u);
+            CHECK(u.logN == 2999 && u.logAll == 3000);
+            CHECK(okr(app.command("logrestore", {{"i", "0"}})));
+            app.uiState(u);
+            CHECK(u.logN == 3000 && u.logAll == 3001 && slurpP(app.logPath()).find("<RST_SENT:4>1500") != std::string::npos);
+            // send unsent: the whole archive goes out in batches (K1OLD was sent before)
+            CHECK(okr(app.command("set", {{"logProto", "2"}, {"logHost", "127.0.0.1"}, {"logPort", "9"}})));
+            std::string r = app.command("logsync", {{"file", "all"}});
+            CHECK(r.find("\"queued\":3000") != std::string::npos);
+            int sentN = 0;
+            while (app.netOnce()) sentN++;
+            CHECK(sentN == 3000);
+            CHECK(app.command("logsync", {{"file", "all"}}).find("\"queued\":0") != std::string::npos);
+            app.command("set", {{"logProto", "0"}});
+            // a cleared log on the card is renamed and kept
+            CHECK(okr(app.command("clearlog", {{"confirm", "yes"}})) && !exists(app.logPath()));
+            std::string kept;
+            if (DIR* dp = opendir(sd.c_str())) { while (struct dirent* e = readdir(dp)) if (!strncmp(e->d_name, "AC9HP_deleted_", 14)) kept = e->d_name; closedir(dp); }
+            CHECK(kept.size() == 33 && !kept.compare(0, 18, "AC9HP_deleted_2026") && !kept.compare(29, 4, ".adi") && nrec(slurpP(sd + "/" + kept)) == 3000);
+            // NUKE: every log file of every station, on the card and internally
+            r = app.command("eraselogs", {{"confirm", "yes"}});
+            CHECK(okr(r) && !exists(sd + "/" + kept) && !exists(app.archivePath()) && !exists(in + "/W1AW-P_archive.adi"));
+            CHECK(exists(in + "/settings.txt"));
+            app.uiState(u);
+            CHECK(u.logN == 0 && u.logAll == 0 && !app.seq.workedBefore("K1OLD"));
+        }
+        {   // almost full internal store: a warning with a rough count of contacts left
+            App app;
+            app.fsInfo = [](bool, uint64_t& t, uint64_t& u) { t = 2000000; u = 1880000; return true; };
+            app.begin(in);
+            std::string js = app.stateJson(0, 0, false);
+            CHECK(js.find("almost full") != std::string::npos && js.find("\"left\":30") != std::string::npos);
+        }
     }
     {   // ---------------- GPS module: PPS pins the second, NMEA names it
         const char* dir = "test/out/gps";

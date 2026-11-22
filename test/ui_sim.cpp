@@ -1,3 +1,4 @@
+#include <dirent.h>
 // Desktop preview of the on-device touch interface: runs the real application core with a
 // simulated radio and band, renders the LVGL screen into memory and writes screenshots (PPM).
 // It also taps the screen through a scripted pointer to check that the controls reach the app.
@@ -158,7 +159,12 @@ int main() {
     clk::init(mono);
     mkdir("test/out", 0755);
     mkdir("test/out/ui", 0755);
-    remove("test/out/ui/log.adi"); remove("test/out/ui/archive.adi"); remove("test/out/ui/settings.txt"); remove("test/out/ui/deleted.adi");
+    if (DIR* dp = opendir("test/out/ui")) {             // a clean start
+        std::vector<std::string> names;
+        while (struct dirent* e = readdir(dp)) if (strstr(e->d_name, ".adi") || strstr(e->d_name, ".txt")) names.push_back(e->d_name);
+        closedir(dp);
+        for (auto& n : names) remove(("test/out/ui/" + n).c_str());
+    }
     radio.app = &app;
     app.radio.write = [](const uint8_t* d, size_t n) { radio.rx(d, n); return true; };
     app.begin("test/out/ui");
@@ -357,7 +363,7 @@ int main() {
     run(1);
     savePpm("test/out/ui/18_logged.ppm");
     {
-        FILE* fp = fopen("test/out/ui/log.adi", "r");
+        FILE* fp = fopen(app.logPath().c_str(), "r");
         std::string all; char buf[512];
         while (fp && fgets(buf, sizeof buf, fp)) all += buf;
         if (fp) fclose(fp);
@@ -387,7 +393,7 @@ int main() {
     run(1.5);
     savePpm("test/out/ui/20_logger_after.ppm");
     {
-        FILE* fp = fopen("test/out/ui/log.adi", "r");
+        FILE* fp = fopen(app.logPath().c_str(), "r");
         std::string all; char buf[512];
         while (fp && fgets(buf, sizeof buf, fp)) all += buf;
         if (fp) fclose(fp);
@@ -406,10 +412,10 @@ int main() {
     tap(871, 31);                                     // gear
     run(0.5);
     savePpm("test/out/ui/21_settings.ppm");
-    tap(85, 64 + 38 + 2 * 76);                        // Radio tab
+    tap(85, 64 + 33 + 2 * 67);                        // Radio tab
     run(0.5);
     savePpm("test/out/ui/22_settings_radio.ppm");
-    tap(85, 64 + 38 + 3 * 76);                        // CW tab
+    tap(85, 64 + 33 + 3 * 67);                        // CW tab
     run(0.3);
     tap(170 + 16 + 270 + 200, 64 + 16 + 62 + 26);     // macro 1 text box: keyboard comes up
     run(0.5);
@@ -423,13 +429,29 @@ int main() {
         App::StaStatus st; st.state = "retrying"; st.ssid = "HomeNet"; st.reason = "wrong password?";
         app.setStaStatus(st);
     }
-    tap(85, 64 + 38 + 5 * 76);                        // Wi-Fi tab
+    tap(85, 64 + 33 + 5 * 67);                        // Wi-Fi tab
     run(0.5);
     savePpm("test/out/ui/26_settings_wifi.ppm");
-    tap(85, 64 + 38 + 6 * 76);                        // Clock tab
+    tap(85, 64 + 33 + 6 * 67);                        // Clock tab
     run(0.3);
     savePpm("test/out/ui/25_settings_clock.ppm");
-    tap(85, 64 + 38);                                 // Station tab
+    tap(85, 64 + 33 + 7 * 67);                        // Device tab
+    run(0.5);
+    tap(170 + 16 + 200 + 240, 64 + 16 + 26);          // brightness slider, middle
+    run(0.5);
+    CHECK(app.cfg.bright > 40 && app.cfg.bright < 65);
+    savePpm("test/out/ui/27_settings_device.ppm");
+    CHECK(state().find("\"all\":0,") == std::string::npos);
+    tap(170 + 16 + 130, 64 + 16 + 356 + 26);          // Erase all logs: asks twice
+    run(0.5);
+    tap(633, 388);                                    // "Erase" (a taller dialog than the others)
+    run(0.5);
+    savePpm("test/out/ui/28_erase_confirm2.ppm");
+    CHECK(state().find("\"all\":0,") == std::string::npos);
+    tap(CONFIRM_X, CONFIRM_Y);
+    run(0.5);
+    CHECK(state().find("\"log\":{\"n\":0,\"all\":0,") != std::string::npos);
+    tap(85, 64 + 33);                                 // Station tab
     tap(60, 32);                                      // Back ...
     run(0.3);
     tap(871, 31);                                     // ... and in again: shows the new value

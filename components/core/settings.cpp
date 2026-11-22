@@ -95,6 +95,8 @@ bool Settings::set(const std::string& k, const std::string& v) {
     if (k == "gpsModBaud") return toInt(v, 4800, 115200, gpsModBaud);
     if (k == "gpsRxPin") return toInt(v, 0, 54, gpsRxPin);
     if (k == "gpsPpsPin") return toInt(v, -1, 54, gpsPpsPin);
+    if (k == "bright") return toInt(v, 5, 100, bright);
+    if (k == "contrast") return toInt(v, 50, 150, contrast);
     return false;
 }
 
@@ -112,6 +114,7 @@ std::string Settings::serialize(bool secrets) const {
     I("watchdogMin", watchdogMin); I("rfPower", rfPower); I("logProto", logProto); I("logPort", logPort);
     I("cwWpm", cwWpm); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);
     I("gpsModule", gpsModule); I("gpsModBaud", gpsModBaud); I("gpsRxPin", gpsRxPin); I("gpsPpsPin", gpsPpsPin);
+    I("bright", bright); I("contrast", contrast);
     return s;
 }
 

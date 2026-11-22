@@ -22,7 +22,16 @@ const int W = 1024, H = 600;
 const int HEAD_H = 58, SLOT_H = 6, WF_Y = HEAD_H + SLOT_H, WF_H = 90, LINE_Y = WF_Y + WF_H, LINE_H = 36;
 const int MAIN_Y = LINE_Y + LINE_H, BOT_H = 64, MAIN_H = H - MAIN_Y - BOT_H, TABLE_W = 620, PANEL_X = 628;
 
-inline lv_color_t C(uint32_t rgb) { return lv_color_hex(rgb); }
+// Every colour goes through C(); the Contrast setting (50-150 %) stretches it around mid-grey, so
+// higher contrast makes the dark panels darker and the text brighter. Read once at start-up.
+int gContrast = 100;
+inline lv_color_t C(uint32_t rgb) {
+    if (gContrast != 100) {
+        auto f = [](int v) { v = 128 + (v - 128) * gContrast / 100; return v < 0 ? 0 : v > 255 ? 255 : v; };
+        rgb = (uint32_t)(f((rgb >> 16) & 255) << 16 | f((rgb >> 8) & 255) << 8 | f(rgb & 255));
+    }
+    return lv_color_hex(rgb);
+}
 const uint32_t BG = 0x0d1317, PAN = 0x151e25, PAN2 = 0x1c2831, LINE = 0x2a3944, TXC = 0xff5b5b, RXC = 0x3fcf8e,
                AMB = 0xf6b93b, TXT = 0xdce5ea, DIM = 0x8498a5, CQC = 0x7fd0ff, MEC = 0xff9d9d;
 
@@ -286,6 +295,8 @@ void onCloseLog(lv_event_t*) { lv_screen_load(scrMain); }
 struct Confirm { lv_obj_t* box; const char* command; std::map<std::string, std::string> args; };
 Confirm g_confirm = {nullptr, nullptr, {}};
 lv_obj_t* scrLogEdit = nullptr;
+void confirm(const char* title, const std::string& text, const char* action, const char* command,
+             const std::map<std::string, std::string>& args = {});
 void onConfirmNo(lv_event_t*) {
     if (g_confirm.box) lv_msgbox_close(g_confirm.box);
     g_confirm.box = nullptr;
@@ -295,6 +306,10 @@ void onConfirmYes(lv_event_t*) {
     std::map<std::string, std::string> args = g_confirm.args;
     args["confirm"] = "yes";
     onConfirmNo(nullptr);
+    if (c && !strcmp(c, "nuke1")) {                    // erasing every log asks twice
+        confirm("Erase all logs - last chance", "Really erase every contact of every station?\nThere is no undo.", "Erase all", "eraselogs");
+        return;
+    }
     if (c && cmd(c, args)) {
         fillLogTable();
         shownLogN = -1;
@@ -302,7 +317,7 @@ void onConfirmYes(lv_event_t*) {
     }
 }
 void confirm(const char* title, const std::string& text, const char* action, const char* command,
-             const std::map<std::string, std::string>& args = {}) {
+             const std::map<std::string, std::string>& args) {
     if (g_confirm.box) return;
     lv_obj_t* m = lv_msgbox_create(nullptr);
     g_confirm = {m, command, args};
@@ -1053,7 +1068,7 @@ void refreshLogger(const App::UiState& s) {
 // "set" command the web page uses, so the same checks apply.
 enum SKind { SK_TEXT, SK_UPPER, SK_NUM, SK_HEX, SK_PASS, SK_DROP, SK_MACRO };
 struct SField { const char* key; const char* label; int tab; SKind kind; int maxLen; const char* opts; const char* vals; const char* hint; };
-const char* kSetTabs[] = {"Station", "Operating", "Radio", "CW", "Logging", "Wi-Fi", "Clock"};
+const char* kSetTabs[] = {"Station", "Operating", "Radio", "CW", "Logging", "Wi-Fi", "Clock", "Device"};
 constexpr int kSetTabN = sizeof kSetTabs / sizeof kSetTabs[0];
 const SField kSet[] = {
     {"call", "Callsign", 0, SK_UPPER, 11, nullptr, nullptr, ""},
@@ -1097,6 +1112,7 @@ const SField kSet[] = {
 };
 constexpr int kSetN = sizeof kSet / sizeof kSet[0];
 lv_obj_t *scrSettings, *sTabs, *sKb, *sStatus, *sWifi, *sWidget[kSetN], *sMacroLbl[kSetN];
+lv_obj_t *sBright, *sBrightL, *sContrast, *sContrastL, *sStor;
 std::map<std::string, std::string> sLoaded;
 const int SET_HEAD = 64, SET_KB = 270;
 
@@ -1198,9 +1214,46 @@ std::string staText(const App::UiState& s) {
 void onSettingsRestart(lv_event_t*) {
     confirm("Restart", "Restart the controller now?\nAny transmission is stopped first.", "Restart", "reboot");
 }
+// ---- Device tab: brightness, contrast, storage ----
+std::string sizeText(uint64_t b) {
+    char t[32];
+    if (b >= 1000000000ULL) snprintf(t, sizeof t, "%.1f GB", b / 1e9);
+    else if (b >= 1000000ULL) snprintf(t, sizeof t, "%.1f MB", b / 1e6);
+    else snprintf(t, sizeof t, "%llu kB", (unsigned long long)(b / 1000));
+    return t;
+}
+std::string storText(const App::UiState& s) {
+    std::string t = "Log of station " + s.station + ": " + (s.logSd ? "on the microSD card" : "in the board's own memory") + "\n";
+    if (s.intTotal) t += "Board memory: " + sizeText(s.intTotal > s.intUsed ? s.intTotal - s.intUsed : 0) + " free of " + sizeText(s.intTotal) + "\n";
+    if (s.sdIn && s.sdTotal) t += "microSD card: " + sizeText(s.sdTotal > s.sdUsed ? s.sdTotal - s.sdUsed : 0) + " free of " + sizeText(s.sdTotal) + "\n";
+    else t += "microSD card: " + (s.sdInfo.empty() ? std::string("none") : s.sdInfo) + "\n";
+    if (s.left >= 0) t += "Room for about " + std::to_string(s.left) + " more contacts";
+    return t;
+}
+void onBright(lv_event_t* e) {
+    int v = lv_slider_get_value(sBright);
+    setText(sBrightL, std::to_string(v) + " %");
+    if (ui_brightness_fn) ui_brightness_fn(v);
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) cmd("set", {{"bright", std::to_string(v)}});
+}
+void onContrast(lv_event_t* e) {
+    int v = lv_slider_get_value(sContrast);
+    setText(sContrastL, std::to_string(v) + " %");
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED && cmd("set", {{"contrast", std::to_string(v)}}))
+        note(v == gContrast ? "Contrast saved" : "Contrast saved: Restart to apply it");
+}
+void onNuke(lv_event_t*) {
+    confirm("Erase all logs", "Erase EVERY log on this RigDeck: current logs, archives, deleted contacts and cleared logs of all "
+            "station callsigns, on the card and in the board's memory? Download anything you want to keep first.", "Erase", "nuke1");
+}
+
 void onOpenSettings(lv_event_t*) {
     cmd("ping");
     settingsLoad();
+    lv_slider_set_value(sBright, g_app->cfg.bright, LV_ANIM_OFF);
+    setText(sBrightL, std::to_string(g_app->cfg.bright) + " %");
+    lv_slider_set_value(sContrast, g_app->cfg.contrast, LV_ANIM_OFF);
+    setText(sContrastL, std::to_string(g_app->cfg.contrast) + " %");
     settingsKbHide();
     lv_screen_load(scrSettings);
 }
@@ -1334,6 +1387,34 @@ void buildSettingsScreen() {
     button(pages[5], 244, row[5] * 62 + 64, 180, 52, "Disconnect", onWifiDisconnect);
     label(pages[5], 0, row[5] * 62 + 130, f16, DIM, "Leave a password box empty to keep the current password. The home network must be 2.4 GHz.\nHotspot name/password changes take effect after a restart; the home network is joined right away.");
 
+    {   // Device
+        lv_obj_t* pg = pages[7];
+        auto slider = [&](int y, const char* name, int lo, int hi, lv_event_cb_t cb, lv_obj_t** val) {
+            label(pg, 0, y + 10, f20, DIM, name);
+            lv_obj_t* sl = lv_slider_create(pg);
+            lv_obj_set_pos(sl, 200, y + 14);
+            lv_obj_set_size(sl, 480, 24);
+            lv_slider_set_range(sl, lo, hi);
+            lv_obj_set_style_bg_color(sl, C(LINE), LV_PART_MAIN);
+            lv_obj_set_style_bg_color(sl, C(AMB), LV_PART_INDICATOR);
+            lv_obj_set_style_bg_color(sl, C(TXT), LV_PART_KNOB);
+            lv_obj_set_style_pad_all(sl, 8, LV_PART_KNOB);
+            lv_obj_add_event_cb(sl, cb, LV_EVENT_VALUE_CHANGED, nullptr);
+            lv_obj_add_event_cb(sl, cb, LV_EVENT_RELEASED, nullptr);
+            *val = label(pg, 710, y + 10, f20, TXT, "");
+            return sl;
+        };
+        sBright = slider(0, "Brightness", 5, 100, onBright, &sBrightL);
+        sContrast = slider(62, "Contrast", 50, 150, onContrast, &sContrastL);
+        label(pg, 0, 116, f16, DIM, "Brightness changes at once. Contrast (100 % = normal) applies after a restart.");
+        sStor = label(pg, 0, 160, f20, TXT, "");
+        lv_obj_set_width(sStor, 800);
+        lv_label_set_long_mode(sStor, LV_LABEL_LONG_MODE_WRAP);
+        label(pg, 0, 300, f16, DIM, "Logs go on a microSD card (FAT32) when one is in at start-up; anything logged in the board's\n"
+                                    "memory moves onto the card then. Files are named after the station callsign.");
+        button(pg, 0, 356, 260, 52, LV_SYMBOL_TRASH " Erase all logs", onNuke, nullptr, 0x9a2a2a);
+    }
+
     sKb = lv_keyboard_create(scrSettings);
     lv_obj_set_size(sKb, W, SET_KB);
     lv_obj_align(sKb, LV_ALIGN_BOTTOM_MID, 0, 0);
@@ -1355,6 +1436,8 @@ void refreshSettings(const App::UiState& s) {
     setTextColor(sStatus, noteOn ? AMB : DIM);
     setText(sWifi, staText(s) + (s.wchipVer.empty() ? "" : "\nWi-Fi chip firmware: " + s.wchipVer));
     setTextColor(sWifi, s.staState == "connected" ? 0x3fcf8e : s.staState == "retrying" ? 0xff6b6b : TXT);
+    setText(sStor, storText(s));
+    setTextColor(sStor, s.left >= 0 && s.left < 200 ? 0xff6b6b : TXT);
 }
 
 // ---- periodic refresh ---------------------------------------------------------------------------
@@ -1378,7 +1461,12 @@ void rebuildTable() {
     }
 }
 
+int shownBright = -1;
 void refresh(lv_timer_t*) {
+    if (g_app->cfg.bright != shownBright) {             // also when changed from the web page
+        shownBright = g_app->cfg.bright;
+        if (ui_brightness_fn) ui_brightness_fn(shownBright);
+    }
     if (!g_app) return;
     App::UiState s;
     g_app->uiState(s);
@@ -1549,8 +1637,10 @@ void buildLut() {                                    // black, blue, cyan, yello
 }  // namespace
 
 void ui_bind(App* app) { g_app = app; }
+void (*ui_brightness_fn)(int percent) = nullptr;
 
 extern "C" void ui_create(void) {
+    gContrast = g_app->cfg.contrast;
     lv_obj_t* scr = lv_screen_active();
     scrMain = scr;
     lv_obj_clean(scr);

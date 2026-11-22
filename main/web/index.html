@@ -188,8 +188,7 @@ table.log th{color:var(--dim);font-weight:500}
     <h3 style="margin-top:16px">Recently deleted</h3>
     <table class="log"><thead><tr><th>Date</th><th>UTC</th><th>Call</th><th>Band</th><th>Mode</th><th>Deleted</th><th></th></tr></thead><tbody id="trrows"></tbody></table>
     <p class="hint" id="trHint">Deleted contacts are kept here for 7 days. Restore puts a contact back where it was (current log, archive or both).</p>
-    <p class="hint">Every contact is written to two files: the current log and the archive. Clearing the current log leaves the archive untouched, so download the current log into your logging program, clear it, and the next download holds only new contacts. Edit or Delete fixes a contact in both files.</p>
-    <div class="row"><button id="eraseall" class="danger">Erase archive and current log</button></div>
+    <p class="hint">Every contact is written to two files: the current log and the archive. Clearing the current log leaves the archive untouched, so download the current log into your logging program, clear it, and the next download holds only new contacts. Edit or Delete fixes a contact in both files. Each station callsign has its own log: change the callsign in Settings and RigDeck switches to that station's files. Free space and "Erase all logs" are under Settings, Device.</p>
   </div>
 </section>
 
@@ -243,6 +242,15 @@ table.log th{color:var(--dim);font-weight:500}
     <div class="row"><span id="wcVer">Firmware: …</span></div>
     <div class="row"><input type="file" id="wcFile" accept=".bin"><button id="wcGo">Update Wi-Fi chip</button><span id="wcMsg" class="hint"></span></div>
     <p class="hint">Updates the firmware of the board's Wi-Fi chip with <b>rigdeck-wifi-chip.bin</b> (from the RigDeck release, or build it with build_wifi_chip.bat). Join the RigDeck hotspot and use 192.168.4.1 for this, keep the board powered, and allow about a minute. The chip keeps its old firmware unless the new one arrives complete, and RigDeck restarts when it is done.</p>
+    <h3 style="margin-top:16px">Device</h3>
+    <div class="form">
+      <label for="dvBright">Screen brightness</label><span><input type="range" id="dvBright" min="5" max="100" style="width:220px;vertical-align:middle"> <span id="dvBrightV"></span></span>
+      <label for="dvContrast">Screen contrast</label><span><input type="range" id="dvContrast" min="50" max="150" style="width:220px;vertical-align:middle"> <span id="dvContrastV"></span></span>
+    </div>
+    <p class="hint">Brightness changes at once. Contrast (100 % = normal) applies after a restart.</p>
+    <div id="dvStor" style="white-space:pre-line"></div>
+    <div class="row" style="margin-top:8px"><button id="eraseall" class="danger">Erase all logs (every station)</button></div>
+    <p class="hint">With a microSD card (FAT32) in at start-up the logs live on the card, in the RigDeck folder, one set of files per station callsign (e.g. AC9HP_log.adi, AC9HP_archive.adi). Contacts logged in the board's memory move onto the card at that start. On the card, deleted contacts are kept for good in AC9HP_deleted.adi and a cleared current log is kept as AC9HP_deleted_<i>date</i>_<i>time</i>.adi. Insert or remove the card with the power off.</p>
     <h3 style="margin-top:16px">Clock</h3>
     <div class="row"><span id="clkinfo"></span><button data-trim="-100">-0.1 s</button><button data-trim="-20">-20 ms</button><button data-trim="20">+20 ms</button><button data-trim="100">+0.1 s</button></div>
     <p class="hint">Without internet or GPS the clock follows this browser's clock each time the page is open. If most stations show the same DT offset, nudge the clock until DT is near zero. With GPS on, change "GPS sentence delay" instead: lower it if DT values are mostly negative, raise it if they are mostly positive.</p>
@@ -349,9 +357,15 @@ function render(){
   pskSince=S.psk.seq;
   $("pskinfo").textContent=`RX ${S.psk.f} Hz (tracking ${S.psk.afc} Hz), signal quality ${S.psk.q}%`;
   // log
-  $("logn").textContent=S.log.n+" contacts in the current log, "+S.log.all+" in the archive"+(S.log.behind?" (archive incomplete: download the current log)":"");
+  $("logn").textContent=(S.stor?S.stor.station+": ":"")+S.log.n+" contacts in the current log, "+S.log.all+" in the archive"+(S.stor&&S.stor.sd?" (on the microSD card)":"")+(S.log.behind?" (archive incomplete: download the current log)":"");
   const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
-  $("dlcur").download=`rigdeck-current-${stamp}.adi`;$("dlall").download=`rigdeck-archive-${stamp}.adi`;
+  const stn=(S.stor&&S.stor.station)||"rigdeck";
+  $("dlcur").download=`${stn}-current-${stamp}.adi`;$("dlall").download=`${stn}-archive-${stamp}.adi`;
+  if(S.stor){const st=S.stor, sz=b=>b>=1e9?(b/1e9).toFixed(1)+" GB":b>=1e6?(b/1e6).toFixed(1)+" MB":Math.round(b/1e3)+" kB", fr=(t,u)=>`${sz(Math.max(0,t-u))} free of ${sz(t)}`;
+    $("dvStor").textContent=`Log of station ${st.station}: ${st.sd?"on the microSD card":"in the board's own memory"}\n`+
+      (st.intT?`Board memory: ${fr(st.intT,st.intU)}\n`:"")+(st.sd&&st.sdT?`microSD card: ${fr(st.sdT,st.sdU)}\n`:`microSD card: ${st.sdInfo||"none"}\n`)+
+      (st.left>=0?`Room for about ${st.left} more contacts`:"");
+    $("dvStor").style.color=st.left>=0&&st.left<200?"var(--tx)":"";}
   $("fwd").textContent=(S.log.ok||S.log.fail)?`forwarded ${S.log.ok}, failed attempts ${S.log.fail}`:"";
   $("lgUnsent").textContent=S.log.unsent?`${S.log.unsent} contact(s) in the current log not sent yet`:"All contacts in the current log have been sent";
   $("lgSync").disabled=!S.log.unsent;
@@ -368,6 +382,7 @@ function render(){
   if(S.cfg&&!cfgLoaded){
     cfgLoaded=true;
     for(const k in S.cfg){const e=$("s_"+k);if(e) e.value=k==="civAddr"?"0x"+(+S.cfg[k]).toString(16).toUpperCase():S.cfg[k];}
+    for(const [id,key] of [["dvBright","bright"],["dvContrast","contrast"]]) if(S.cfg[key]!==undefined){$(id).value=S.cfg[key];$(id+"V").textContent=S.cfg[key]+" %";}
   }
   // SSB / CW logger
   {const MN={0:"LSB",1:"USB",2:"AM",3:"CW",4:"RTTY",5:"FM",7:"CW-R",8:"RTTY-R",23:"DV"}, cw=r.rmode===3||r.rmode===7;
@@ -473,7 +488,15 @@ $("psktxt").onkeydown=e=>{if(e.key==="Enter")$("psksend").click();};
 $("pskclr").onclick=()=>$("pskrx").textContent="";
 $("psklog").onclick=()=>cmd("logqso",{call:$("pskcall").value,rs:$("pskrs").value,rr:$("pskrr").value}).then(j=>{if(j.ok)banner("Logged "+$("pskcall").value.toUpperCase());});
 $("clrlog").onclick=()=>{if(confirm("Clear the current log? Its contacts stay in the archive."))cmd("clearlog",{confirm:"yes"});};
-$("eraseall").onclick=()=>{if(confirm("Erase the archive AND the current log from the device? Every stored contact and the worked-before list will be gone. This cannot be undone.")&&confirm("Really erase everything?"))cmd("eraselogs",{confirm:"yes"});};
+$("eraseall").onclick=async()=>{
+  if(prompt("Erase EVERY log on this RigDeck: current logs, archives, deleted contacts and cleared logs of all station callsigns, on the card and in the board's memory. The worked-before list goes too. There is no undo.\n\nDownload what you want to keep first. Type NUKE to erase:")!=="NUKE") return;
+  const j=await cmd("eraselogs",{confirm:"yes"});
+  if(j&&j.ok) banner(`All logs erased (${j.files} files)`);
+};
+for(const [id,key] of [["dvBright","bright"],["dvContrast","contrast"]]){
+  $(id).oninput=()=>{$(id+"V").textContent=$(id).value+" %";};
+  $(id).onchange=()=>{cmd("set",{[key]:$(id).value});if(key==="contrast")banner("Contrast saved: restart the device to apply it");};
+}
 // SSB / CW logger
 // Frequency and mode follow the radio until the operator types a frequency or picks SSB / CW.
 var qlManual=false, qlMode="";
@@ -502,8 +525,9 @@ async function trLoad(){
   const j=await cmd("logtrash");
   if(!j||!j.ok) return;
   LG.trash=j.items;
+  $("trHint").textContent=j.keep?`On the microSD card deleted contacts are kept for good (in the ..._deleted.adi file); the newest ${Math.min(100,j.total)} of ${j.total} are listed. Restore puts a contact back where it was (current log, archive or both).`:"Deleted contacts are kept here for 7 days. Restore puts a contact back where it was (current log, archive or both).";
   const d=s=>s&&s.length>=8?`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`:"", t=s=>s?`${s.slice(0,2)}:${s.slice(2,4)}`:"";
-  $("trrows").innerHTML=j.items.length?j.items.map((it,k)=>{const f=it.f,del=f.APP_RIGDECK_DELETED||"";return `<tr><td>${d(f.QSO_DATE)}</td><td>${t(f.TIME_ON)}</td><td>${esc(f.CALL||"")}</td><td>${esc(f.BAND||"")}</td><td>${esc(f.SUBMODE||f.MODE||"")}</td><td>${del.length===14?d(del)+" "+t(del.slice(8)):""}</td><td><button data-trres="${k}">Restore</button></td></tr>`;}).join(""):`<tr><td colspan="7" class="hint">Nothing deleted in the last 7 days</td></tr>`;
+  $("trrows").innerHTML=j.items.length?j.items.map((it,k)=>{const f=it.f,del=f.APP_RIGDECK_DELETED||"";return `<tr><td>${d(f.QSO_DATE)}</td><td>${t(f.TIME_ON)}</td><td>${esc(f.CALL||"")}</td><td>${esc(f.BAND||"")}</td><td>${esc(f.SUBMODE||f.MODE||"")}</td><td>${del.length===14?d(del)+" "+t(del.slice(8)):""}</td><td><button data-trres="${k}">Restore</button></td></tr>`;}).join(""):`<tr><td colspan="7" class="hint">${j.keep?"Nothing deleted":"Nothing deleted in the last 7 days"}</td></tr>`;
 }
 async function lgLoad(){
   if(demo) return;

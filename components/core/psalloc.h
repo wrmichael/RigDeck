@@ -42,3 +42,30 @@ struct SvLess {                                    // compare PStr / std::string
 };
 using PSet = std::set<PStr, SvLess, PsAlloc<PStr>>;
 using RecVec = std::vector<PStr, PsAlloc<PStr>>;  // one ADIF record per entry
+
+// A set of strings kept as sorted 64-bit hashes: 8 bytes per entry in PSRAM, so worked-before and
+// "already sent" stay small for logs of 100,000+ contacts. Load with bulkAdd() then finish();
+// insert()/contains() after that. A false match needs two different keys with the same 64-bit
+// hash: not a practical concern for callsign keys.
+#include <algorithm>
+#include <cstdint>
+struct HashIndex {
+    std::vector<uint64_t, PsAlloc<uint64_t>> v;
+    static uint64_t hash(std::string_view s) {
+        uint64_t h = 1469598103934665603ULL;          // FNV-1a
+        for (unsigned char c : s) { h ^= c; h *= 1099511628211ULL; }
+        return h;
+    }
+    void clear() { v.clear(); v.shrink_to_fit(); }
+    void bulkAdd(std::string_view k) { v.push_back(hash(k)); }
+    void finish() { std::sort(v.begin(), v.end()); v.erase(std::unique(v.begin(), v.end()), v.end()); }
+    bool insert(std::string_view k) {                 // true = it was new
+        uint64_t h = hash(k);
+        auto it = std::lower_bound(v.begin(), v.end(), h);
+        if (it != v.end() && *it == h) return false;
+        v.insert(it, h);
+        return true;
+    }
+    bool contains(std::string_view k) const { return std::binary_search(v.begin(), v.end(), hash(k)); }
+    size_t size() const { return v.size(); }
+};

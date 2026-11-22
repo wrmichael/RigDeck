@@ -9,6 +9,8 @@
 
 static const char *TAG = "display";
 
+static void set_brightness(int percent) { bsp_display_brightness_set(percent); }
+
 void display_start(void)
 {
     bsp_display_cfg_t cfg = {
@@ -27,6 +29,7 @@ void display_start(void)
         return;
     }
     bsp_display_backlight_on();
+    ui_brightness_fn = set_brightness;               // the saved brightness is applied on the first refresh
     if (!bsp_display_lock(-1)) {
         ESP_LOGE(TAG, "could not take the LVGL lock");
         return;

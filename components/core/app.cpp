@@ -10,6 +10,9 @@
 #include <strings.h>
 #include <cmath>
 #include <chrono>
+#include <set>
+#include <sys/stat.h>
+#include <dirent.h>
 
 static const float kPi = 3.14159265358979f;
 
@@ -76,14 +79,17 @@ uint64_t parseDialFreq(const std::string& text) {
 
 App::App() {}
 
-void App::begin(const std::string& dataDir) {
+void App::begin(const std::string& dataDir, const std::string& logDir) {
     dir_ = dataDir;
+    logOnSd_ = !logDir.empty() && logDir != dataDir;
+    logDir_ = logOnSd_ ? logDir : dataDir;
+    if (logOnSd_) mkdir(logDir_.c_str(), 0777);
     cfg.load(dir_ + "/settings.txt");
     alcLoad();
     radio.addr = (uint8_t)cfg.civAddr;
     seq.now = [] { return clk::utcMs(); };
     seq.workedBefore = [this](const std::string& call) {
-        return worked_.count(call + "|" + bandName(radio.freq.load())) > 0;
+        return worked_.contains(call + "|" + bandName(radio.freq.load()));
     };
     seq.onLog = [this](const QsoLog& q) {           // called with mtx_ held
         QsoRecord r;
@@ -99,43 +105,111 @@ void App::begin(const std::string& dataDir) {
         logQso(r);
     };
     syncSeq();
-    // Worked-before comes from the archive (all QSOs) as well as the current log.
+    logOpen();
+    storRefresh();
+}
+
+// ---- log files ----------------------------------------------------------------------------------
+static bool fileExists(const std::string& p) { struct stat st; return stat(p.c_str(), &st) == 0; }
+static long fileSize(const std::string& p) { struct stat st; return stat(p.c_str(), &st) == 0 ? (long)st.st_size : 0; }
+
+// Moves the contents of src onto the end of dst (or renames it when dst does not exist yet and both
+// are on the same store), then removes src. ADIF files: record lines only (dst gets a header if new).
+static bool moveInto(const std::string& src, const std::string& dst, bool adif) {
+    if (src == dst || !fileExists(src)) return true;
+    if (!fileExists(dst) && rename(src.c_str(), dst.c_str()) == 0) return true;
+    bool fresh = !fileExists(dst);
+    FILE* out = fopen(dst.c_str(), "a");
+    if (!out) return false;
+    bool ok = true;
+    if (adif) {
+        if (fresh) ok = fputs(adifHeader().c_str(), out) >= 0;
+        adifForEach(src, [&](std::string_view r, int, long) {
+            ok = ok && fwrite(r.data(), 1, r.size(), out) == r.size() && fputc('\n', out) != EOF;
+            return ok;
+        });
+    } else {
+        FILE* in = fopen(src.c_str(), "rb");
+        if (in) {
+            char buf[1024];
+            size_t n;
+            while (ok && (n = fread(buf, 1, sizeof buf, in)) > 0) ok = fwrite(buf, 1, n, out) == n;
+            fclose(in);
+        }
+    }
+    ok = (fclose(out) == 0) && ok;
+    if (ok) remove(src.c_str());
+    return ok;
+}
+
+// The callsign as it appears in file names: "VE3/AC9HP/P" -> "VE3-AC9HP-P"; no callsign -> NOCALL.
+static std::string fileCall(const std::string& call) {
+    std::string o;
+    for (char ch : upperTrim(call)) o += isalnum((unsigned char)ch) ? ch : '-';
+    return o.empty() ? "NOCALL" : o.substr(0, 12);           // SPIFFS names: 31 characters at most
+}
+
+std::string App::logFile(bool archive) { std::lock_guard<std::mutex> lk(mtx_); return archive ? archivePath() : logPath(); }
+std::string App::station() { std::lock_guard<std::mutex> lk(mtx_); return station_; }
+
+static const char* const kLogKinds[] = {"log.adi", "archive.adi", "deleted.adi", "sent.txt"};
+
+// Chooses the files of the station callsign now in Settings and loads them. On the way in:
+//  - files from before per-station names (log.adi, archive.adi ...) become this station's;
+//  - contacts logged while no callsign was set (NOCALL_*) become this station's;
+//  - with the card in use, anything logged internally for this station (e.g. while the card was
+//    out) is moved onto the card.
+void App::logOpen() {
+    station_ = fileCall(cfg.call);
+    for (const char* k : kLogKinds) {
+        bool adif = strcmp(k, "sent.txt") != 0;
+        std::string dst = stationFile(k);
+        moveInto(dir_ + "/" + k, dst, adif);
+        if (station_ != "NOCALL") {
+            moveInto(logDir_ + "/NOCALL_" + k, dst, adif);
+            if (logOnSd_) moveInto(dir_ + "/NOCALL_" + k, dst, adif);
+        }
+        if (logOnSd_) moveInto(dir_ + "/" + station_ + "_" + k, dst, adif);
+    }
+    {
+        std::lock_guard<std::mutex> nl(netMtx_);
+        syncFile_ = -1;
+        syncPending_ = false;
+    }
     sentLoad();
     logReload();
-    trashPurge();
+    if (!logOnSd_) trashPurge();
     archiveBehind_ = logCount_ > archiveCount_;
+    if (logFn) logFn(("log: " + logPath() + " (" + std::to_string(logCount_) + " contacts), archive " + std::to_string(archiveCount_)).c_str());
 }
 
-// Counts the records in an ADIF file and adds each one to the worked-before list.
-int App::scanLog(const std::string& path) {
-    FILE* f = fopen(path.c_str(), "r");
-    if (!f) return 0;
-    int count = 0, ch;
-    std::string rec;
-    while ((ch = fgetc(f)) != EOF) {
-        rec += (char)ch;
-        size_t n = rec.size();
-        if (n >= 5 && (rec[n - 1] == '>') && !strncasecmp(rec.c_str() + n - 5, "<EOR>", 5)) {
-            std::string call = adifField(rec, "CALL"), band = adifField(rec, "BAND");
-            if (!call.empty()) { worked_.insert(pstr(call + "|" + band)); count++; }
-            rec.clear();
-        } else if (n >= 5 && !strncasecmp(rec.c_str() + n - 5, "<EOH>", 5)) rec.clear();
-        if (rec.size() > 2000) rec.clear();
-    }
-    fclose(f);
-    return count;
-}
-
-// After the files changed (edit, delete): worked-before, counts and the recent list from scratch.
+// After the files changed (edit, delete, switch): worked-before, counts, the recent list and the
+// unsent count, streaming through both files once.
 void App::logReload() {
     worked_.clear();
-    archiveCount_ = scanLog(archivePath());
-    logCount_ = scanLog(logPath());
+    archiveCount_ = logCount_ = 0;
+    adifForEach(archivePath(), [&](std::string_view r, int, long) {
+        worked_.bulkAdd(adifField(r, "CALL") + "|" + adifField(r, "BAND"));
+        archiveCount_++;
+        return true;
+    });
+    std::deque<PStr> last;
+    int unsent = 0;
+    {
+        std::lock_guard<std::mutex> nl(netMtx_);
+        adifForEach(logPath(), [&](std::string_view r, int, long) {
+            worked_.bulkAdd(adifField(r, "CALL") + "|" + adifField(r, "BAND"));
+            logCount_++;
+            if (!sent_.contains(sentKey(r))) unsent++;
+            last.push_back(pstr(r));
+            if (last.size() > 30) last.pop_front();
+            return true;
+        });
+    }
+    worked_.finish();
     recent_.clear();
-    RecVec recs;
-    adifReadRecords(logPath(), recs);
-    for (size_t i = recs.size() > 30 ? recs.size() - 30 : 0; i < recs.size(); i++) recent_.push_back(adifToQso(recs[i]));
-    unsent_ = countUnsent();
+    for (auto& r : last) recent_.push_back(adifToQso(r));
+    unsent_ = unsent;
 }
 
 // Edit (fields) or delete (fields == nullptr) record idx of the current log or the archive. The
@@ -144,11 +218,17 @@ void App::logReload() {
 std::string App::logChange(bool archive, int idx, const std::string& expectCall,
                            const std::map<std::string, std::string>* fields) {
     std::string path = archive ? archivePath() : logPath(), other = archive ? logPath() : archivePath();
-    RecVec recs;
-    if (!adifReadRecords(path, recs) || idx < 0 || idx >= (int)recs.size()) return "That contact is no longer in the log; reload the list";
-    if (!expectCall.empty() && strcasecmp(adifField(recs[idx], "CALL").c_str(), expectCall.c_str()))
+    std::string orig;
+    bool found = false;
+    adifForEach(path, [&](std::string_view r, int i, long) {
+        if (i != idx) return true;
+        orig = sstr(r); found = true;
+        return false;
+    });
+    if (!found || idx < 0) return "That contact is no longer in the log; reload the list";
+    if (!expectCall.empty() && strcasecmp(adifField(orig, "CALL").c_str(), expectCall.c_str()))
         return "The log changed since the list was read; reload it";
-    std::string orig = sstr(recs[idx]), repl;
+    std::string repl;
     if (fields) {
         AdifFields f = adifParse(orig);
         bool bandSet = false, freqSet = false;
@@ -180,77 +260,77 @@ std::string App::logChange(bool archive, int idx, const std::string& expectCall,
         if (adifField(adifBuild(f), "CALL").empty()) return "A contact needs a callsign";
         repl = adifBuild(f);
         if (repl == orig) return "";
-        recs[idx] = repl;
-    } else {
-        recs.erase(recs.begin() + idx);
     }
-    if (!adifWriteRecords(path, recs)) return "Could not save the log (storage full?)";
-    bool inOther = false;
-    RecVec o;
-    if (adifReadRecords(other, o)) {
-        for (size_t i = o.size(); i > 0; i--) {
-            if (std::string_view(o[i - 1]) != orig) continue;
-            if (fields) o[i - 1] = repl;
-            else o.erase(o.begin() + (i - 1));
-            adifWriteRecords(other, o);
-            inOther = true;
-            break;
-        }
-    }
-    if (!fields) {                                    // keep it in the "recently deleted" list for a week
+    auto change = [&](const std::string& file, int at) {
+        return adifRewrite(file, [&](std::string_view, int i, std::string& out) {
+            if (i != at) return true;
+            out = repl;                               // empty = delete
+            return false;
+        });
+    };
+    if (change(path, idx) < 0) return "Could not save the log (storage full?)";
+    int otherIdx = -1;
+    adifForEach(other, [&](std::string_view r, int i, long) { if (r == orig) otherIdx = i; return true; });
+    bool inOther = otherIdx >= 0;
+    if (inOther) change(other, otherIdx);
+    if (!fields) {                                    // into the deleted contacts (internal store: for a week)
         AdifFields f = adifParse(orig);
         int64_t now = clk::valid() ? clk::utcMs() : 0;
         char ts[24] = "0";
         if (now) { time_t t = (time_t)(now / 1000); struct tm tm; gmtime_r(&t, &tm); strftime(ts, sizeof ts, "%Y%m%d%H%M%S", &tm); }
         f.emplace_back("APP_RIGDECK_DELETED", ts);
         f.emplace_back("APP_RIGDECK_FROM", inOther ? "both" : (archive ? "all" : "cur"));
+        bool fresh = !fileExists(trashPath());
         FILE* fp = fopen(trashPath().c_str(), "a");
-        if (fp) { fputs(adifBuild(f).c_str(), fp); fputc('\n', fp); fclose(fp); }
-        trashPurge();
+        if (fp) {
+            if (fresh) fputs(adifHeader().c_str(), fp);
+            fputs(adifBuild(f).c_str(), fp); fputc('\n', fp); fclose(fp);
+        }
+        if (!logOnSd_) trashPurge();
+    }
+    {
+        std::lock_guard<std::mutex> nl(netMtx_);
+        syncOff_ = 0;                                 // the file changed under a "send unsent": start its scan again
     }
     logReload();
     return "";
 }
 
-// "Recently deleted": records with the time of deletion and the files they came from. Entries are
-// dropped after 7 days (only when the clock is known; an entry deleted without a clock stays until
-// the clock is set and it is then treated as deleted now).
+// Deleted contacts carry the time of deletion and the files they came from. On the internal store
+// they are dropped after 7 days (only when the clock is known; an entry deleted without a clock
+// stays until the clock is set and its week starts then). On the card they are kept for good.
 void App::trashPurge() {
-    if (!clk::valid()) return;
-    RecVec recs, keep;
-    if (!adifReadRecords(trashPath(), recs) || recs.empty()) return;
+    if (!clk::valid() || logOnSd_) return;
     time_t now = (time_t)(clk::utcMs() / 1000);
-    bool changed = false;
-    for (auto& r : recs) {
+    char nowTs[24];
+    { struct tm tm; gmtime_r(&now, &tm); strftime(nowTs, sizeof nowTs, "%Y%m%d%H%M%S", &tm); }
+    auto verdict = [&](std::string_view r) {      // 0 keep, 1 drop, 2 restamp
         std::string d = adifField(r, "APP_RIGDECK_DELETED");
-        if (d == "0" || d.size() != 14) {             // deleted before the clock was set: start its week now
-            AdifFields f = adifParse(r);
-            struct tm tm; gmtime_r(&now, &tm);
-            char ts[24]; strftime(ts, sizeof ts, "%Y%m%d%H%M%S", &tm);
-            adifSetField(f, "APP_RIGDECK_DELETED", ts);
-            keep.push_back(pstr(adifBuild(f)));
-            changed = true;
-            continue;
-        }
+        if (d == "0" || d.size() != 14) return 2;
         QsoRecord q = adifToQso("<QSO_DATE:8>" + d.substr(0, 8) + " <TIME_ON:6>" + d.substr(8) + " <CALL:1>X <EOR>");
-        if (now * 1000LL - q.startMs > 7LL * 86400000LL) { changed = true; continue; }
-        keep.push_back(r);
-    }
-    if (changed) {
-        if (keep.empty()) remove(trashPath().c_str());
-        else adifWriteRecords(trashPath(), keep);
-    }
+        return now * 1000LL - q.startMs > 7LL * 86400000LL ? 1 : 0;
+    };
+    bool changed = false;
+    adifForEach(trashPath(), [&](std::string_view r, int, long) { changed = verdict(r) != 0; return !changed; });
+    if (!changed) return;
+    int left = adifRewrite(trashPath(), [&](std::string_view r, int, std::string& out) {
+        int v = verdict(r);
+        if (v == 0) return true;
+        if (v == 2) { AdifFields f = adifParse(r); adifSetField(f, "APP_RIGDECK_DELETED", nowTs); out = adifBuild(f); }
+        return false;
+    });
+    if (left == 0) remove(trashPath().c_str());
 }
 
 void App::uiTrashNewest(UiLogEntry& e, int& count) {
     std::lock_guard<std::mutex> lk(mtx_);
     trashPurge();
-    RecVec recs;
-    adifReadRecords(trashPath(), recs);
-    count = (int)recs.size();
+    std::string last;
+    count = 0;
+    adifForEach(trashPath(), [&](std::string_view r, int, long) { last = sstr(r); count++; return true; });
     e = UiLogEntry();
-    if (recs.empty()) return;
-    std::string_view r = recs.back();
+    if (!count) return;
+    std::string_view r = last;
     e.idx = count - 1;
     e.call = adifField(r, "CALL");
     e.date = adifField(r, "QSO_DATE"); e.time = adifField(r, "TIME_ON");
@@ -258,67 +338,184 @@ void App::uiTrashNewest(UiLogEntry& e, int& count) {
     e.band = adifField(r, "BAND");
 }
 
+// Newest first, at most 100 (the card keeps every deleted contact; the list shows the latest).
 std::string App::trashJson() {
     trashPurge();
-    RecVec recs;
-    adifReadRecords(trashPath(), recs);
-    std::string o = "{\"ok\":true,\"items\":[";
-    for (int i = (int)recs.size() - 1; i >= 0; i--) {
-        o += std::string(i == (int)recs.size() - 1 ? "" : ",") + "{\"i\":" + jnum(i) + ",\"f\":{";
+    std::deque<std::pair<int, PStr>> last;
+    int total = 0;
+    adifForEach(trashPath(), [&](std::string_view r, int i, long) {
+        last.emplace_back(i, pstr(r));
+        if (last.size() > 100) last.pop_front();
+        total++;
+        return true;
+    });
+    std::string o = "{\"ok\":true,\"total\":" + jnum(total) + ",\"keep\":" + jbool(logOnSd_) + ",\"items\":[";
+    for (size_t k = last.size(); k > 0; k--) {
+        o += std::string(k == last.size() ? "" : ",") + "{\"i\":" + jnum(last[k - 1].first) + ",\"f\":{";
         bool first = true;
-        for (auto& kv : adifParse(recs[i])) { o += std::string(first ? "" : ",") + jstr(kv.first) + ":" + jstr(kv.second); first = false; }
+        for (auto& kv : adifParse(last[k - 1].second)) { o += std::string(first ? "" : ",") + jstr(kv.first) + ":" + jstr(kv.second); first = false; }
         o += "}}";
     }
     return o + "]}";
 }
 
+// Put rec into an ADIF file after the last contact that started no later than it.
+static bool insertByTime(const std::string& path, const std::string& rec) {
+    std::string key = adifStartKey(rec);
+    int after = -1;
+    adifForEach(path, [&](std::string_view r, int i, long) { if (adifStartKey(r) <= key) after = i; return true; });
+    bool done = false;
+    int n = adifRewrite(path, [&](std::string_view r, int i, std::string& out) {
+        if (after == -1 && i == 0) { out = rec + "\n" + sstr(r); done = true; return false; }
+        if (i == after) { out = sstr(r) + "\n" + rec; done = true; return false; }
+        return true;
+    }, "");
+    if (n < 0) return false;
+    if (!done) {                                       // empty or missing file
+        bool fresh = !fileExists(path);
+        FILE* f = fopen(path.c_str(), "a");
+        if (!f) return false;
+        if (fresh) fputs(adifHeader().c_str(), f);
+        bool ok = fputs(rec.c_str(), f) >= 0 && fputc('\n', f) != EOF;
+        return (fclose(f) == 0) && ok;
+    }
+    return true;
+}
+
 // Put a deleted contact back where it came from (in time order) and take it off the list.
 std::string App::trashRestore(int idx) {
-    RecVec recs;
-    if (!adifReadRecords(trashPath(), recs) || idx < 0 || idx >= (int)recs.size()) return "That contact is no longer in the deleted list";
-    AdifFields f = adifParse(recs[idx]);
+    std::string orig;
+    adifForEach(trashPath(), [&](std::string_view r, int i, long) { if (i != idx) return true; orig = sstr(r); return false; });
+    if (orig.empty() || idx < 0) return "That contact is no longer in the deleted list";
+    AdifFields f = adifParse(orig);
     std::string from = "cur";
     for (auto& kv : f) if (kv.first == "APP_RIGDECK_FROM") from = kv.second;
     adifSetField(f, "APP_RIGDECK_DELETED", "");
     adifSetField(f, "APP_RIGDECK_FROM", "");
     std::string rec = adifBuild(f);
-    QsoRecord q = adifToQso(rec);
-    auto putBack = [&](const std::string& path) {
-        RecVec l;
-        adifReadRecords(path, l);
-        size_t at = l.size();
-        while (at > 0 && adifToQso(l[at - 1]).startMs > q.startMs) at--;
-        l.insert(l.begin() + at, pstr(rec));
-        return adifWriteRecords(path, l);
-    };
     bool ok = true;
-    if (from == "cur" || from == "both") ok = putBack(logPath()) && ok;
-    if (from == "all" || from == "both") ok = putBack(archivePath()) && ok;
+    if (from == "cur" || from == "both") ok = insertByTime(logPath(), rec) && ok;
+    if (from == "all" || from == "both") ok = insertByTime(archivePath(), rec) && ok;
     if (!ok) return "Could not save the log (storage full?)";
-    recs.erase(recs.begin() + idx);
-    if (recs.empty()) remove(trashPath().c_str());
-    else adifWriteRecords(trashPath(), recs);
+    int left = adifRewrite(trashPath(), [&](std::string_view, int i, std::string&) { return i != idx; });
+    if (left == 0) remove(trashPath().c_str());
+    {
+        std::lock_guard<std::mutex> nl(netMtx_);
+        syncOff_ = 0;
+    }
     logReload();
     return "";
 }
 
 // One page of a log, newest first: {"total":N,"items":[{"i":index,"f":{"CALL":"..",..}}]}.
-// filter (optional) matches the callsign (contains, any case).
+// filter (optional) matches the callsign (contains, any case). Two passes over the file: which
+// records match, then the page itself.
 std::string App::logReadJson(bool archive, int from, int n, const std::string& filter) {
-    RecVec recs;
-    adifReadRecords(archive ? archivePath() : logPath(), recs);
-    std::string flt = upperTrim(filter);
-    std::vector<int> idx;
-    for (int i = (int)recs.size() - 1; i >= 0; i--)
-        if (flt.empty() || upperTrim(adifField(recs[i], "CALL")).find(flt) != std::string::npos) idx.push_back(i);
-    std::string o = "{\"ok\":true,\"total\":" + jnum((long long)idx.size()) + ",\"items\":[";
-    for (int k = std::max(0, from); k < (int)idx.size() && k < from + n; k++) {
-        o += std::string(k > from ? "," : "") + "{\"i\":" + jnum(idx[k]) + ",\"f\":{";
-        bool first = true;
-        for (auto& kv : adifParse(recs[idx[k]])) { o += std::string(first ? "" : ",") + jstr(kv.first) + ":" + jstr(kv.second); first = false; }
-        o += "}}";
+    std::string path = archive ? archivePath() : logPath(), flt = upperTrim(filter);
+    std::vector<int, PsAlloc<int>> match;            // file indices that match, oldest first
+    int total = 0;
+    adifForEach(path, [&](std::string_view r, int i, long) {
+        if (flt.empty()) total++;
+        else if (upperTrim(adifField(r, "CALL")).find(flt) != std::string::npos) match.push_back(i);
+        return true;
+    });
+    if (!flt.empty()) total = (int)match.size();
+    std::vector<int> want;                             // file index of each item on the page, in page order
+    for (int k = std::max(0, from); k < total && k < from + n; k++)
+        want.push_back(flt.empty() ? total - 1 - k : match[match.size() - 1 - k]);
+    std::map<int, std::string> items;
+    if (!want.empty()) {
+        int lo = *std::min_element(want.begin(), want.end()), hi = *std::max_element(want.begin(), want.end());
+        std::set<int> wanted(want.begin(), want.end());
+        adifForEach(path, [&](std::string_view r, int i, long) {
+            if (i > hi) return false;
+            if (i < lo || !wanted.count(i)) return true;
+            std::string o = "{\"i\":" + jnum(i) + ",\"f\":{";
+            bool first = true;
+            for (auto& kv : adifParse(r)) { o += std::string(first ? "" : ",") + jstr(kv.first) + ":" + jstr(kv.second); first = false; }
+            items[i] = o + "}}";
+            return true;
+        });
+    }
+    std::string o = "{\"ok\":true,\"total\":" + jnum((long long)total) + ",\"items\":[";
+    bool first = true;
+    for (int i : want) {
+        auto it = items.find(i);
+        if (it == items.end()) continue;
+        o += std::string(first ? "" : ",") + it->second;
+        first = false;
     }
     return o + "]}";
+}
+
+// Every RigDeck log file of every station on the log store (and old ones left internally).
+int App::eraseAllLogs() {
+    auto isLog = [](const std::string& n) {
+        auto ends = [&](const char* s) { size_t l = strlen(s); return n.size() >= l && n.compare(n.size() - l, l, s) == 0; };
+        if (n == "log.adi" || n == "archive.adi" || n == "deleted.adi" || n == "sent.txt") return true;
+        size_t u = n.find('_');
+        if (u == std::string::npos || u == 0) return false;
+        std::string rest = n.substr(u + 1);
+        return rest == "log.adi" || rest == "archive.adi" || rest == "sent.txt" || rest.compare(0, 7, "deleted") == 0 ||
+               ends(".adi.tmp");
+    };
+    int removed = 0;
+    std::vector<std::string> dirs = {logDir_};
+    if (logOnSd_) dirs.push_back(dir_);
+    for (auto& d : dirs) {
+        std::vector<std::string> names;
+        if (DIR* dp = opendir(d.c_str())) {
+            while (struct dirent* e = readdir(dp)) {
+                std::string n = e->d_name;
+                size_t sl = n.rfind('/');                 // SPIFFS can report names with a leading '/'
+                if (sl != std::string::npos) n = n.substr(sl + 1);
+                if (isLog(n)) names.push_back(n);
+            }
+            closedir(dp);
+        }
+        for (auto& n : names) if (remove((d + "/" + n).c_str()) == 0) removed++;
+    }
+    {
+        std::lock_guard<std::mutex> nl(netMtx_);
+        sent_.clear();
+        netQ_.clear();
+        syncFile_ = -1;
+        syncPending_ = false;
+    }
+    recent_.clear();
+    worked_.clear();
+    logCount_ = archiveCount_ = 0;
+    unsent_ = 0;
+    archiveBehind_ = false;
+    return removed;
+}
+
+// Free space on both stores (and a rough count of contacts that still fit where the log is). The
+// card's first free-space query can take a moment, so this runs on the network thread.
+void App::storRefresh() {
+    storMono_ = clk::monoMs();
+    if (!fsInfo) return;
+    uint64_t t = 0, u = 0;
+    if (fsInfo(false, t, u)) { intTotal_ = t; intUsed_ = u; }
+    bool sd = false;
+    {
+        std::lock_guard<std::mutex> lk(mtx_);
+        sd = logOnSd_;
+    }
+    if (sd && fsInfo(true, t, u)) { sdTotal_ = t; sdUsed_ = u; }
+    uint64_t total = sd ? sdTotal_.load() : intTotal_.load(), used = sd ? sdUsed_.load() : intUsed_.load();
+    std::lock_guard<std::mutex> lk(mtx_);
+    long per = 330;                                     // bytes per contact in one file, from the archive when it has a few
+    if (archiveCount_ >= 20) per = std::max(150L, fileSize(archivePath()) / archiveCount_);
+    // Each contact goes into two files; SPIFFS also needs some room to work in.
+    long long room = (long long)(total > used ? total - used : 0) - (sd ? 1048576LL : (long long)(total / 20));
+    long left = total ? (long)std::max(0LL, room / (2 * per)) : -1;
+    left_ = left;
+    bool low = left >= 0 && left < 200;
+    if (low && !lowWarned_)
+        status("Log storage almost full: room for about " + std::to_string(left) + " more contacts. Download the logs and clear them" +
+               (sd ? std::string(", or use a bigger card.") : std::string(", or put a microSD card in (the log moves onto it at the next start).")));
+    lowWarned_ = low;
 }
 
 void App::syncSeq() {
@@ -783,11 +980,14 @@ void App::logQso(const QsoRecord& in) {              // mtx_ held
     // Every QSO goes to two files: the current log, which the operator can clear, and the
     // archive, which keeps everything. Clearing the current log therefore never loses a contact.
     bool saved = true;
+    // (header first when a file is new, so programs that expect one read it)
+    for (const std::string& p : {archivePath(), logPath()})
+        if (!fileExists(p)) { if (FILE* f = fopen(p.c_str(), "w")) { fputs(adifHeader().c_str(), f); fclose(f); } }
     if (appendAdif(archivePath(), rec)) archiveCount_++;
     else { archiveBehind_ = true; saved = false; }
     if (appendAdif(logPath(), rec)) logCount_++;
     else saved = false;
-    worked_.insert(pstr(q.call + "|" + bandName(q.freqHz)));
+    worked_.insert(q.call + "|" + bandName(q.freqHz));
     recent_.push_back(q);
     while (recent_.size() > 30) recent_.pop_front();
     status(saved ? "Logged " + q.call : "QSO with " + q.call + " could not be saved to the device (storage full?)");
@@ -814,34 +1014,57 @@ void App::sentLoad() {
     while (fgets(line, sizeof line, f)) {
         size_t n = strlen(line);
         while (n && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;
-        if (n) sent_.insert(pstr(line));
+        if (n) sent_.bulkAdd(line);
     }
     fclose(f);
+    sent_.finish();
 }
-int App::countUnsent() {
-    RecVec recs;
-    adifReadRecords(logPath(), recs);
+int App::countUnsent() {                               // mtx_ held
     std::lock_guard<std::mutex> nl(netMtx_);
     int n = 0;
-    for (auto& r : recs) if (!sent_.count(sentKey(r))) n++;
+    adifForEach(logPath(), [&](std::string_view r, int, long) { if (!sent_.contains(sentKey(r))) n++; return true; });
     return n;
 }
-int App::queueUnsent(bool archive) {
-    RecVec recs;
-    adifReadRecords(archive ? archivePath() : logPath(), recs);
+// "Send unsent": counts what the logging program does not have, then the network thread queues it
+// in batches (syncRefill), so a whole archive never sits in memory.
+int App::queueUnsent(bool archive) {                   // mtx_ held
+    int n = 0;
+    {
+        std::lock_guard<std::mutex> nl(netMtx_);
+        PSet queued;                                   // already on their way: not counted twice
+        for (auto& it : netQ_) queued.insert(pstr(sentKey(it.rec)));
+        adifForEach(archive ? archivePath() : logPath(), [&](std::string_view r, int, long) {
+            std::string k = sentKey(r);
+            if (!sent_.contains(k) && !queued.count(k)) n++;
+            return true;
+        });
+        if (!n) return 0;
+        syncFile_ = archive ? 1 : 0;
+        syncOff_ = 0;
+        syncPending_ = true;
+    }
+    syncRefill();
+    return n;
+}
+void App::syncRefill() {                               // mtx_ held
     std::lock_guard<std::mutex> nl(netMtx_);
+    if (syncFile_ < 0) { syncPending_ = false; return; }
+    std::string path = syncFile_ ? archivePath() : logPath();
     PSet queued;
     for (auto& it : netQ_) queued.insert(pstr(sentKey(it.rec)));
-    int n = 0;
-    for (auto& r : recs) {
+    int scanned = 0;
+    bool more = false;
+    long off = syncOff_;
+    adifForEach(path, [&](std::string_view r, int, long end) {
+        if (++scanned > 2000 || netQ_.size() >= 100) { more = true; return false; }   // the rest next time
         std::string k = sentKey(r);
-        if (sent_.count(k) || queued.count(k)) continue;
-        queued.insert(pstr(k));
-        netQ_.push_back({r, false});
-        n++;
-    }
-    if (n) netCv_.notify_one();
-    return n;
+        if (!sent_.contains(k) && !queued.count(k)) { queued.insert(pstr(k)); netQ_.push_back({pstr(r), false}); }
+        off = end;
+        return true;
+    }, syncOff_);
+    syncOff_ = off;
+    if (!more) { syncFile_ = -1; syncPending_ = false; }
+    netCv_.notify_one();
 }
 
 bool App::netOnce() {
@@ -849,6 +1072,9 @@ bool App::netOnce() {
     QsoRecord q;
     int proto, port;
     bool isTest = false;
+    bool refill;
+    { std::lock_guard<std::mutex> nl(netMtx_); refill = netQ_.empty() && syncPending_; }
+    if (refill) { std::lock_guard<std::mutex> lk(mtx_); syncRefill(); }
     {
         std::lock_guard<std::mutex> nl(netMtx_);
         if (netQ_.empty()) return false;
@@ -894,7 +1120,7 @@ bool App::netOnce() {
         netOk_++;
         if (!isTest && proto != LOG_NONE) {          // remember it, so "Send unsent" skips it
             std::string k = sentKey(rec);
-            if (sent_.insert(pstr(k)).second) {
+            if (sent_.insert(k)) {
                 FILE* f = fopen(sentPath().c_str(), "a");
                 if (f) { fputs(k.c_str(), f); fputc('\n', f); fclose(f); }
                 if (unsent_ > 0) unsent_--;
@@ -906,15 +1132,26 @@ bool App::netOnce() {
 
 void App::netLoop() {
     for (;;) {
+        bool work;
         {
             std::unique_lock<std::mutex> nl(netMtx_);
-            netCv_.wait(nl, [this] { return !netQ_.empty(); });
+            netCv_.wait_for(nl, std::chrono::seconds(30), [this] { return !netQ_.empty() || syncPending_.load(); });
+            work = !netQ_.empty();
+        }
+        if (clk::monoMs() - storMono_ >= 30000) storRefresh();
+        if (!work) {
+            if (syncPending_) { std::lock_guard<std::mutex> lk(mtx_); syncRefill(); }
+            continue;
         }
         if (netOnce()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(40));   // a whole log: do not flood the receiver
             bool empty;
             { std::lock_guard<std::mutex> nl(netMtx_); empty = netQ_.empty(); }
-            if (empty) unsent_ = countUnsent();
+            if (empty) {
+                std::lock_guard<std::mutex> lk(mtx_);
+                if (syncPending_) syncRefill();
+                else unsent_ = countUnsent();
+            }
         } else {                                     // keep it queued and try again in a while
             std::unique_lock<std::mutex> nl(netMtx_);
             netCv_.wait_for(nl, std::chrono::seconds(15));
@@ -1155,7 +1392,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
             }
         }
         if (!clk::valid()) return err("Clock not set yet");
-        bool dupe = worked_.count(q.call + "|" + bandName(q.freqHz ? q.freqHz : radio.freq.load())) > 0;
+        bool dupe = worked_.contains(q.call + "|" + bandName(q.freqHz ? q.freqHz : radio.freq.load()));
         q.startMs = q.endMs = clk::utcMs();
         logQso(q);
         if (dupe) status("Logged " + q.call + " (worked before on this band)");
@@ -1192,11 +1429,24 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         if (arg(a, "confirm") != "yes") return err("confirm=yes required");
         if (archiveBehind_ && arg(a, "force") != "yes")
             return err("The archive is missing contacts that are in the current log. Download the current log first.");
-        remove(logPath().c_str());
+        if (txState_ == ST_TX) return err("not while transmitting");
+        std::string kept;
+        if (logOnSd_ && fileExists(logPath())) {            // on the card the cleared log is kept, renamed
+            char ts[32] = "nodate";
+            if (clk::valid()) { time_t t = (time_t)(clk::utcMs() / 1000); struct tm tm; gmtime_r(&t, &tm); strftime(ts, sizeof ts, "%Y%m%d_%H%M%S", &tm); }
+            kept = stationFile((std::string("deleted_") + ts + ".adi").c_str());
+            remove(kept.c_str());
+            if (rename(logPath().c_str(), kept.c_str()) != 0) return err("Could not rename the log on the card");
+        } else remove(logPath().c_str());
+        {
+            std::lock_guard<std::mutex> nl(netMtx_);
+            if (syncFile_ == 0) { syncFile_ = -1; syncPending_ = false; }
+        }
         recent_.clear();
         logCount_ = 0;
+        unsent_ = 0;
         archiveBehind_ = false;
-        status("Current log cleared");
+        status(kept.empty() ? std::string("Current log cleared") : "Current log cleared (kept on the card as " + kept.substr(kept.rfind('/') + 1) + ")");
         return ok();
     }
     if (c == "logtest") {                                            // send a test contact to the logging program only
@@ -1223,22 +1473,25 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
     }
     if (c == "logmarksent") {                                        // the logging program already has these: do not send them
         if (arg(a, "confirm") != "yes") return err("confirm=yes required");
-        RecVec recs;
-        adifReadRecords(arg(a, "file") == "all" ? archivePath() : logPath(), recs);
         {
             std::lock_guard<std::mutex> nl(netMtx_);
             FILE* f = fopen(sentPath().c_str(), "a");
-            for (auto& r : recs) {
+            adifForEach(arg(a, "file") == "all" ? archivePath() : logPath(), [&](std::string_view r, int, long) {
                 std::string k = sentKey(r);
-                if (sent_.insert(pstr(k)).second && f) { fputs(k.c_str(), f); fputc('\n', f); }
-            }
+                if (!sent_.contains(k)) { if (f) { fputs(k.c_str(), f); fputc('\n', f); } sent_.bulkAdd(k); }
+                return true;
+            });
             if (f) fclose(f);
+            sent_.finish();
+            syncFile_ = -1;
+            syncPending_ = false;
         }
         unsent_ = countUnsent();
         status("Marked as already in the logging program");
         return ok();
     }
     if (c == "logtrash") return trashJson();                          // recently deleted contacts
+    if ((c == "logrestore" || c == "logedit" || c == "logdel") && txState_ == ST_TX) return err("not while transmitting");
     if (c == "logrestore") {
         std::string call = arg(a, "call");
         std::string e = trashRestore(atoi(arg(a, "i", "-1").c_str()));
@@ -1264,14 +1517,10 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
     }
     if (c == "eraselogs") {                                          // current log and archive, and worked-before with them
         if (arg(a, "confirm") != "yes") return err("confirm=yes required");
-        remove(logPath().c_str());
-        remove(archivePath().c_str());
-        recent_.clear();
-        worked_.clear();
-        logCount_ = archiveCount_ = 0;
-        archiveBehind_ = false;
-        status("All logs erased");
-        return ok();
+        if (txState_ == ST_TX) return err("not while transmitting");
+        int n = eraseAllLogs();
+        status("All logs erased (" + std::to_string(n) + " files)");
+        return "{\"ok\":true,\"files\":" + jnum(n) + "}";
     }
     if (c == "set") {
         Settings n = cfg;
@@ -1287,7 +1536,13 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         bool wifiChanged = wifi && (n.apSsid != cfg.apSsid || n.apPass != cfg.apPass);
         bool staChanged = wifi && (n.staSsid != cfg.staSsid || n.staPass != cfg.staPass);
         bool alcReset = n.txLevel != cfg.txLevel || n.autoAlc != cfg.autoAlc;   // start again from the new level
+        bool newStation = fileCall(n.call) != station_;
+        if (newStation && txState_ == ST_TX) return err("Change the callsign when not transmitting");
         cfg = n;
+        if (newStation) {                                            // each station callsign has its own log files
+            logOpen();
+            status("Station " + station_ + ": " + std::to_string(logCount_) + " contacts in the current log, " + std::to_string(archiveCount_) + " in the archive");
+        }
         if (alcReset) { alcLevel_.clear(); alcSave(); }
         radio.addr = (uint8_t)cfg.civAddr;
         syncSeq();
@@ -1343,21 +1598,26 @@ void App::uiState(UiState& u) {
     u.logN = logCount_; u.logAll = archiveCount_; u.netOk = netOk_; u.netFail = netFail_; u.unsent = unsent_;
     u.status = memFail ? "Not enough RAM for the decoder" : status_;
     u.net = netInfo_; u.call = cfg.call; u.myGrid = cfg.grid;
+    u.logSd = logOnSd_; u.sdIn = logOnSd_; u.station = station_; u.sdInfo = sdInfo;
+    u.intTotal = intTotal_; u.intUsed = intUsed_; u.sdTotal = sdTotal_; u.sdUsed = sdUsed_; u.left = left_;
+    u.bright = cfg.bright; u.contrast = cfg.contrast;
 }
 
 bool App::uiWorked(const std::string& call) {
     std::lock_guard<std::mutex> lk(mtx_);
-    return worked_.count(upperTrim(call) + "|" + bandName(radio.freq.load())) > 0;
+    return worked_.contains(upperTrim(call) + "|" + bandName(radio.freq.load()));
 }
 
 void App::uiLogTail(size_t max, std::vector<UiLogEntry>& out) {
     std::lock_guard<std::mutex> lk(mtx_);
     RecVec recs;
-    adifReadRecords(logPath(), recs);
+    int first = -1;
+    adifTail(logPath(), max, recs, first);
+    if (first < 0) first = logCount_ - (int)recs.size();
     for (size_t i = recs.size(); i > 0 && out.size() < max; i--) {
         std::string_view r = recs[i - 1];
         UiLogEntry e;
-        e.idx = (int)i - 1;
+        e.idx = first + (int)i - 1;
         e.call = adifField(r, "CALL");
         e.date = adifField(r, "QSO_DATE"); e.time = adifField(r, "TIME_ON");
         if (e.date.size() == 8 && e.time.size() >= 4) e.when = e.date.substr(4, 2) + "-" + e.date.substr(6, 2) + " " + e.time.substr(0, 2) + ":" + e.time.substr(2, 2);
@@ -1492,7 +1752,10 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) +
          ",\"sta\":{\"state\":" + jstr(sta_.state) + ",\"ssid\":" + jstr(sta_.ssid) + ",\"ip\":" + jstr(sta_.ip) +
          ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}" +
-         ",\"wchip\":{\"ver\":" + jstr(wchipVer_) + ",\"upd\":" + jstr(wchipUpd_) + "}";
+         ",\"wchip\":{\"ver\":" + jstr(wchipVer_) + ",\"upd\":" + jstr(wchipUpd_) + "}" +
+         ",\"stor\":{\"sd\":" + jbool(logOnSd_) + ",\"station\":" + jstr(station_) + ",\"sdInfo\":" + jstr(sdInfo) +
+         ",\"intT\":" + jnum((long long)intTotal_.load()) + ",\"intU\":" + jnum((long long)intUsed_.load()) +
+         ",\"sdT\":" + jnum((long long)sdTotal_.load()) + ",\"sdU\":" + jnum((long long)sdUsed_.load()) + ",\"left\":" + jnum(left_.load()) + "}";
     if (withCfg) o += ",\"cfg\":" + cfg.json();
     return o + "}";
 }

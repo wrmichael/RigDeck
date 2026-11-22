@@ -50,6 +50,8 @@ struct Settings {
     int gpsModBaud = 9600;               // its NMEA baud rate (most u-blox / ATGM modules: 9600)
     int gpsRxPin = 3;                    // board GPIO the module's TX goes to
     int gpsPpsPin = 4;                   // board GPIO the module's PPS goes to, -1 = not wired
+    int bright = 100;                    // display backlight, % (5 - 100)
+    int contrast = 100;                  // display colour contrast, % (50 - 150; 100 = as designed)
 
     bool set(const std::string& key, const std::string& value);   // false = unknown key / bad value
     std::string serialize(bool includeSecrets) const;             // key=value lines

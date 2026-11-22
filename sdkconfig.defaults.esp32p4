@@ -21,3 +21,9 @@ CONFIG_LV_FONT_MONTSERRAT_16=y
 CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_FONT_MONTSERRAT_28=y
 CONFIG_LV_FONT_MONTSERRAT_36=y
+
+# microSD card for the log: long file names ("AC9HP_archive.adi"), and bigger stdio buffers so a
+# large log streams quickly.
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+CONFIG_FATFS_VFS_FSTAT_BLKSIZE=4096

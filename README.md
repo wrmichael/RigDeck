@@ -52,7 +52,7 @@ On this board the firmware also drives the 7 inch display, so no phone is needed
 - Band activity: tap a line to work that station. Blue = CQ, red = calling you, amber = your TX.
 - Enable TX / HALT TX, Manual / Auto CQ / Auto hunt (answer CQs), CQ, Tune, Clear, TX slot.
 - **Log: N** button: opens the logbook screen with the current log's contacts, the current and
-  archive counts, **Clear current log** and **Erase archive + log** (both ask first).
+  archive counts and **Clear current log** (asks first).
 - Bottom row: FT8/FT4 and band buttons.
 
 Callsign, grid, levels, network logging, PSK31 and the log downloads stay on the web page.
@@ -157,11 +157,17 @@ made by hand. Opening the screen turns automatic FT8 transmit off.
 ## Settings on the touch screen
 
 The gear button at the top right of the operating screen opens **Settings**: everything on the web
-page's Settings tab, in six tabs (Station, Operating, Radio, CW, Logging, Wi-Fi). Tap a box to type
+page's Settings tab, in eight tabs (Station, Operating, Radio, CW, Logging, Wi-Fi, Clock, Device). Tap a box to type
 (a keyboard rises from the bottom; ✓ or ✕ puts it away), choose from lists, then press **Save**.
 Invalid values are refused with the field named on the status line. Password boxes stay empty: leave
 them empty to keep the current password. **Restart** restarts the controller (needed after Wi-Fi,
 baud-rate and GPS changes). CW macros have a label box (the button name) and a text box.
+
+**Device** tab (also on the web page, Settings, Device): **Brightness** (changes at once),
+**Contrast** (100 % = as designed; higher makes panels darker and text brighter; applies after a
+restart), where the log is and the free space in the board's memory and on the microSD card
+(shown separately), a rough count of contacts that still fit, and **Erase all logs** (asks twice;
+on the web page you type NUKE).
 
 ## Choosing the radio
 
@@ -409,14 +415,28 @@ for the ESP32-P4.
 
 ## Logging
 
-- On the board, every contact is written to two ADIF files:
-  - the **current log** (`/log.adi`), which you download and then clear from the Log tab;
-  - the **archive** (`/archive.adi`), which keeps every contact and is not touched by clearing.
+- On the board, every contact is written to two ADIF files, named after the **station callsign**:
+  - the **current log** (`AC9HP_log.adi`), which you download and then clear from the Log tab;
+  - the **archive** (`AC9HP_archive.adi`), which keeps every contact and is not touched by clearing.
   Typical use: download the current log into your logging program, press "Clear current log",
   and the next download holds only new contacts. "Download full archive" gives you everything.
-  "Erase archive and current log" (asks twice) is the only thing that deletes the archive.
+  "Erase all logs" (Settings, Device; asks twice) is the only thing that deletes the archive.
   Worked-before (per band) is rebuilt from both files at boot, so clearing does not reset it.
-  Storage is about 2 MB, roughly 3,000 contacts across both files.
+- **One log per station:** changing the callsign in Settings switches to that callsign's files
+  (a new, empty log the first time); changing it back brings the old log back. The operator
+  callsign (OPERATOR) does not change the files: several operators share the station's log.
+  `/` in a callsign becomes `-` in file names (`VE3-AC9HP-P_log.adi`). Logs from older firmware
+  (`log.adi`, `archive.adi`) become the current callsign's at the first start.
+- **Where the log lives:** the board's own memory holds about 2 MB, roughly 2,500 contacts across
+  both files. With a **microSD card** (FAT32) in at start-up the logs go on the card instead, in
+  the `RigDeck` folder: room for hundreds of thousands of contacts. Contacts logged in the board's
+  memory (for example while the card was out) move onto the card at that start. Insert or remove
+  the card with the power off: it is only looked for at start-up. Big logs are read a piece at a
+  time, never whole, so their size is limited only by the card.
+  - On the card a deleted contact is kept for good in `AC9HP_deleted.adi` (the newest 100 are
+    listed for Restore), and **Clear current log** keeps the cleared log as
+    `AC9HP_deleted_YYYYMMDD_HHMMSS.adi` instead of deleting it. Take the card to a PC to get them.
+  - When the store gets close to full the status line says so, with a rough count of contacts left.
 - **Editing and deleting contacts:**
   - Web page, Log tab: pick the current log or the archive, find a call, page through (newest
     first), press **Edit** on a contact. Every ADIF field of the contact is listed; change or clear
@@ -426,7 +446,8 @@ for the ESP32-P4.
     **Save**, or **Delete contact** (asks first).
   - A change is made in both files (current log and archive), and worked-before follows it.
     Contacts already sent to a logging program are not changed there.
-  - **Recently deleted:** a deleted contact is kept for 7 days (file `deleted.adi`). Restore it from
+  - **Recently deleted:** a deleted contact is kept for 7 days in the board's memory (file
+    `AC9HP_deleted.adi`), for good on a microSD card. Restore it from
     the Log tab's "Recently deleted" list, or with **Undo delete** in the touch Logbook (newest
     first). It goes back where it was, in time order.
 - **Send unsent to logger** (Log tab; touch Logbook "Send unsent (N)"): RigDeck remembers which
@@ -497,7 +518,9 @@ The page shows the decode time. If it is regularly above ~1400 ms on your board,
   published descriptions. Real radios may differ in details (the probe log in the monitor output
   will show what was found).
 - The web page has no login of its own; the hotspot password is the access control.
-- Settings and log live on SPIFFS; the log file is rewritten by append only.
+- Settings live on SPIFFS; the log on SPIFFS or the microSD card. A new contact is appended; an
+  edit, delete or restore rewrites the file through a temporary copy, so a large log on the card
+  takes a moment (not allowed while transmitting). The card is only looked for at start-up.
 
 ## Licence
 

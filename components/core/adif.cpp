@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "adif.h"
 #include <cstdio>
 #include <cstdlib>
@@ -224,6 +225,115 @@ bool adifWriteRecords(const std::string& path, const RecVec& recs) {
     if (!ok) { remove(tmp.c_str()); return false; }
     remove(path.c_str());                                 // SPIFFS rename does not replace an existing file
     return rename(tmp.c_str(), path.c_str()) == 0;
+}
+
+static std::string_view recLine(std::string_view l) {     // a record line, trimmed, or "" if not one
+    while (!l.empty() && (l.back() == '\r' || l.back() == ' ' || l.back() == '\n')) l.remove_suffix(1);
+    size_t n = l.size();
+    if (n >= 5 && !strncasecmp(l.data() + n - 5, "<EOR>", 5) && !adifField(l, "CALL").empty()) return l;
+    return std::string_view();
+}
+
+bool adifForEach(const std::string& path, const AdifRecFn& fn, long start) {
+    FILE* fp = fopen(path.c_str(), "rb");
+    if (!fp) return false;
+    if (start > 0 && fseek(fp, start, SEEK_SET) != 0) { fclose(fp); return true; }
+    PStr buf, line;
+    buf.resize(16384);
+    line.reserve(1024);
+    long off = start > 0 ? start : 0;
+    int idx = 0;
+    bool stop = false;
+    size_t n;
+    while (!stop && (n = fread(&buf[0], 1, buf.size(), fp)) > 0) {
+        size_t p = 0;
+        while (p < n) {
+            const char* nl = (const char*)memchr(buf.data() + p, '\n', n - p);
+            size_t e = nl ? (size_t)(nl - buf.data()) : n;
+            if (line.size() < 200000) line.append(buf.data() + p, e - p);
+            off += (long)(e - p);
+            p = e;
+            if (!nl) break;
+            p++; off++;
+            std::string_view r = recLine(line);
+            if (!r.empty() && !fn(r, idx++, off)) { stop = true; break; }
+            line.clear();
+        }
+    }
+    if (!stop) {
+        std::string_view r = recLine(line);
+        if (!r.empty()) fn(r, idx, off);
+    }
+    fclose(fp);
+    return true;
+}
+
+int adifRewrite(const std::string& path, const AdifEditFn& fn, const std::string& tail) {
+    std::string tmp = path + ".tmp";
+    FILE* out = fopen(tmp.c_str(), "w");
+    if (!out) return -1;
+    bool ok = fputs(adifHeader().c_str(), out) >= 0;
+    int kept = 0;
+    std::string repl;
+    auto put = [&](std::string_view s) {
+        ok = ok && fwrite(s.data(), 1, s.size(), out) == s.size() && fputc('\n', out) != EOF;
+    };
+    adifForEach(path, [&](std::string_view r, int i, long) {
+        repl.clear();
+        if (fn(r, i, repl)) { put(r); kept++; }
+        else if (!repl.empty()) { put(repl); kept += 1 + (int)std::count(repl.begin(), repl.end(), '\n'); }
+        return ok;
+    });
+    if (!tail.empty()) { put(tail); kept += 1 + (int)std::count(tail.begin(), tail.end(), '\n'); }
+    ok = (fclose(out) == 0) && ok;
+    if (!ok) { remove(tmp.c_str()); return -1; }
+    remove(path.c_str());                                 // SPIFFS / FAT rename does not replace a file
+    if (rename(tmp.c_str(), path.c_str()) != 0) return -1;
+    return kept;
+}
+
+bool adifTail(const std::string& path, size_t max, RecVec& out, int& firstIdx) {
+    out.clear();
+    firstIdx = -1;
+    FILE* fp = fopen(path.c_str(), "rb");
+    if (!fp) return false;
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    long want = (long)(max + 1) * 600;
+    for (;;) {
+        long from = size > want ? size - want : 0;
+        PStr buf;
+        buf.resize((size_t)(size - from));
+        fseek(fp, from, SEEK_SET);
+        size_t n = fread(&buf[0], 1, buf.size(), fp);
+        buf.resize(n);
+        RecVec recs;
+        size_t p = 0;
+        if (from > 0) { size_t nl = buf.find('\n'); p = nl == PStr::npos ? buf.size() : nl + 1; }   // partial first line
+        while (p < buf.size()) {
+            size_t e = buf.find('\n', p);
+            if (e == PStr::npos) e = buf.size();
+            std::string_view r = recLine(std::string_view(buf.data() + p, e - p));
+            if (!r.empty()) recs.push_back(pstr(r));
+            p = e + 1;
+        }
+        if (recs.size() >= max || from == 0) {
+            size_t skip = recs.size() > max ? recs.size() - max : 0;
+            for (size_t i = skip; i < recs.size(); i++) out.push_back(std::move(recs[i]));
+            if (from == 0) firstIdx = (int)skip;
+            break;
+        }
+        want *= 4;
+    }
+    fclose(fp);
+    return true;
+}
+
+std::string adifStartKey(std::string_view rec) {
+    std::string d = adifField(rec, "QSO_DATE"), t = adifField(rec, "TIME_ON");
+    if (d.size() != 8) return "";
+    while (t.size() < 6) t += '0';
+    return d + t.substr(0, 6);
 }
 
 static int64_t adifTimeMs(const std::string& d, const std::string& t) {

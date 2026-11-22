@@ -1,3 +1,4 @@
+#include <dirent.h>
 // End-to-end simulation: two complete stations (two App instances) joined by an audio channel with
 // noise, each with a simulated IC-7100 on its CI-V port, running on a simulated clock.
 // Station A calls CQ automatically, station B hunts CQs automatically. They must find each other,
@@ -39,11 +40,12 @@ struct Station {
         name = call;
         rng.seed(seed);
         mkdir(dir, 0755);
-        remove((std::string(dir) + "/log.adi").c_str());
-        remove((std::string(dir) + "/archive.adi").c_str());
-        remove((std::string(dir) + "/sent.txt").c_str());
-        remove((std::string(dir) + "/deleted.adi").c_str());
-        remove((std::string(dir) + "/settings.txt").c_str());
+        if (DIR* dp = opendir(dir)) {                            // a clean start: no logs, settings or levels
+            std::vector<std::string> names;
+            while (struct dirent* e = readdir(dp)) if (e->d_name[0] != '.') names.push_back(e->d_name);
+            closedir(dp);
+            for (auto& n : names) remove((std::string(dir) + "/" + n).c_str());
+        }
         app.radio.write = [this](const uint8_t* d, size_t n) { fakeRadio(d, n); return true; };
         app.begin(dir);
         app.usbSerial = true;
@@ -183,7 +185,7 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
         A.app.stateJson(0, 0, false);
         B.app.stateJson(0, 0, false);
     }
-    std::string la = slurp(da + "/log.adi"), lb = slurp(db + "/log.adi");
+    std::string la = slurp(A.app.logPath()), lb = slurp(B.app.logPath());
     printf("A log: %s", la.c_str() + (la.find("<EOH>") == std::string::npos ? 0 : la.find("<EOH>") + 6));
     printf("B log: %s", lb.c_str() + (lb.find("<EOH>") == std::string::npos ? 0 : lb.find("<EOH>") + 6));
     auto count = [](const std::string& s) { int n = 0; for (size_t p = 0; (p = s.find("<EOR>", p)) != std::string::npos; p++) n++; return n; };
@@ -285,10 +287,10 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
 
     // Log management: the archive got the same record; clearing the current log keeps the archive
     // and worked-before, and survives a restart.
-    CHECK(count(slurp(db + "/archive.adi")) == 1 && adifField(slurp(db + "/archive.adi"), "CALL") == "W9XYZ");
-    CHECK(B.app.command("clearlog", {}).find("\"ok\":false") != std::string::npos && count(slurp(db + "/log.adi")) == 1);
+    CHECK(count(slurp(B.app.archivePath())) == 1 && adifField(slurp(B.app.archivePath()), "CALL") == "W9XYZ");
+    CHECK(B.app.command("clearlog", {}).find("\"ok\":false") != std::string::npos && count(slurp(B.app.logPath())) == 1);
     CHECK(B.app.command("clearlog", {{"confirm", "yes"}}).find("true") != std::string::npos);
-    CHECK(slurp(db + "/log.adi").empty() && count(slurp(db + "/archive.adi")) == 1);
+    CHECK(slurp(B.app.logPath()).empty() && count(slurp(B.app.archivePath())) == 1);
     CHECK(B.app.stateJson(0, 0, false).find("\"log\":{\"n\":0,\"all\":1,\"behind\":false") != std::string::npos);
     {
         App again;
@@ -297,7 +299,7 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
         CHECK(again.seq.workedBefore("W9XYZ") && !again.seq.workedBefore("N0CALL"));
         CHECK(again.stateJson(0, 0, false).find("\"log\":{\"n\":0,\"all\":1") != std::string::npos);
         CHECK(again.command("eraselogs", {{"confirm", "yes"}}).find("true") != std::string::npos);
-        CHECK(slurp(db + "/archive.adi").empty() && !again.seq.workedBefore("W9XYZ"));
+        CHECK(slurp(B.app.archivePath()).empty() && !again.seq.workedBefore("W9XYZ"));
         CHECK(again.stateJson(0, 0, false).find("\"log\":{\"n\":0,\"all\":0") != std::string::npos);
     }
 

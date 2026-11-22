@@ -94,7 +94,7 @@ static esp_err_t hLog(httpd_req_t* req) {
     httpd_resp_set_hdr(req, "Content-Disposition", "attachment");   // the page supplies a dated file name
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     bool archive = req->user_ctx != nullptr;
-    FILE* f = fopen((archive ? s_app->archivePath() : s_app->logPath()).c_str(), "r");
+    FILE* f = fopen(s_app->logFile(archive).c_str(), "r");
     if (!f) {                                        // nothing logged yet: still a valid, empty ADIF file
         std::string h = adifHeader();
         return httpd_resp_send(req, h.data(), h.size());

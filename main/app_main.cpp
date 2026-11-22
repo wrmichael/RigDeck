@@ -13,6 +13,9 @@
 #include "esp_app_desc.h"
 #include "nvs_flash.h"
 #include <sys/time.h>
+#if CONFIG_IDF_TARGET_ESP32P4
+#include "sdcard.h"
+#endif
 
 static const char* TAG = "main";
 static App s_app;
@@ -38,6 +41,21 @@ static void rtcRestore() {
 static bool haveRam(size_t bytes) {
     return heap_caps_get_free_size(MALLOC_CAP_DEFAULT) >= bytes &&
            heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT) >= 200 * 1024;
+}
+
+// Size and use of the internal store or the microSD card, for the Device page and "log almost full".
+static bool fsInfo(bool sd, uint64_t& total, uint64_t& used) {
+    if (!sd) {
+        size_t t = 0, u = 0;
+        if (esp_spiffs_info("storage", &t, &u) != ESP_OK) return false;
+        total = t; used = u;
+        return true;
+    }
+#if CONFIG_IDF_TARGET_ESP32P4
+    return sdcard_info(&total, &used);
+#else
+    return false;
+#endif
 }
 
 static void decodeTask(void*) { s_app.decodeLoop(); }
@@ -88,7 +106,14 @@ extern "C" void app_main(void) {
     s_app.haveRam = haveRam;
     s_app.fwVersion = esp_app_get_description()->version;
     s_app.logFn = [](const char* line) { ESP_LOGI("app", "%s", line); };
-    s_app.begin("/fs");
+    std::string logDir;                               // the log goes on the microSD card when one is in
+#if CONFIG_IDF_TARGET_ESP32P4
+    char sdi[64];
+    if (sdcard_start(sdi, sizeof sdi)) logDir = SDCARD_LOG_DIR;
+    s_app.sdInfo = sdi;
+#endif
+    s_app.fsInfo = fsInfo;
+    s_app.begin("/fs", logDir);
     ESP_LOGI(TAG, "RigDeck %s, call=%s grid=%s, free heap %u kB", s_app.fwVersion.c_str(), s_app.cfg.call.c_str(), s_app.cfg.grid.c_str(),
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_DEFAULT) / 1024));
 

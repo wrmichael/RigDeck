@@ -3,6 +3,8 @@ if(IDF_TARGET STREQUAL "esp32p4")
     # Wi-Fi chip (ESP32-C6 co-processor) version and firmware update over ESP-Hosted
     # (a dependency in idf_component.yml, so its headers are already available here).
     list(APPEND srcs "wifi_chip.cpp")
+    # microSD card for the log (the Waveshare BSP mounts it)
+    list(APPEND srcs "sdcard.c")
 endif()
 if(CONFIG_IC7100_DISPLAY)
     # On-device touch interface (LVGL) for the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B.
@@ -12,6 +14,6 @@ endif()
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "."
-    PRIV_REQUIRES core esp_app_format esp_wifi esp_netif esp_event nvs_flash esp_http_server spiffs esp_timer lwip esp_driver_uart esp_driver_gpio esp_partition
+    PRIV_REQUIRES core fatfs sdmmc esp_app_format esp_wifi esp_netif esp_event nvs_flash esp_http_server spiffs esp_timer lwip esp_driver_uart esp_driver_gpio esp_partition
     EMBED_TXTFILES "web/index.html")
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error -Wno-format -Wno-missing-field-initializers)

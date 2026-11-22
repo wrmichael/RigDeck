@@ -27,7 +27,9 @@ uint64_t parseDialFreq(const std::string& text);
 class App {
 public:
     App();
-    void begin(const std::string& dataDir);        // loads settings and the log
+    // Loads settings and the log. Settings live in dataDir; the log files in logDir (the microSD
+    // card when one is in) or, if that is empty, in dataDir as well.
+    void begin(const std::string& dataDir, const std::string& logDir = "");
 
     Settings cfg;
     Radio radio;
@@ -54,9 +56,12 @@ public:
     std::string spectrumJson();
     std::string command(const std::string& c, const std::map<std::string, std::string>& args);
     std::string expandMacro(const std::string& macro, const std::string& call, const std::string& rst) const;
-    std::string logPath() const { return dir_ + "/log.adi"; }          // current log: cleared by "clearlog"
-    std::string archivePath() const { return dir_ + "/archive.adi"; }  // every QSO ever logged
-    std::string trashPath() const { return dir_ + "/deleted.adi"; }    // deleted contacts, kept 7 days for Restore
+    // Log files are per station callsign ("AC9HP_log.adi"): changing the callsign switches logs.
+    std::string logPath() const { return stationFile("log.adi"); }          // current log: cleared by "clearlog"
+    std::string archivePath() const { return stationFile("archive.adi"); }  // every QSO ever logged
+    std::string trashPath() const { return stationFile("deleted.adi"); }    // deleted contacts (Restore)
+    std::string logFile(bool archive);                 // the same, safe from any thread (web download)
+    std::string station();                             // file-name form of the station callsign
 
     // --- on-device display --------------------------------------------------------------------
     // Reading state does not count as "an operator is present"; command() does (TX watchdog).
@@ -71,6 +76,12 @@ public:
         uint32_t decId = 0;
         std::string clkSrc, band, txText, nextText, dx, grid, status, net, call, myGrid, model;
         std::string staState, staIp, staReason, wchipVer;
+        // log storage: where the log is, free space on each store, rough contacts left
+        bool logSd = false, sdIn = false;
+        uint64_t intTotal = 0, intUsed = 0, sdTotal = 0, sdUsed = 0;
+        long left = -1;
+        std::string station, sdInfo;
+        int bright = 100, contrast = 100;
         int staRssi = 0, txLvl = 0;
     };
     struct UiDecode { uint32_t id; int64_t slotMs; int snr; float dt; int freq; std::string text; bool cq, toMe; };
@@ -102,6 +113,9 @@ public:
     void (*logFn)(const char* line) = nullptr;      // platform log (serial monitor on the ESP32)                  // set by the platform (version.txt on the ESP32)
     bool (*haveRam)(size_t bytes) = nullptr;         // platform check before the big decoder allocations
     std::atomic<bool> memFail{false};
+    // Storage: the platform reports size and use of the internal store (sd=false) or the card.
+    bool (*fsInfo)(bool sd, uint64_t& total, uint64_t& used) = nullptr;
+    std::string sdInfo;                                // set before begin(): "", or what the card is / why it is not used
     void setNetInfo(const std::string& s);
     // Home-network (station) link, reported by the platform and controlled from Settings.
     struct StaStatus { std::string state = "off", ssid, ip, reason; int rssi = 0; };
@@ -171,11 +185,21 @@ private:
     std::string txText_, lastTx_;
 
     // log
+    std::string logDir_, station_;
+    bool logOnSd_ = false;
+    std::string stationFile(const char* what) const { return logDir_ + "/" + station_ + "_" + what; }
+    void logOpen();                                    // pick the station's files (moving older ones in) and load them
+    int eraseAllLogs();                                // every log file of every station; returns files removed
     std::deque<QsoRecord> recent_;
-    PSet worked_;                                      // "CALL|band" (PSRAM: one entry per contact)
+    HashIndex worked_;                                 // "CALL|band"
     int logCount_ = 0, archiveCount_ = 0;
     bool archiveBehind_ = false;                     // a QSO is in the current log but not in the archive
-    int scanLog(const std::string& path);
+    // storage figures, refreshed every 30 s by the network thread
+    std::atomic<uint64_t> intTotal_{0}, intUsed_{0}, sdTotal_{0}, sdUsed_{0};
+    std::atomic<long> left_{-1};
+    int64_t storMono_ = -100000;
+    bool lowWarned_ = false;
+    void storRefresh();
     void logReload();                                  // worked-before, counts and recent list from the files
     std::string logChange(bool archive, int idx, const std::string& expectCall,
                           const std::map<std::string, std::string>* fields);   // nullptr = delete; returns error or ""
@@ -189,13 +213,17 @@ private:
     std::condition_variable netCv_;
     struct NetItem { PStr rec; bool test = false; };
     std::deque<NetItem, PsAlloc<NetItem>> netQ_;       // contacts waiting to go to the logging program (PSRAM)
-    PSet sent_;                                        // contacts the logging program has (key: sentKey)
+    HashIndex sent_;                                   // contacts the logging program has (key: sentKey)
     std::atomic<int> unsent_{0};                       // contacts in the current log not sent yet
-    std::string sentPath() const { return dir_ + "/sent.txt"; }
+    std::string sentPath() const { return stationFile("sent.txt"); }
     static std::string sentKey(std::string_view rec);
     void sentLoad();
     int countUnsent();                                 // reads the current log
-    int queueUnsent(bool archive);                     // returns how many were queued
+    int queueUnsent(bool archive);                     // starts sending; returns how many will go
+    int syncFile_ = -1;                                // "send unsent" in progress: 0 current log, 1 archive (mtx_)
+    long syncOff_ = 0;                                 // how far through that file it has queued
+    std::atomic<bool> syncPending_{false};
+    void syncRefill();                                 // mtx_ held: queue the next batch
     std::atomic<int> netOk_{0}, netFail_{0};
 
     NmeaTime nmea_, nmeaMod_;
