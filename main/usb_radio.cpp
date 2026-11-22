@@ -213,6 +213,8 @@ static void serialTask(void*) {
                 if (old) cdc_acm_host_close(old);
                 rad.setProto(RP_NONE);
                 rad.freq = (uint64_t)s_app->cfg.dialHz;
+                rad.mode = s_app->cfg.dialMode;
+                rad.dataMode = s_app->cfg.dialData;
                 s_app->usbSerial = true;
                 ESP_LOGI(TAG, "no CAT: dial %.3f MHz, PTT by %s", s_app->cfg.dialHz / 1e6,
                          rad.pttMethod == PTT_RTS ? "RTS" : rad.pttMethod == PTT_DTR ? "DTR" : "VOX (the sound card keys the radio)");

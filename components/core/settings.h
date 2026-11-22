@@ -22,7 +22,8 @@ struct Settings {
     int radioType = 0;                   // 0 = find out, 1 = Icom, 2 = Yaesu, 3 = QRP Labs QMX / QMX+,
                                          // 4 = Kenwood / Elecraft, 5 = no CAT (SignaLink or other sound card)
     int pttMethod = 0;                   // 0 = CAT command, 1 = serial RTS line (Digirig), 2 = DTR, 3 = VOX
-    long long dialHz = 14074000;         // no CAT: the dial frequency the band buttons last set
+    long long dialHz = 14074000;         // no CAT: the dial frequency the band buttons (or typed) last set
+    int dialMode = 1, dialData = 1;      // no CAT: mode (Icom numbering: 0 LSB 1 USB 3 CW ...) and DATA on/off
     int catBaud = 38400;                 // text CAT rate tried first (FTX-1 "CAT-1 RATE"; others are searched)
     int txFreq = 1500;                   // audio offset of our signal, Hz
     int txLevel = 50;                    // digital drive level, percent of full scale

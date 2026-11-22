@@ -190,8 +190,11 @@ Radios and interfaces:
 | SignaLink USB (any radio) | Radio "No CAT": the SignaLink keys the radio on its own | should work, untested |
 | Digirig without a CAT cable | Radio "No CAT", PTT "Serial RTS" | should work, untested |
 
-- **No CAT** (Settings > Radio): RigDeck cannot read the frequency, so the band buttons set the
-  dial frequency it logs (remembered across restarts); set the radio to the same band by hand.
+- **No CAT** (Settings > Radio): a sound card cannot tell RigDeck the band, mode or frequency, so
+  you tell it what you set on the radio: the FT8 band buttons (USB-D at the band's FT8 frequency),
+  or tap the frequency (touch screen: it opens the radio screen with bands, modes and a keypad for
+  the exact frequency; web page: type e.g. `7.030 CW` or `14.250 USB`). That frequency and mode go
+  into the log and are remembered across restarts.
   PTT is VOX (the SignaLink keys on the audio) unless Settings > PTT says RTS or DTR.
 - **PTT** (Settings > Radio): CAT command (default), the serial port's **RTS** (Digirig) or **DTR**
   line, or **VOX**. RTS / DTR work with CAT on the same port too.

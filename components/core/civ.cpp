@@ -84,6 +84,7 @@ void Radio::setFreq(uint64_t hz) {
 }
 
 void Radio::setUsbData() {
+    if (proto == RP_NONE) { mode = 0x01; dataMode = 1; return; }   // no CAT: what the operator sets by hand
     if (isText()) return tSetUsbData();
     send(0x06, {0x01, 0x01});              // USB, FIL1
     send(0x1A, {0x06, 0x01, 0x01});        // DATA mode on, FIL1
@@ -129,6 +130,7 @@ static std::vector<uint8_t> bcd255(int percent) {     // 0..100 % -> 0000..0255 
 }
 
 void Radio::setMode(uint8_t m, uint8_t fil) {
+    if (proto == RP_NONE) { mode = m; dataMode = 0; filter = fil < 1 || fil > 3 ? 1 : fil; return; }
     if (isText()) return tSetMode(m);
     send(0x06, {m, (uint8_t)(fil < 1 || fil > 3 ? 1 : fil)});
     send(0x04, {});
@@ -136,6 +138,7 @@ void Radio::setMode(uint8_t m, uint8_t fil) {
 }
 
 void Radio::setData(bool on) {
+    if (proto == RP_NONE) { dataMode = on ? 1 : 0; return; }
     if (isText()) return tSetData(on);
     int fil = filter.load();
     send(0x1A, {0x06, (uint8_t)(on ? 1 : 0), (uint8_t)(on ? (fil >= 1 && fil <= 3 ? fil : 1) : 0)});

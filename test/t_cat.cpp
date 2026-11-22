@@ -249,12 +249,17 @@ int main() {
             app.command("band", {{"hz", "7074000"}});
             for (int i = 0; i < 20; i++) { simMs += 10; app.tick(); }
             CHECK(app.radio.freq == 7074000 && app.cfg.dialHz == 7074000);
+            CHECK(app.radio.mode == 1 && app.radio.dataMode == 1);   // the band button: USB-D
+            app.command("qsy", {{"hz", "7030000"}});
+            app.command("rmode", {{"m", "03"}, {"fil", "1"}});
+            for (int i = 0; i < 5; i++) { simMs += 10; app.tick(); }
+            CHECK(app.radio.freq == 7030000 && app.cfg.dialHz == 7030000 && app.cfg.dialMode == 3 && app.cfg.dialData == 0);
             app.command("set", {{"pttMethod", "1"}});
             CHECK(app.radio.pttMethod == PTT_RTS);
         }
         App app2;
         app2.begin(dir);
-        CHECK(app2.cfg.dialHz == 7074000 && app2.cfg.radioType == 5 && app2.cfg.pttMethod == 1);
+        CHECK(app2.cfg.dialHz == 7030000 && app2.cfg.dialMode == 3 && app2.cfg.radioType == 5 && app2.cfg.pttMethod == 1);
     }
     {   // ---------------- a CI-V port echoes: it must not pass for a text radio
         Radio r;

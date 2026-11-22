@@ -1504,7 +1504,7 @@ void refresh(lv_timer_t*) {
     } else setText(lFreq, "--.---.---");
     static const char* modeNames[] = {"FT8", "FT4", "PSK31", "FT-CW"};
     snprintf(b, sizeof b, "%s  %s  %s\n%s", s.band.empty() ? "--" : s.band.c_str(), s.rmode == 1 ? (s.data == 1 ? "USB-D" : "USB") : "",
-             modeNames[s.mode < 0 || s.mode > 3 ? 0 : s.mode], s.model.c_str());
+             modeNames[s.mode < 0 || s.mode > 3 ? 0 : s.mode], s.model == "No CAT" ? "No CAT: tap the frequency" : s.model.c_str());
     setText(lSub, b);
     bool tx = s.txOn || s.ptt;
     if (tx) {
@@ -1677,6 +1677,8 @@ extern "C" void ui_create(void) {
     // header
     lv_obj_t* head = box(scr, 0, 0, W, HEAD_H, PAN);
     lFreq = label(head, 14, 8, f36, AMB, "--.---.---");
+    lv_obj_add_flag(lFreq, LV_OBJ_FLAG_CLICKABLE);                   // the radio screen: bands, modes, typed frequency
+    lv_obj_add_event_cb(lFreq, onOpenRadio, LV_EVENT_CLICKED, nullptr);
     lSub = label(head, 262, 9, f16, DIM);
     label(head, 440, 8, f16, DIM, "Sig");
     barS = meter(head, 484, 13, 150);

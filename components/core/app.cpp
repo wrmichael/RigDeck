@@ -866,6 +866,11 @@ void App::tick() {
     std::lock_guard<std::mutex> lk(mtx_);
 
     if (pttOffRepeat_ && mono >= pttOffRepeat_ && txState_ == ST_IDLE) { pttOffRepeat_ = 0; radio.ptt(false); }
+    if (radio.proto == RP_NONE && radio.mode >= 0 && (radio.mode != cfg.dialMode || radio.dataMode != cfg.dialData)) {
+        cfg.dialMode = radio.mode;                      // no CAT: the mode set on the radio screen is remembered too
+        cfg.dialData = radio.dataMode > 0 ? 1 : 0;
+        cfg.save(dir_ + "/settings.txt");
+    }
     alcTick(mono);
     bool conn = radio.connected();
     if (conn && !wasConn_ && cfg.keyWpm > 0) radio.setKeySpeed(cfg.keyWpm);

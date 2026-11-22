@@ -303,7 +303,11 @@ function render(){
   if(S.cfg) render.call=S.cfg.call;
   S.cfg_call=render.call||"";
   const mhz=r.freq?(r.freq/1e6).toFixed(6):"--.------";
-  $("freq").innerHTML=`${mhz.slice(0,-3)}<small>${mhz.slice(-3)} MHz ${esc(r.band)} ${r.rmode===1?(r.data===1?"USB-D":"USB"):""} ${esc(r.model||"")}</small>`;
+  const MODES={0:"LSB",1:"USB",2:"AM",3:"CW",4:"RTTY",5:"FM",7:"CW-R",8:"RTTY-R"};
+  const noCat=r.model==="No CAT";
+  $("freq").innerHTML=`${mhz.slice(0,-3)}<small>${mhz.slice(-3)} MHz ${esc(r.band)} ${MODES[r.rmode]!==undefined?MODES[r.rmode]+(r.data===1?"-D":""):""} ${esc(r.model||"")}${noCat?" (set the radio to this; tap to change)":""}</small>`;
+  $("freq").style.cursor=noCat?"pointer":"";
+  $("freq").title=noCat?"No CAT: tap to type the frequency and mode you set on the radio":"";
   $("dUsb").className="dot "+(r.ser?"ok":"bad");
   $("dCiv").className="dot "+(r.civ?"ok":"bad");
   $("dAud").className="dot "+(r.aud?"ok":"bad");
@@ -497,6 +501,20 @@ $("eraseall").onclick=async()=>{
   if(prompt("Erase EVERY log on this RigDeck: current logs, archives, deleted contacts and cleared logs of all station callsigns, on the card and in the board's memory. The worked-before list goes too. There is no undo.\n\nDownload what you want to keep first. Type NUKE to erase:")!=="NUKE") return;
   const j=await cmd("eraselogs",{confirm:"yes"});
   if(j&&j.ok) banner(`All logs erased (${j.files} files)`);
+};
+// No CAT: the frequency and mode are whatever the operator set on the radio; type them here.
+$("freq").onclick=async()=>{
+  if(!S||!S.radio||S.radio.model!=="No CAT")return;
+  const v=prompt("No CAT: the dial frequency you set on the radio, in MHz (e.g. 14.074).\nAdd a mode after it if it is not USB-D: 7.030 CW, 14.250 USB, 3.573 USB-D, 7.185 LSB",(S.radio.freq/1e6).toFixed(3));
+  if(!v)return;
+  const m=v.trim().toUpperCase().match(/^([0-9.]+)\s*(USB-D|USB|LSB-D|LSB|CW|AM|FM)?$/);
+  if(!m){banner("Type a frequency in MHz, optionally followed by a mode");return;}
+  const hz=Math.round(parseFloat(m[1])*1e6);
+  const j=await cmd("qsy",{hz});
+  if(!j||!j.ok)return;
+  const md=m[2]||"USB-D", code={LSB:"00","LSB-D":"00",USB:"01","USB-D":"01",CW:"03",AM:"02",FM:"05"}[md];
+  await cmd("rmode",{m:code,fil:1});
+  cmd("rdata",{v:md.endsWith("-D")?"1":"0"});
 };
 $("dvConsole").onchange=()=>{cmd("set",{consoleLog:$("dvConsole").checked?"1":"0"});setTimeout(loadConsoleLogs,1500);};
 async function loadConsoleLogs(){
