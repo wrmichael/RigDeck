@@ -86,8 +86,13 @@ static void purgeOld() {                       // console files dated more than 
     for (auto& n : gone) remove((s_dir + "/" + n).c_str());
 }
 
+// Buffers in PSRAM: internal RAM is kept for the USB host (CAT, audio), the Wi-Fi link and the display.
+static const size_t CHUNK = 4096;
+static char* s_chunk;
+static char* s_fbuf;
+
 static void writerTask(void*) {
-    static char chunk[4096];
+    char* chunk = s_chunk;
     FILE* f = nullptr;
     std::string day;
     bool clockAtOpen = false;
@@ -110,6 +115,7 @@ static void writerTask(void*) {
             struct stat st;
             if (!valid && stat(path.c_str(), &st) == 0 && st.st_size > 5 * 1024 * 1024) remove(path.c_str());
             f = fopen(path.c_str(), "a");
+            if (f) setvbuf(f, s_fbuf, _IOFBF, CHUNK);                 // not stdio's own buffer (internal RAM)
             day = today;
             clockAtOpen = valid;
             lastMark = 0;
@@ -130,7 +136,7 @@ static void writerTask(void*) {
             size_t n = 0;
             unsigned dropped;
             portENTER_CRITICAL(&s_mux);
-            while (s_tail != s_head && n < sizeof chunk) chunk[n++] = s_ring[s_tail++ % RING];
+            while (s_tail != s_head && n < CHUNK) chunk[n++] = s_ring[s_tail++ % RING];
             dropped = s_dropped;
             s_dropped = 0;
             portEXIT_CRITICAL(&s_mux);
@@ -155,9 +161,12 @@ void sdlog_pause(bool pause) {
 
 void sdlog_start(const char* dir) {
     if (!s_ring) return;
+    s_chunk = (char*)heap_caps_malloc(CHUNK, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    s_fbuf = (char*)heap_caps_malloc(CHUNK, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_chunk || !s_fbuf) return;
     s_dir = dir;
     mkdir(s_dir.c_str(), 0777);
-    xTaskCreate(writerTask, "sdlog", 4096, nullptr, 2, nullptr);
+    xTaskCreate(writerTask, "sdlog", 3584, nullptr, 2, nullptr);
 }
 
 // ---- web page: list and download the console logs ----------------------------------------------
@@ -201,11 +210,14 @@ static esp_err_t hFile(httpd_req_t* req) {
     std::string disp = std::string("attachment; filename=\"") + f + "\"";
     httpd_resp_set_hdr(req, "Content-Disposition", disp.c_str());
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    static char buf[2048];                      // one download at a time (the server has one worker)
+    char* buf = (char*)heap_caps_malloc(2048, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!buf) { fclose(fp); return ESP_FAIL; }
     size_t n;
-    while ((n = fread(buf, 1, sizeof buf, fp)) > 0)
-        if (httpd_resp_send_chunk(req, buf, n) != ESP_OK) { fclose(fp); return ESP_FAIL; }
+    esp_err_t r = ESP_OK;
+    while (r == ESP_OK && (n = fread(buf, 1, 2048, fp)) > 0) r = httpd_resp_send_chunk(req, buf, n);
     fclose(fp);
+    heap_caps_free(buf);
+    if (r != ESP_OK) return ESP_FAIL;
     return httpd_resp_send_chunk(req, nullptr, 0);
 }
 

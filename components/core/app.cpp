@@ -647,6 +647,7 @@ bool App::decodeOnce() {
     if (cw) { cwMon_[slot & 1].decode(out); cwMon_[slot & 1].busy = false; }
     else { mon_[slot & 1].decode(out); mon_[slot & 1].busy = false; }
     decodeMs_ = (int)(clk::monoMs() - t0);
+    if (decodeMs_ > 2500 && logFn) logFn(("decoding took " + std::to_string(decodeMs_) + " ms (" + std::to_string(out.size()) + " decodes)").c_str());
     {
         std::lock_guard<std::mutex> lk(mtx_);
         for (auto& d : out) {
@@ -927,9 +928,18 @@ void App::tick() {
     int64_t now = clk::utcMs(), slot = now / L, tIn = now - slot * L;
     const int64_t lateLimit = (mode_ == DM_FT4) ? 1000 : 2000;      // latest moment we may still start
     if (tIn > lateLimit || slot == txSlot_.load()) return;
-    {   // The previous slot's decodes decide what we send: wait for them.
-        std::lock_guard<std::mutex> jl(jobMtx_);
-        if (jobPending_ || decoding_) return;
+    {   // The previous slot's decodes decide what we send: wait for them, but not past the point
+        // where the slot would be lost. A decode that runs long (busy band) then means this slot
+        // sends what was planned and the decodes act from the next one, as WSJT-X does.
+        bool busy;
+        {
+            std::lock_guard<std::mutex> jl(jobMtx_);
+            busy = jobPending_ || decoding_;
+        }
+        if (busy) {
+            if (tIn < lateLimit - 400) return;
+            if (logFn) logFn(("decoding still running " + std::to_string(tIn) + " ms into the slot: transmitting without waiting for it").c_str());
+        }
     }
     syncSeq();
     std::string text;

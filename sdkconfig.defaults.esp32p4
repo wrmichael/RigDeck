@@ -22,8 +22,7 @@ CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_FONT_MONTSERRAT_28=y
 CONFIG_LV_FONT_MONTSERRAT_36=y
 
-# microSD card for the log: long file names ("AC9HP_archive.adi"), and bigger stdio buffers so a
-# large log streams quickly.
+# microSD card for the log: long file names ("AC9HP_archive.adi"). stdio buffers stay small
+# (FSTAT_BLKSIZE 0): they come from internal RAM, which the USB host and Wi-Fi need.
 CONFIG_FATFS_LFN_HEAP=y
 CONFIG_FATFS_MAX_LFN=255
-CONFIG_FATFS_VFS_FSTAT_BLKSIZE=4096

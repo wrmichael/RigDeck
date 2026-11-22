@@ -24,8 +24,8 @@ static bool s_sntp = false;
 static int s_retry = 0;
 static App::StaStatus s_st;
 static esp_timer_handle_t s_retryTimer = nullptr;
-static TaskHandle_t s_ctlTask = nullptr;
 static std::atomic<int> s_ctlReq{0};                // 1 join, 2 leave
+static std::atomic<bool> s_ctlBusy{false};
 
 static void publish() {
     std::string s = "AP \"" + s_app->cfg.apSsid + "\" 192.168.4.1";
@@ -215,18 +215,17 @@ void net_start(App& app) {
     td.name = "sta-drop";
     esp_timer_create(&td, &s_dropTimer);
     // Settings / the Connect button call this with the app's lock held, and joining publishes its
-    // state through the app (which takes that lock): so the work is handed to a small task.
-    xTaskCreate([](void*) {
-        for (;;) {
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-            int r = s_ctlReq.exchange(0);
-            if (r == 1) staJoin();
-            else if (r == 2) staLeave();
-        }
-    }, "sta-ctl", 4096, nullptr, 5, &s_ctlTask);
+    // state through the app (which takes that lock): so the work is done by a short-lived task
+    // (its stack is internal RAM, needed by the USB host and the display: not kept).
     app.wifiControl = [](bool connect) {
         s_ctlReq = connect ? 1 : 2;
-        if (s_ctlTask) xTaskNotifyGive(s_ctlTask);
+        if (s_ctlBusy.exchange(true)) return;          // the running one picks up the latest request
+        if (xTaskCreate([](void*) {
+                int r;
+                while ((r = s_ctlReq.exchange(0)) != 0) { if (r == 1) staJoin(); else staLeave(); }
+                s_ctlBusy = false;
+                vTaskDelete(nullptr);
+            }, "sta-ctl", 4096, nullptr, 5, nullptr) != pdPASS) s_ctlBusy = false;
     };
 
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
