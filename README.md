@@ -56,7 +56,7 @@ On this board the firmware also drives the 7 inch display, so no phone is needed
 - Bottom row: FT8/FT4 and band buttons.
 
 Callsign, grid, levels, network logging, PSK31 and the log downloads stay on the web page.
-Touching the screen counts as "operator present" for the TX watchdog, the same as an open web page.
+Touching the screen counts as "operator present" for the TX watchdog, the same as a click on the web page.
 For ESP32-P4 boards without this display: `idf.py menuconfig` > IC-7100 FT8 controller > turn the
 touch interface off.
 
@@ -130,6 +130,23 @@ The QMX appears as one USB device (STMicroelectronics VID 0483) with a CDC seria
   sliders have no effect. Frequency, band, mode
   (LSB/USB/CW/DIGI), A/B and keyer speed work.
 - Logger CW macros use the QMX keyer (`KY`), sent in 24-character pieces.
+
+## TX watchdog and the traffic light
+
+The TX watchdog (Settings, `TX watchdog, minutes`, default 6, 0 = off) turns transmit off when nobody
+has touched the controls for that long. Any click or key on the web page, any touch on the screen, or
+any command counts as "operator present". An open web page on its own does not: the page polls the
+device all the time, so that would never let the watchdog trip.
+
+The web page shows a floating traffic light in the bottom-right corner, wherever you scroll:
+
+| Light | Meaning |
+|---|---|
+| Green | TX enabled, more than half the watchdog time left. Pulses while transmitting. |
+| Yellow | TX enabled, past half of the watchdog time. Tap the light (or anything) to restart it. |
+| Red | TX off: never enabled, halted, the watchdog timed out, or the dead man's switch stopped it. |
+
+The text next to it shows the time left, for example `TX 4m`, or `TX now 4m` while transmitting.
 
 ## SSB / CW logger and CW macros
 

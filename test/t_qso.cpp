@@ -180,10 +180,10 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
     CHECK(B.pttLog.empty());
 
     int secs = (int)(slotLen * 9 / 1000);
-    for (int i = 0; i < secs; i += 5) {                          // a browser polling keeps the watchdog happy
+    for (int i = 0; i < secs; i += 5) {                          // an operator clicking keeps the watchdog happy
         runSim(A, B, 5, slotLen, slowB);
-        A.app.stateJson(0, 0, false);
-        B.app.stateJson(0, 0, false);
+        A.app.command("ping", {});
+        B.app.command("ping", {});
     }
     std::string la = slurp(A.app.logPath()), lb = slurp(B.app.logPath());
     printf("A log: %s", la.c_str() + (la.find("<EOH>") == std::string::npos ? 0 : la.find("<EOH>") + 6));
@@ -341,8 +341,19 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
     // Nobody watching for longer than the watchdog time: automatic transmit must switch itself off.
     CHECK(A.app.command("txen", {{"v", "1"}}).find("true") != std::string::npos);
     size_t keyed = A.pttLog.size();
-    runSim(A, B, 5 * 60, slotLen, slowB);
+    CHECK(A.app.stateJson(0, 0, false).find("\"wdLeft\":360,") != std::string::npos);
+    for (int i = 0; i < 5 * 60; i += 10) {                       // a page that only polls is not an operator
+        runSim(A, B, 10, slotLen, slowB);
+        A.app.stateJson(0, 0, false);
+        A.app.command("time", {{"ms", "1"}});
+    }
     CHECK(A.pttLog.size() > keyed);                              // still calling CQ inside the window
+    {
+        std::string j = A.app.stateJson(0, 0, false);
+        size_t p = j.find("\"wdLeft\":");
+        int left = p == std::string::npos ? -9 : atoi(j.c_str() + p + 9);
+        CHECK(left > 0 && left <= 60);                           // past half: the web light is yellow
+    }
     runSim(A, B, 90, slotLen, slowB);
     keyed = A.pttLog.size();
     runSim(A, B, 60, slotLen, slowB);

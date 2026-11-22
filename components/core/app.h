@@ -53,6 +53,8 @@ public:
 
     // --- web API ------------------------------------------------------------------------------
     std::string stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg);
+    void activity();                       // operator touched the screen: restarts the TX watchdog
+    int wdLeftSec() const;                 // caller holds the lock; -1 = watchdog not counting
     std::string spectrumJson();
     std::string command(const std::string& c, const std::map<std::string, std::string>& args);
     std::string expandMacro(const std::string& macro, const std::string& call, const std::string& rst) const;

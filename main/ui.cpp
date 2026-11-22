@@ -1498,6 +1498,13 @@ void refresh(lv_timer_t*) {
         if (ui_brightness_fn) ui_brightness_fn(shownBright);
     }
     if (!g_app) return;
+    {                                                   // any touch on the screen is operator activity (TX watchdog)
+        static uint32_t lastAct = 0;
+        if (lv_display_get_inactive_time(nullptr) < 400 && lv_tick_elaps(lastAct) > 2000) {
+            lastAct = lv_tick_get();
+            g_app->activity();
+        }
+    }
     App::UiState s;
     g_app->uiState(s);
     char b[96];

@@ -937,7 +937,7 @@ void App::tick() {
     if (seq.txEnabled && cfg.watchdogMin > 0 && mono - lastUiMono_ > (int64_t)cfg.watchdogMin * 60000) {
         seq.txEnabled = false;
         watchdogTripped_ = true;
-        status("TX watchdog: no browser connected, transmit disabled");
+        status("TX watchdog: no operator activity for " + std::to_string(cfg.watchdogMin) + " min, transmit disabled");
     }
 
     if (txState_ == ST_TX) {
@@ -1270,7 +1270,7 @@ void App::setMode(int m) {
 
 std::string App::command(const std::string& c, const std::map<std::string, std::string>& a) {
     std::lock_guard<std::mutex> lk(mtx_);
-    lastUiMono_ = clk::monoMs();
+    if (c != "time") lastUiMono_ = clk::monoMs();                   // the page's background clock sync is not operator activity
     auto ok = [] { return std::string("{\"ok\":true}"); };
     auto err = [](const std::string& e) { return "{\"ok\":false,\"err\":" + jstr(e) + "}"; };
     auto needCall = [&]() { return !validCall(cfg.call) || !validGrid(cfg.grid); };
@@ -1875,9 +1875,18 @@ std::string App::spectrumJson() {
     return o + "\"}";
 }
 
-std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg) {
+int App::wdLeftSec() const {                                       // seconds until the TX watchdog trips, -1 = not counting
+    if (!seq.txEnabled || cfg.watchdogMin <= 0) return -1;
+    int64_t left = (int64_t)cfg.watchdogMin * 60000 - (clk::monoMs() - lastUiMono_);
+    return left > 0 ? (int)(left / 1000) : 0;
+}
+void App::activity() {
     std::lock_guard<std::mutex> lk(mtx_);
     lastUiMono_ = clk::monoMs();
+}
+
+std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg) {
+    std::lock_guard<std::mutex> lk(mtx_);                          // polling is not operator activity (TX watchdog)
     int64_t now = clk::utcMs(), L = slotLen();
     uint64_t f = radio.freq.load();
     std::string o = "{";
@@ -1892,7 +1901,8 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     o += ",\"slot\":{\"len\":" + jnum(L) + ",\"t\":" + jnum(now % L) + ",\"par\":" + jnum((now / L) & 1) + "}";
     o += std::string(",\"tx\":{\"en\":") + jbool(seq.txEnabled) + ",\"wait\":" + jbool(seq.waitNext) + ",\"on\":" + jbool(txState_ == ST_TX) + ",\"msg\":" + jnum(seq.txMsg) + ",\"par\":" + jnum(seq.txParity);
     o += ",\"text\":" + jstr(txState_ == ST_TX ? (gen_ == GEN_TUNE ? "TUNE" : (gen_ == GEN_PSK ? "PSK31" : txText_)) : "") + ",\"last\":" + jstr(lastTx_);
-    o += ",\"freq\":" + jnum(cfg.txFreq) + ",\"lvl\":" + jnum(cfg.txLevel) + ",\"txLvl\":" + jnum((int)lroundf(txLevelNow())) + std::string(",\"tune\":") + jbool(tuneReq_) + std::string(",\"wd\":") + jbool(watchdogTripped_) + "}";
+    o += ",\"freq\":" + jnum(cfg.txFreq) + ",\"lvl\":" + jnum(cfg.txLevel) + ",\"txLvl\":" + jnum((int)lroundf(txLevelNow())) + std::string(",\"tune\":") + jbool(tuneReq_) + std::string(",\"wd\":") + jbool(watchdogTripped_) +
+         ",\"wdLeft\":" + jnum(wdLeftSec()) + ",\"wdMin\":" + jnum(cfg.watchdogMin) + "}";
     o += ",\"qso\":{\"dx\":" + jstr(seq.dxCall) + ",\"grid\":" + jstr(seq.dxGrid) + ",\"rs\":" + jnum(seq.rptSent) + ",\"rr\":" + jnum(seq.rptRcvd) + ",\"try\":" + jnum(seq.retries) + ",\"m\":[";
     for (int i = 1; i <= 7; i++) o += (i > 1 ? "," : "") + jstr(seq.compose(i));
     o += "]}";

@@ -33,6 +33,12 @@ header{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:8px 1
 .meter i{display:block;height:100%;width:0;background:var(--rx)}
 #slot{height:6px;background:#0b1014}#slot i{display:block;height:100%;width:0;background:var(--rx)}
 #slot.tx i{background:var(--tx)}
+main{padding-bottom:50px}
+#tl{position:fixed;right:14px;bottom:14px;z-index:60;display:flex;align-items:center;gap:8px;padding:6px 12px 6px 7px;border-radius:22px;background:rgba(11,16,20,.94);border:1px solid var(--line);font:600 14px var(--mono);color:var(--txt);box-shadow:0 2px 10px rgba(0,0,0,.5)}
+#tl i{width:20px;height:20px;border-radius:50%;background:#e5484d;box-shadow:0 0 8px #e5484d}
+#tl.g i{background:#2fd16a;box-shadow:0 0 10px #2fd16a}#tl.y i{background:#f2c230;box-shadow:0 0 10px #f2c230}
+#tl.on i{animation:tlp .8s ease-in-out infinite}@keyframes tlp{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){#tl.on i{animation:none;outline:2px solid #fff}}
 #banner{display:none;padding:7px 14px;background:#4a3a10;color:#ffe6a6;border-bottom:1px solid #6b5416}
 #txline{padding:5px 14px;font:13px var(--mono);background:var(--pan);border-bottom:1px solid var(--line);color:var(--dim);min-height:29px}
 #txline b{color:var(--tx)}
@@ -78,6 +84,7 @@ table.log th{color:var(--dim);font-weight:500}
 </header>
 <div id="slot"><i></i></div>
 <div id="banner"></div>
+<button id="tl" type="button" title="Transmit status. Tap to show you are here (restarts the TX watchdog)."><i></i><span>TX off</span></button>
 <div id="txline"></div>
 <nav>
   <button data-tab="op" class="on">Operate</button><button data-tab="qlog">SSB / CW log</button><button data-tab="log">Log</button><button data-tab="set">Settings</button>
@@ -342,6 +349,7 @@ function render(){
   lastTx=tx.on?tx.text:"";
   // buttons
   $("txen").className=tx.en?"txon":"";$("txen").textContent=tx.en?"TX enabled":"Enable TX";
+  trafficLight(tx);
   $("nextqso").classList.toggle("hide",!tx.wait);$("cq").classList.toggle("hide",!!tx.wait);
   $("tune").className=tx.tune?"txon":"";
   document.querySelectorAll("[data-mode]").forEach(b=>b.className=b.dataset.mode===S.mode?"on":"");
@@ -413,6 +421,28 @@ function render(){
   if(S.cfg) $("mycall").textContent=S.cfg.call?S.cfg.call+" "+S.cfg.grid:"Set your callsign in Settings";
 }
 
+// Floating traffic light: green = TX on with more than half the watchdog time left (pulses while
+// transmitting), yellow = past half, red = TX off, halted, watchdog or dead man's switch stopped it.
+function trafficLight(tx){
+  const el=$("tl"); let c="r", t=tx.wd?"TX timed out":"TX off";
+  if(tx.en){
+    c="g"; t="TX on";
+    if(tx.wdLeft>=0&&tx.wdMin>0){
+      if(tx.wdLeft<=tx.wdMin*30) c="y";
+      t="TX "+(tx.wdLeft>=60?Math.ceil(tx.wdLeft/60)+"m":tx.wdLeft+"s");
+    }
+  }
+  if(tx.on) t=t.replace(/^TX( on)?/,"TX now");
+  el.className=c+(tx.on?" on":""); el.querySelector("span").textContent=t;
+  el.title=(c==="r"?"Not transmitting. ":c==="y"?"Past half of the TX watchdog time. ":"Ready to transmit. ")+"Tap to show you are here (restarts the TX watchdog).";
+}
+$("tl").onclick=async()=>{await cmd("ping");poll();};
+// Any click or key on the page counts as operator activity for the TX watchdog (at most every 15 s).
+let lastPing=0;
+["pointerdown","keydown"].forEach(ev=>document.addEventListener(ev,e=>{
+  if(e.target.closest&&e.target.closest("#tl")) return;
+  const n=Date.now(); if(n-lastPing>15000){lastPing=n;cmd("ping");}
+},{passive:true}));
 async function poll(){
   if(busy) return; busy=true;
   try{
@@ -656,7 +686,7 @@ function demoState(){
   const d=[]; if(demoState.s!==slot&&t>13600){demoState.s=slot;
     [["CQ K1ABC FN42",-7,1012],["W9XYZ N0CALL -12",3,1540],["CQ DX VK2DEF QF56",-18,2210],["G4AAA EA3BB R-09",-11,640]].forEach((x,i)=>d.push({id:++demoState.id,t:slot*15000,p:slot&1,snr:x[1],dt:.1*i,f:x[2],m:x[0]}));}
   return {utc:now,clk:{ok:true,src:"demo",age:1},mode:"FT8",op:1,radio:{ser:true,aud:true,civ:true,model:"IC-7100",freq:14074000,band:"20m",rmode:1,data:1,ptt:false,s:95,po:0,swr:0,alc:0,wpm:22},
-    slot:{len:15000,t,par:slot&1},tx:{en:false,on:false,msg:6,par:0,text:"",last:"",freq:1500,lvl:50,tune:false,wd:false},
+    slot:{len:15000,t,par:slot&1},tx:{en:false,on:false,msg:6,par:0,text:"",last:"",freq:1500,lvl:50,tune:false,wd:false,wdLeft:-1,wdMin:6},
     qso:{dx:"",grid:"",rs:-99,rr:-99,try:0,m:["","","","","","CQ W9XYZ EN37",""]},lvl:-22,dec:d,decId:demoState.id,decMs:640,
     psk:{seq:0,f:1000,afc:1000,q:20,text:""},log:{n:0,all:0,behind:false,ok:0,fail:0,last:[]},msg:"",net:"Preview mode: open this page from the device to control the radio",cfg:{call:"W9XYZ",grid:"EN37",txLevel:"50",macro1:"CQ|CQ CQ DE {MYCALL} {MYCALL} K",macro2:"His call|{CALL}",macro3:"Report|{CALL} UR {RST} {RST} BK",macro4:"TU 73|TU 73 DE {MYCALL} E E",macro5:"My call|{MYCALL}",macro6:"AGN?|AGN?"}};
 }
