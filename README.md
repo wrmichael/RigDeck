@@ -449,8 +449,10 @@ sets its clock from them:
   "GPS sentence delay" (default 150 ms) allows for that. If decodes show a steady DT offset,
   lower the delay when DT is mostly negative and raise it when mostly positive.
 
-This opens a second serial port, which an ESP32-S3 has no spare USB channels for; it is meant
-for the ESP32-P4.
+The radio's GPS port is only opened when needed: it stays open until the clock is set (plus half
+a minute of averaging), then closes and opens again an hour later for a fresh sync. With
+internet time (NTP, when RigDeck is on your home network) it is not opened at all. This keeps
+USB and memory free for the audio and the microSD card. It is meant for the ESP32-P4.
 
 ## Logging
 

@@ -12,6 +12,7 @@
 // bulk in/out (2) leaves exactly one for audio, so the receive and transmit audio streams are never
 // open at the same time. FT8 is half duplex anyway. ESP32-P4 (16 channels) has room to spare.
 #include "platform.h"
+#include "clock.h"
 #include <cstring>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -195,7 +196,7 @@ static int buildProbes(uint8_t protos, Probe* out) {
 
 static void serialTask(void*) {
     int gpsFails = 0;
-    int64_t gpsNextUs = 0;
+    int64_t gpsNextUs = 0, gpsOpenedUs = 0, gpsFixAt = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         uint8_t addrs[12];
@@ -246,13 +247,39 @@ static void serialTask(void*) {
             rad.addr = (uint8_t)s_app->cfg.civAddr;
         }
         if (s_cdc) {
+            // The radio's GPS port is only open while it is needed: until it has set the clock (plus
+            // half a minute of averaging), then it is closed again and reopened an hour later for a
+            // fresh sync. With internet time (NTP) it is not opened at all. Kept open, it holds USB
+            // and internal memory the audio streams and the microSD card also need.
+            const int64_t nowUs = esp_timer_get_time();
+            if (s_gps) {
+                const int64_t openMs = (nowUs - gpsOpenedUs) / 1000;
+                const int64_t sinceFix = clk::monoMs() - s_app->gpsLastMono.load();
+                bool synced = gpsFixAt == 0 && sinceFix < 2000 && openMs > 2000;
+                if (synced) gpsFixAt = nowUs;
+                const char* why = nullptr;
+                if (s_app->ntpSynced) why = "internet time (NTP) is in use";
+                else if (gpsFixAt && nowUs - gpsFixAt > 30 * 1000000LL) why = "clock set";
+                else if (!gpsFixAt && openMs > 180000) why = "no time from it in 3 minutes";
+                if (why) {
+                    xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
+                    cdc_acm_dev_hdl_t g = s_gps;
+                    s_gps = nullptr;
+                    xSemaphoreGive(s_cdcMtx);
+                    if (g) cdc_acm_host_close(g);
+                    int mins = gpsFixAt ? 60 : 10;
+                    gpsNextUs = nowUs + (int64_t)mins * 60 * 1000000;
+                    ESP_LOGI(TAG, "radio's GPS port closed (%s); next sync in %d min", why, mins);
+                }
+                continue;
+            }
             // The GPS port: when it cannot be opened (on the IC-705 the USB host often has no endpoint
             // memory left next to CI-V and audio), back off instead of retrying every second; each
             // failed attempt costs memory and floods the log.
-            if (s_app->usbSerial && s_app->cfg.gpsClock && !s_gps && gpsFails < 3 && esp_timer_get_time() >= gpsNextUs &&
+            if (s_app->usbSerial && s_app->cfg.gpsClock && !s_app->ntpSynced && !s_gps && gpsFails < 3 && nowUs >= gpsNextUs &&
                 usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) == ESP_OK) {
                 openGpsPort(addrs, n);
-                if (s_gps) gpsFails = 0;
+                if (s_gps) { gpsFails = 0; gpsOpenedUs = esp_timer_get_time(); gpsFixAt = 0; }
                 else {
                     // Each failed open can leave USB host memory behind that the audio streams need when
                     // they restart, so give up after 3 tries until the radio is plugged in again.
@@ -268,6 +295,7 @@ static void serialTask(void*) {
         }
         gpsFails = 0;
         gpsNextUs = 0;
+        gpsFixAt = 0;
         if (usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) != ESP_OK) continue;
         Radio& radio = s_app->radio;
         for (int i = 0; i < n && !s_app->usbSerial; i++) {
@@ -394,8 +422,9 @@ static void handleEvent(const AudioEv& e) {
     dc.addr = e.addr;
     dc.iface_num = e.iface;
     // Ring buffers come from internal RAM, which the USB host, Wi-Fi link and display also need:
-    // 100 ms / 200 ms of 16-bit stereo (about 67 / 133 ms at 24 bits, still plenty).
-    dc.buffer_size = tx ? 19200 : 38400;
+    // 100 ms / 150 ms of 16-bit stereo (about 67 / 100 ms at 24 bits); the audio task empties the
+    // receive buffer every 10 ms.
+    dc.buffer_size = tx ? 19200 : 28800;
     dc.buffer_threshold = dc.buffer_size / 4;
     dc.callback = uacDeviceCb;
     uac_host_device_handle_t h = nullptr;
