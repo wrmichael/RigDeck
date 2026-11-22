@@ -24,6 +24,8 @@ static bool s_sntp = false;
 static int s_retry = 0;
 static App::StaStatus s_st;
 static esp_timer_handle_t s_retryTimer = nullptr;
+static TaskHandle_t s_ctlTask = nullptr;
+static std::atomic<int> s_ctlReq{0};                // 1 join, 2 leave
 
 static void publish() {
     std::string s = "AP \"" + s_app->cfg.apSsid + "\" 192.168.4.1";
@@ -212,7 +214,20 @@ void net_start(App& app) {
     td.callback = [](void*) { esp_wifi_disconnect(); };
     td.name = "sta-drop";
     esp_timer_create(&td, &s_dropTimer);
-    app.wifiControl = [](bool connect) { if (connect) staJoin(); else staLeave(); };
+    // Settings / the Connect button call this with the app's lock held, and joining publishes its
+    // state through the app (which takes that lock): so the work is handed to a small task.
+    xTaskCreate([](void*) {
+        for (;;) {
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+            int r = s_ctlReq.exchange(0);
+            if (r == 1) staJoin();
+            else if (r == 2) staLeave();
+        }
+    }, "sta-ctl", 4096, nullptr, 5, &s_ctlTask);
+    app.wifiControl = [](bool connect) {
+        s_ctlReq = connect ? 1 : 2;
+        if (s_ctlTask) xTaskNotifyGive(s_ctlTask);
+    };
 
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&init));
