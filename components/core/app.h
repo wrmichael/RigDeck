@@ -166,7 +166,10 @@ private:
     int64_t jobSlot_ = -1;
     bool jobPending_ = false;
     std::atomic<bool> decoding_{false};
-    std::deque<Decode> decodes_;
+    // The last 150 decodes, in PSRAM: kept in internal RAM they took ~20 kB of it once the list was
+    // full, and the microSD card's reads then failed for want of a DMA buffer.
+    struct DecodeKept { uint32_t id; int64_t slotMs; int parity, snr; float dt, freq; PStr text; };
+    std::deque<DecodeKept, PsAlloc<DecodeKept>> decodes_;
     uint32_t nextId_ = 0;
     std::atomic<int> decodeMs_{0};
 
@@ -191,7 +194,7 @@ private:
     std::string stationFile(const char* what) const { return logDir_ + "/" + station_ + "_" + what; }
     void logOpen();                                    // pick the station's files (moving older ones in) and load them
     int eraseAllLogs();                                // every log file of every station; returns files removed
-    std::deque<QsoRecord> recent_;
+    std::deque<QsoRecord, PsAlloc<QsoRecord>> recent_;
     HashIndex worked_;                                 // "CALL|band"
     HashIndex workedDay_;                              // "CALL|band|mode|YYYYMMDD" (parks: once a day)
     static std::string dayKey(std::string_view rec);

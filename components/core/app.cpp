@@ -689,7 +689,7 @@ bool App::decodeOnce() {
             d.id = ++nextId_;
             d.slotMs = slot * slotLen();
             d.parity = (int)(slot & 1);
-            decodes_.push_back(d);
+            decodes_.push_back({d.id, d.slotMs, d.parity, d.snr, d.dt, d.freq, pstr(d.text)});
         }
         while (decodes_.size() > 150) decodes_.pop_front();
         syncSeq();
@@ -1335,7 +1335,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         for (auto& d : decodes_) {
             if (d.id != id) continue;
             ParsedMsg p;
-            if (!parseMsg(d.text, p) || p.from.empty() || p.from == cfg.call) return err("Nothing to call in that message");
+            if (!parseMsg(sstr(d.text), p) || p.from.empty() || p.from == cfg.call) return err("Nothing to call in that message");
             syncSeq();
             if (p.to == cfg.call && p.kind != K_OTHER && p.kind != K_CQ) seq.respondTo(p, d.snr, d.parity);
             else seq.callStation(p.from, (p.kind == K_CQ || p.kind == K_GRID) ? p.grid : "", d.snr, d.parity);
@@ -1797,9 +1797,9 @@ void App::uiDecodes(uint32_t since, std::vector<UiDecode>& out) {
     std::lock_guard<std::mutex> lk(mtx_);
     for (auto& d : decodes_) {
         if (d.id <= since) continue;
-        UiDecode r{d.id, d.slotMs, d.snr, d.dt, (int)lroundf(d.freq), d.text, false, false};
-        r.cq = d.text.compare(0, 3, "CQ ") == 0;
-        r.toMe = !cfg.call.empty() && d.text.compare(0, cfg.call.size() + 1, cfg.call + " ") == 0;
+        UiDecode r{d.id, d.slotMs, d.snr, d.dt, (int)lroundf(d.freq), sstr(d.text), false, false};
+        r.cq = r.text.compare(0, 3, "CQ ") == 0;
+        r.toMe = !cfg.call.empty() && r.text.compare(0, cfg.call.size() + 1, cfg.call + " ") == 0;
         out.push_back(r);
     }
 }
@@ -1843,7 +1843,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
         if (d.id <= sinceDecode) continue;
         char b[96];
         snprintf(b, sizeof b, "%s{\"id\":%u,\"t\":%lld,\"p\":%d,\"snr\":%d,\"dt\":%.1f,\"f\":%d,\"m\":", first ? "" : ",", (unsigned)d.id, (long long)d.slotMs, d.parity, d.snr, d.dt, (int)lroundf(d.freq));
-        o += b + jstr(d.text) + "}";
+        o += b + jstr(sstr(d.text)) + "}";
         first = false;
     }
     o += "],\"decId\":" + jnum(nextId_) + ",\"decMs\":" + jnum(decodeMs_.load());

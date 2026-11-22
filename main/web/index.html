@@ -249,11 +249,13 @@ table.log th{color:var(--dim);font-weight:500}
       <label for="dvContrast">Screen contrast</label><span><input type="range" id="dvContrast" min="50" max="150" style="width:220px;vertical-align:middle"> <span id="dvContrastV"></span></span>
     </div>
     <p class="hint">Brightness changes at once. Contrast (100 % = normal) applies after a restart.</p>
-    <div id="dvLogs" class="hint"></div>
-    <label><input type="checkbox" id="dvConsole"> Console log to the microSD card (RigDeck/logs/console_<i>date</i>_<i>time</i>.txt, a new file each start and each day, kept 7 days)</label>
+    <h4 style="margin:14px 0 4px">Logbook (contacts) and storage</h4>
     <div id="dvStor" style="white-space:pre-line"></div>
-    <div class="row" style="margin-top:8px"><button id="eraseall" class="danger">Erase all logs (every station)</button> <button id="sdformat" class="danger">Format microSD card</button></div>
+    <div class="row" style="margin-top:8px"><button id="eraseall" class="danger">Erase all contact logs (every station)</button> <button id="sdformat" class="danger">Format microSD card</button></div>
     <p class="hint">With a microSD card (FAT32) in at start-up the logs live on the card, in the RigDeck folder, one set of files per station callsign (e.g. AC9HP_log.adi, AC9HP_archive.adi). Contacts logged in the board's memory move onto the card at that start. On the card, deleted contacts are kept for good in AC9HP_deleted.adi and a cleared current log is kept as AC9HP_deleted_<i>date</i>_<i>time</i>.adi. Insert or remove the card with the power off.</p>
+    <h4 style="margin:14px 0 4px">Console logs (for troubleshooting)</h4>
+    <label><input type="checkbox" id="dvConsole"> Copy the console log to the microSD card (RigDeck/logs/console_<i>date</i>_<i>time</i>.txt, a new file each start and each day, kept 7 days)</label>
+    <div id="dvLogs" class="hint"></div>
     <h3 style="margin-top:16px">Clock</h3>
     <div class="row"><span id="clkinfo"></span><button data-trim="-100">-0.1 s</button><button data-trim="-20">-20 ms</button><button data-trim="20">+20 ms</button><button data-trim="100">+0.1 s</button></div>
     <p class="hint">Without internet or GPS the clock follows this browser's clock each time the page is open. If most stations show the same DT offset, nudge the clock until DT is near zero. With GPS on, change "GPS sentence delay" instead: lower it if DT values are mostly negative, raise it if they are mostly positive.</p>
@@ -498,7 +500,7 @@ $("pskclr").onclick=()=>$("pskrx").textContent="";
 $("psklog").onclick=()=>cmd("logqso",{call:$("pskcall").value,rs:$("pskrs").value,rr:$("pskrr").value}).then(j=>{if(j.ok)banner("Logged "+$("pskcall").value.toUpperCase());});
 $("clrlog").onclick=()=>{if(confirm("Clear the current log? Its contacts stay in the archive."))cmd("clearlog",{confirm:"yes"});};
 $("eraseall").onclick=async()=>{
-  if(prompt("Erase EVERY log on this RigDeck: current logs, archives, deleted contacts and cleared logs of all station callsigns, on the card and in the board's memory. The worked-before list goes too. There is no undo.\n\nDownload what you want to keep first. Type NUKE to erase:")!=="NUKE") return;
+  if(prompt("Erase EVERY contact log on this RigDeck (not the console logs): current logs, archives, deleted contacts and cleared logs of all station callsigns, on the card and in the board's memory. The worked-before list goes too. There is no undo.\n\nDownload what you want to keep first. Type NUKE to erase:")!=="NUKE") return;
   const j=await cmd("eraselogs",{confirm:"yes"});
   if(j&&j.ok) banner(`All logs erased (${j.files} files)`);
 };

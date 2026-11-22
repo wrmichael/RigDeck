@@ -313,7 +313,7 @@ void onConfirmYes(lv_event_t*) {
         return;
     }
     if (c && !strcmp(c, "nuke1")) {                    // erasing every log asks twice
-        confirm("Erase all logs - last chance", "Really erase every contact of every station?\nThere is no undo.", "Erase all", "eraselogs");
+        confirm("Erase contact logs - last chance", "Really erase every contact of every station?\nThere is no undo.", "Erase all", "eraselogs");
         return;
     }
     if (c && cmd(c, args)) {
@@ -1259,7 +1259,7 @@ void onSdFormat(lv_event_t*) {
             "deleted/cleared logs on the card are lost.", "Format", "sdfmt1");
 }
 void onNuke(lv_event_t*) {
-    confirm("Erase all logs", "Erase EVERY log on this RigDeck: current logs, archives, deleted contacts and cleared logs of all "
+    confirm("Erase all contact logs", "Erase EVERY contact log on this RigDeck: current logs, archives, deleted contacts and cleared logs of all "
             "station callsigns, on the card and in the board's memory? Download anything you want to keep first.", "Erase", "nuke1");
 }
 
@@ -1429,7 +1429,7 @@ void buildSettingsScreen() {
         lv_label_set_long_mode(sStor, LV_LABEL_LONG_MODE_WRAP);
         label(pg, 0, 300, f16, DIM, "Logs go on a microSD card (FAT32) when one is in at start-up; anything logged in the board's\n"
                                     "memory moves onto the card then. Files are named after the station callsign.");
-        button(pg, 0, 356, 260, 52, LV_SYMBOL_TRASH " Erase all logs", onNuke, nullptr, 0x9a2a2a);
+        button(pg, 0, 356, 260, 52, LV_SYMBOL_TRASH " Erase contact logs", onNuke, nullptr, 0x9a2a2a);
         button(pg, 280, 356, 300, 52, LV_SYMBOL_SD_CARD " Format microSD card", onSdFormat, nullptr, 0x9a2a2a);
         sConsole = lv_switch_create(pg);
         lv_obj_set_pos(sConsole, 0, 428);
@@ -1437,7 +1437,7 @@ void buildSettingsScreen() {
         lv_obj_set_style_bg_color(sConsole, C(LINE), LV_PART_MAIN);
         lv_obj_set_style_bg_color(sConsole, C(AMB), LV_PART_INDICATOR | LV_STATE_CHECKED);
         lv_obj_add_event_cb(sConsole, onConsoleLog, LV_EVENT_VALUE_CHANGED, nullptr);
-        label(pg, 86, 434, f20, TXT, "Console log to the card (RigDeck/logs, one file per day, kept 7 days)");
+        label(pg, 86, 434, f20, TXT, "Console log (troubleshooting) to the card, kept 7 days");
     }
 
     sKb = lv_keyboard_create(scrSettings);

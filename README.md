@@ -166,7 +166,7 @@ baud-rate and GPS changes). CW macros have a label box (the button name) and a t
 **Device** tab (also on the web page, Settings, Device): **Brightness** (changes at once),
 **Contrast** (100 % = as designed; higher makes panels darker and text brighter, lower greys
 everything; applies after a restart, which it offers), where the log is and the free space in the board's memory and on the microSD card
-(shown separately), a rough count of contacts that still fit, and **Erase all logs** (asks twice;
+(shown separately), a rough count of contacts that still fit, and **Erase contact logs** (asks twice;
 on the web page you type NUKE). **Format microSD card** (asks twice; on the web page you type
 FORMAT) erases the card and formats all of it as FAT32: this station's log is parked in the board's
 memory meanwhile and put back; other files on the card are lost. Use it for a new card (most
@@ -459,7 +459,7 @@ for the ESP32-P4.
   - the **archive** (`AC9HP_archive.adi`), which keeps every contact and is not touched by clearing.
   Typical use: download the current log into your logging program, press "Clear current log",
   and the next download holds only new contacts. "Download full archive" gives you everything.
-  "Erase all logs" (Settings, Device; asks twice) is the only thing that deletes the archive.
+  "Erase contact logs" (Settings, Device; asks twice) is the only thing that deletes the archive.
   Worked-before (per band) is rebuilt from both files at boot, so clearing does not reset it.
 - **One log per station:** changing the callsign in Settings switches to that callsign's files
   (a new, empty log the first time); changing it back brings the old log back. The operator
