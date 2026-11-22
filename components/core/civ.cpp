@@ -263,7 +263,7 @@ void Radio::setProto(int p) {
     q_.clear();
     line_.clear();
     parser_ = CivParser();
-    pcHead_ = 0; yMode_ = 0; textId_ = 0; pollStep_ = 0; extStep_ = 0;
+    pcHead_ = 0; yMode_ = 0; textId_ = 0; ecModel_ = -1; omAsked_ = false; pollStep_ = 0; extStep_ = 0;
     freq = 0; mode = -1; dataMode = -1; filter = -1; att = -1; keySpeed = -1;
     smeter = 0; po = 0; swr = 0; alc = 0; pttState = false;
     for (auto& l : level) l = -1;
@@ -286,7 +286,7 @@ const char* Radio::modelName() const {
     case RP_NONE: return "No CAT";
     case RP_KENWOOD:
         switch (textId_) {
-        case 17: return "Elecraft K2/K3";
+        case 17: return ecModel_ == 2 ? "KX2" : ecModel_ == 1 ? "KX3" : ecModel_ == 0 ? "K3" : ecModel_ == 3 ? "Elecraft" : "Elecraft K2";
         case 19: return "TS-2000";
         case 20: return "TS-480";
         case 21: return "TS-590S";

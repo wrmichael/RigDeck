@@ -187,6 +187,7 @@ Radios and interfaces:
 | IC-7300, IC-7610, IC-9700, IC-905 | one USB cable (CI-V + sound card) | should work, untested |
 | FTDX10, FT-991A, FT-710, FTDX101 | one USB cable (CAT at the radio's rate + sound card) | should work, untested |
 | TS-2000, TS-480, TS-590, K2, K3 | Digirig with the radio's CAT cable (or a CP2102 USB-RS232 cable + sound card on a hub) | should work, untested |
+| Elecraft KX2, KX3 | Digirig with the Elecraft (ACC1, 3.5 mm) CAT cable; audio to the mic and phones jacks; PTT "CAT command" | should work, untested |
 | SignaLink USB (any radio) | Radio "No CAT": the SignaLink keys the radio on its own | should work, untested |
 | Digirig without a CAT cable | Radio "No CAT", PTT "Serial RTS" | should work, untested |
 
@@ -196,6 +197,10 @@ Radios and interfaces:
   the exact frequency; web page: type e.g. `7.030 CW` or `14.250 USB`). That frequency and mode go
   into the log and are remembered across restarts.
   PTT is VOX (the SignaLink keys on the audio) unless Settings > PTT says RTS or DTR.
+- **Elecraft:** all models answer ID017; the K3, KX3 and KX2 are told apart by their OM answer and
+  shown as K3 / KX3 / KX2. On those, FT8 runs in DATA mode, DATA A (MD6, DT0), and RF power is set in
+  watts (KX2 up to 10 W, KX3 15 W). The K2 has no DATA mode: FT8 runs in USB. KX2 / KX3: the CAT
+  rate is the radio's RS232 menu setting (38400 by default, which RigDeck tries).
 - **PTT** (Settings > Radio): CAT command (default), the serial port's **RTS** (Digirig) or **DTR**
   line, or **VOX**. RTS / DTR work with CAT on the same port too.
 - Only Silicon Labs CP210x USB-serial chips (as in Digirig and most radios) are driven; FTDI,

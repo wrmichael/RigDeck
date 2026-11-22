@@ -6,8 +6,11 @@
 //   head digit (1 field head, 2 SPA-1), KM/KY for keyer text.
 // QMX (CAT manual 1_04): TS-480 subset. IF carries frequency, TX state and mode; TQ keys the
 //   transmitter; MD6 is the digital mode; KY sends keyer text.
-// Kenwood / Elecraft (TS-2000, TS-480, TS-590, K2, K3): the same IF layout and FA, TX; / RX; for
-//   PTT, Kenwood's mode digits (1 LSB 2 USB 3 CW 4 FM 5 AM 6 FSK 7 CW-R 9 FSK-R); FT8 runs in USB.
+// Kenwood / Elecraft (TS-2000, TS-480, TS-590, K2, K3, KX2, KX3): the same IF layout and FA, TX; / RX;
+//   for PTT, Kenwood's mode digits (1 LSB 2 USB 3 CW 4 FM 5 AM 6 FSK 7 CW-R 9 FSK-R); FT8 runs in USB.
+//   Elecraft answers ID017 on all models; the K3 / KX3 / KX2 also answer OM; (product number at the
+//   end: 00 K3, 01 KX3, 02 KX2). On those, mode 6 is DATA: FT8 uses DATA (MD6) with DATA A (DT0),
+//   and PC is the power in watts (KX2 up to 10 W, KX3 15 W, K3 100 W). The K2 answers OM with ?.
 // Other Yaesu radios (FTDX10, FT-991A, FT-710, FTDX101, FT-891): the FTX-1 commands, but PC is
 //   three digits of watts without the FTX-1's head digit.
 #include "civ.h"
@@ -46,11 +49,19 @@ void Radio::tSetFreq(uint64_t hz) {
 
 void Radio::tSetUsbData() {
     if (proto == RP_YAESU) { sendText("MD0C;"); sendText("MD0;"); }      // DATA-U
+    else if (proto == RP_KENWOOD && ecModel_ >= 0) { sendText("MD6;"); sendText("DT0;"); sendText("IF;"); }   // Elecraft DATA A
     else if (proto == RP_KENWOOD) { sendText("MD2;"); sendText("IF;"); } // USB
     else { sendText("Q90;"); sendText("MD6;"); sendText("MD;"); }        // IQ mode off, DIGI
 }
 
 void Radio::tSetRfPower(int percent) {
+    if (proto == RP_KENWOOD && ecModel_ >= 0) {                          // K3 / KX3 / KX2: PC + watts
+        int w = (percent * ecMaxW() + 50) / 100;
+        if (w < 1) w = 1;
+        sendText(fmt("PC%03lld;", w));
+        sendText("PC;");
+        return;
+    }
     if (proto == RP_YAESU && pcHead_ == 0 && textId_ && textId_ != 800) {   // FTDX10 and friends: PC + watts
         int w = (percent * 100 + 50) / 100;
         if (w < 5) w = 5;
@@ -97,6 +108,7 @@ void Radio::tSetMode(uint8_t m) {
 }
 
 void Radio::tSetData(bool on) {
+    if (proto == RP_KENWOOD && ecModel_ >= 0) { sendText(on ? "MD6;" : "MD2;"); if (on) sendText("DT0;"); sendText("IF;"); return; }
     if (proto == RP_KENWOOD) { ng++; return; }                          // no data mode: FT8 runs in USB
     int m = mode.load();
     char c;
@@ -193,7 +205,8 @@ void Radio::textPoll() {                                                 // mtx_
         }
     } else if (proto == RP_KENWOOD) {
         static const char* rx[] = {"IF;", "IF;", "IF;", "KS;"};
-        push(pttWanted ? "IF;" : rx[step % 4]);
+        if (!pttWanted && ecModel_ >= 0 && step % 8 == 6) push("PC;");          // Elecraft: power setting
+        else push(pttWanted ? "IF;" : rx[step % 4]);
     } else {
         static const char* rx[] = {"IF;", "SM;", "IF;", "KS;"};
         static const char* tx[] = {"IF;", "PC;", "SW;"};
@@ -260,7 +273,18 @@ void Radio::textAnswer(const std::string& a) {
                    (c == "TX" && a.size() == 3) || (c == "RM" && a.size() >= 9);
     else alive = (c == "ID" && a.size() == 5) || (c == "IF" && a.size() >= 30);
     if (alive) lastRxMono = clk::monoMs();
-    if (c == "ID") { if (alive) textId_ = atoi(a.c_str() + 2); return; }
+    if (c == "ID") {
+        if (alive) textId_ = atoi(a.c_str() + 2);
+        if (alive && proto == RP_KENWOOD && textId_ == 17 && !omAsked_) { omAsked_ = true; sendText("OM;"); }   // which Elecraft?
+        return;
+    }
+    if (c == "OM" && proto == RP_KENWOOD) {                              // K3 / KX3 / KX2: product number at the end
+        std::string t = a;
+        while (!t.empty() && t.back() == ' ') t.pop_back();
+        int pid = t.size() >= 4 && isdigit((unsigned char)t[t.size() - 1]) && isdigit((unsigned char)t[t.size() - 2]) ? atoi(t.c_str() + t.size() - 2) : 3;
+        ecModel_ = pid <= 2 ? pid : 3;
+        return;
+    }
     if (!connected()) return;                                            // nothing is believed until the radio is identified
     if (c == "FA") { freq = strtoull(a.c_str() + 2, nullptr, 10); return; }
     if (c == "KS") { keySpeed = num(a, 2); return; }
@@ -295,12 +319,19 @@ void Radio::textAnswer(const std::string& a) {
     }
     // QMX and Kenwood / Elecraft: the same IF layout (TS-480)
     const bool ken = proto == RP_KENWOOD;
+    // Elecraft K3 / KX: 6 is DATA (USB side), 9 DATA-REV
+    auto ecMode = [&](char m) {
+        if (m == '6') { mode = 0x01; dataMode = 1; }
+        else if (m == '9') { mode = 0x00; dataMode = 1; }
+        else fromKenwoodMode(m, mode, dataMode);
+    };
     if (c == "IF" && a.size() >= 30) {
         freq = strtoull(a.substr(2, 11).c_str(), nullptr, 10);
         if (pttMethod.load() == PTT_CAT) pttState = a[28] == '1';
-        if (ken) fromKenwoodMode(a[29], mode, dataMode); else fromQmxMode(a[29], mode, dataMode);
+        if (ken && ecModel_ >= 0) ecMode(a[29]); else if (ken) fromKenwoodMode(a[29], mode, dataMode); else fromQmxMode(a[29], mode, dataMode);
     }
-    else if (c == "MD") { if (ken) fromKenwoodMode(a[2], mode, dataMode); else fromQmxMode(a[2], mode, dataMode); }
+    else if (c == "MD") { if (ken && ecModel_ >= 0) ecMode(a[2]); else if (ken) fromKenwoodMode(a[2], mode, dataMode); else fromQmxMode(a[2], mode, dataMode); }
+    else if (ken && ecModel_ >= 0 && c == "PC" && a.size() >= 5) level[0x0A] = num(a, 2, 3) * 100 / ecMaxW();
     else if (ken) return;                                                // the rest is the QMX's
     else if (c == "TQ") pttState = a[2] == '1';
     else if (c == "SM") { int v = num(a, 2) * 120 / 54; smeter = v < 0 ? 0 : v > 255 ? 255 : v; }   // dB -> Icom scale, S9 = 120

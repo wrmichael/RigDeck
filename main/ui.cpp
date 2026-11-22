@@ -1093,7 +1093,7 @@ const SField kSet[] = {
     {"watchdogMin", "TX watchdog, minutes", 1, SK_NUM, 3, nullptr, nullptr, ""},
     {"cwWpm", "FT-CW speed, wpm", 1, SK_NUM, 2, nullptr, nullptr, "20 - 50, same at both stations"},
     {"confirmQso", "POTA mode: confirm each QSO", 1, SK_DROP, 0, "Off\nOn: press Next QSO after each", "0|1", nullptr},
-    {"radioType", "Radio", 2, SK_DROP, 0, "Find automatically\nIcom (CI-V)\nYaesu (FTX-1, FTDX10, FT-991A...)\nQRP Labs QMX / QMX+\nKenwood / Elecraft (TS-2000, K2...)\nNo CAT (SignaLink / sound card)", "0|1|2|3|4|5", nullptr},
+    {"radioType", "Radio", 2, SK_DROP, 0, "Find automatically\nIcom (CI-V)\nYaesu (FTX-1, FTDX10, FT-991A...)\nQRP Labs QMX / QMX+\nKenwood / Elecraft (TS-2000, K2, KX2...)\nNo CAT (SignaLink / sound card)", "0|1|2|3|4|5", nullptr},
     {"pttMethod", "PTT", 2, SK_DROP, 0, "CAT command\nSerial RTS (Digirig)\nSerial DTR\nVOX (sound card keys it)", "0|1|2|3", nullptr},
     {"catBaud", "CAT rate tried first", 2, SK_DROP, 0, "4800\n9600\n19200\n38400\n115200", "4800|9600|19200|38400|115200", nullptr},
     {"civAddr", "CI-V address (hex)", 2, SK_HEX, 4, nullptr, nullptr, "88 7100 A4 705 94 7300 A2 9700"},

@@ -119,6 +119,9 @@ private:
     int pcHead_ = 0;                                   // Yaesu FTX-1: 1 = field head (10 W), 2 = SPA-1 (100 W)
     int yMode_ = 0;                                    // last raw mode character from a text radio
     int textId_ = 0;                                   // the radio's answer to ID; (model number)
+    int ecModel_ = -1;                                 // Elecraft (ID 017) from OM;: 0 K3, 1 KX3, 2 KX2, 3 other; -1 K2 / not asked
+    bool omAsked_ = false;
+    int ecMaxW() const { return ecModel_ == 2 ? 10 : ecModel_ == 1 ? 15 : 100; }
     std::mutex mtx_;
     CivParser parser_;
     std::deque<std::vector<uint8_t>> q_;

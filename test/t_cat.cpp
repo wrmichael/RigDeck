@@ -19,6 +19,8 @@ static int64_t mono() { return simMs; }
 struct FakeText {
     Radio* r = nullptr;
     bool yaesu = true, kenwood = false;
+    int ecProduct = -1;                     // Elecraft: -1 = K2 (no OM), else the OM product number (2 = KX2)
+    std::string dt = "0";
     std::string yid = "ID0800";
     uint64_t freq = 14074000;
     char mode = '2';
@@ -69,7 +71,11 @@ struct FakeText {
     }
     void kenwoodCmd(const std::string& c) {             // TS-2000 (no TQ, no MD6, TX; / RX;)
         char b[64];
-        if (c == "ID") say("ID019");
+        if (c == "ID") say(ecProduct == -2 ? "ID019" : "ID017");
+        else if (c == "OM") { if (ecProduct < 0) say("?"); else { snprintf(b, sizeof b, "OM AP----------%02d", ecProduct); say(b); } }
+        else if (c.compare(0, 2, "DT") == 0 && c.size() == 3) dt = c.substr(2);
+        else if (c == "PC") { snprintf(b, sizeof b, "PC%03d", watts); say(b); }
+        else if (c.compare(0, 2, "PC") == 0 && c.size() == 5) watts = atoi(c.c_str() + 2);
         else if (c == "IF") {
             snprintf(b, sizeof b, "IF%011llu     +000000000%d%c%d00000 ", (unsigned long long)freq, tx ? 1 : 0, mode, vfo);
             say(b);
@@ -185,7 +191,7 @@ int main() {
         CHECK(f.vfo == 1);
     }
     {   // ---------------- Kenwood TS-2000
-        Radio r; FakeText f; f.r = &r; f.kenwood = true; f.mode = '2'; f.freq = 7074000;
+        Radio r; FakeText f; f.r = &r; f.kenwood = true; f.ecProduct = -2; f.mode = '2'; f.freq = 7074000;
         r.write = [&f](const uint8_t* d, size_t n) { f.rx(d, n); return true; };
         r.setProto(RP_KENWOOD);
         r.requestId();
@@ -213,6 +219,28 @@ int main() {
         r.pttMethod = PTT_CAT;
         r.setProto(RP_YAESU); run(r, 4000);
         CHECK(!r.connected());
+    }
+    {   // ---------------- Elecraft KX2 (e.g. through a Digirig): ID017 + OM ...02; FT8 in DATA A
+        Radio r; FakeText f; f.r = &r; f.kenwood = true; f.ecProduct = 2; f.mode = '2'; f.freq = 14074000; f.watts = 5;
+        r.write = [&f](const uint8_t* d, size_t n) { f.rx(d, n); return true; };
+        r.setProto(RP_KENWOOD);
+        r.requestId();
+        run(r, 3000);
+        CHECK(r.connected() && !strcmp(r.modelName(), "KX2"));
+        r.setFreq(7074000); r.setUsbData(); run(r, 2000);
+        CHECK(f.freq == 7074000 && f.mode == '6' && f.dt == "0" && r.mode == 1 && r.dataMode == 1);
+        r.setRfPower(80); run(r, 2000);
+        CHECK(f.watts == 8 && r.level[0x0A] == 80);
+        r.ptt(true); run(r, 600);
+        CHECK(f.tx); r.ptt(false); run(r, 600); CHECK(!f.tx);
+        // a K2: no OM, FT8 in USB
+        Radio k; FakeText g; g.r = &k; g.kenwood = true; g.ecProduct = -1; g.mode = '1';
+        k.write = [&g](const uint8_t* d, size_t n) { g.rx(d, n); return true; };
+        k.setProto(RP_KENWOOD);
+        k.requestId();
+        run(k, 3000);
+        k.setUsbData(); run(k, 1500);
+        CHECK(!strcmp(k.modelName(), "Elecraft K2") && g.mode == '2' && k.mode == 1);
     }
     {   // ---------------- Yaesu FTDX10: FTX-1 commands, PC in plain watts
         Radio r; FakeText f; f.r = &r; f.yid = "ID0761"; f.watts = 50;
