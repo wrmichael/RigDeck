@@ -15,6 +15,7 @@
 #include <sys/time.h>
 #if CONFIG_IDF_TARGET_ESP32P4
 #include "sdcard.h"
+#include "sdlog.h"
 #endif
 
 static const char* TAG = "main";
@@ -65,6 +66,9 @@ static void controlTask(void*) {
     int64_t lastMem = 0;
     for (;;) {
         s_app.tick();
+#if CONFIG_IDF_TARGET_ESP32P4
+        sdlog_enable(s_app.cfg.consoleLog != 0);
+#endif
         int64_t now = monoMs();
         if (now - lastMem >= 60000) {                  // memory once a minute: a leak shows as a falling "internal" figure
             lastMem = now;
@@ -87,6 +91,9 @@ static void controlTask(void*) {
 }
 
 extern "C" void app_main(void) {
+#if CONFIG_IDF_TARGET_ESP32P4
+    sdlog_capture();                                  // console log text is kept from here on (for the card)
+#endif
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         nvs_flash_erase();
@@ -109,7 +116,10 @@ extern "C" void app_main(void) {
     std::string logDir;                               // the log goes on the microSD card when one is in
 #if CONFIG_IDF_TARGET_ESP32P4
     char sdi[64];
-    if (sdcard_start(sdi, sizeof sdi)) logDir = SDCARD_LOG_DIR;
+    if (sdcard_start(sdi, sizeof sdi)) {
+        logDir = SDCARD_LOG_DIR;
+        sdlog_start(SDCARD_LOG_DIR "/logs");          // console log onto the card too
+    } else sdlog_off();
     s_app.sdInfo = sdi;
 #endif
     s_app.fsInfo = fsInfo;

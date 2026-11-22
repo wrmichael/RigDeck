@@ -10,7 +10,8 @@
 
 static const char* TAG = "web";
 #if CONFIG_IDF_TARGET_ESP32P4
-void wifichip_register(httpd_handle_t srv);          // wifi_chip.cpp: firmware upload for the Wi-Fi chip
+void wifichip_register(httpd_handle_t srv);
+#include "sdlog.h"          // wifi_chip.cpp: firmware upload for the Wi-Fi chip
 #endif
 static App* s_app;
 extern const char index_html_start[] asm("_binary_index_html_start");
@@ -111,7 +112,7 @@ void web_start(App& app) {
     s_app = &app;
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 10240;
-    cfg.max_uri_handlers = 10;
+    cfg.max_uri_handlers = 14;
     cfg.recv_wait_timeout = 30;                      // a firmware upload pauses while the Wi-Fi chip erases
     cfg.lru_purge_enable = true;
     httpd_handle_t srv = nullptr;
@@ -127,5 +128,6 @@ void web_start(App& app) {
     for (auto& u : uris) httpd_register_uri_handler(srv, &u);
 #if CONFIG_IDF_TARGET_ESP32P4
     wifichip_register(srv);
+    sdlog_register(srv);
 #endif
 }

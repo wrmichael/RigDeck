@@ -1118,7 +1118,7 @@ const SField kSet[] = {
 };
 constexpr int kSetN = sizeof kSet / sizeof kSet[0];
 lv_obj_t *scrSettings, *sTabs, *sKb, *sStatus, *sWifi, *sWidget[kSetN], *sMacroLbl[kSetN];
-lv_obj_t *sBright, *sBrightL, *sContrast, *sContrastL, *sStor;
+lv_obj_t *sBright, *sBrightL, *sContrast, *sContrastL, *sStor, *sConsole;
 std::map<std::string, std::string> sLoaded;
 const int SET_HEAD = 64, SET_KB = 270;
 
@@ -1248,6 +1248,10 @@ void onContrast(lv_event_t* e) {
     if (lv_event_get_code(e) == LV_EVENT_RELEASED && cmd("set", {{"contrast", std::to_string(v)}}) && v != gContrast)
         confirm("Contrast", "The new contrast applies after a restart.\nRestart now?", "Restart", "reboot");
 }
+void onConsoleLog(lv_event_t*) {
+    bool on = lv_obj_has_state(sConsole, LV_STATE_CHECKED);
+    cmd("set", {{"consoleLog", on ? "1" : "0"}});
+}
 void onSdFormat(lv_event_t*) {
     confirm("Format microSD card", "Erase EVERYTHING on the microSD card and format it (FAT32, whole card)? This station's "
             "log is kept: it waits in the board's memory and goes back on the card. Other stations' logs and kept "
@@ -1264,6 +1268,7 @@ void onOpenSettings(lv_event_t*) {
     lv_slider_set_value(sBright, g_app->cfg.bright, LV_ANIM_OFF);
     setText(sBrightL, std::to_string(g_app->cfg.bright) + " %");
     lv_slider_set_value(sContrast, g_app->cfg.contrast, LV_ANIM_OFF);
+    if (g_app->cfg.consoleLog) lv_obj_add_state(sConsole, LV_STATE_CHECKED); else lv_obj_remove_state(sConsole, LV_STATE_CHECKED);
     setText(sContrastL, std::to_string(g_app->cfg.contrast) + " %");
     settingsKbHide();
     lv_screen_load(scrSettings);
@@ -1425,6 +1430,13 @@ void buildSettingsScreen() {
                                     "memory moves onto the card then. Files are named after the station callsign.");
         button(pg, 0, 356, 260, 52, LV_SYMBOL_TRASH " Erase all logs", onNuke, nullptr, 0x9a2a2a);
         button(pg, 280, 356, 300, 52, LV_SYMBOL_SD_CARD " Format microSD card", onSdFormat, nullptr, 0x9a2a2a);
+        sConsole = lv_switch_create(pg);
+        lv_obj_set_pos(sConsole, 0, 428);
+        lv_obj_set_size(sConsole, 70, 36);
+        lv_obj_set_style_bg_color(sConsole, C(LINE), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(sConsole, C(AMB), LV_PART_INDICATOR | LV_STATE_CHECKED);
+        lv_obj_add_event_cb(sConsole, onConsoleLog, LV_EVENT_VALUE_CHANGED, nullptr);
+        label(pg, 86, 434, f20, TXT, "Console log to the card (RigDeck/logs, one file per day, kept 7 days)");
     }
 
     sKb = lv_keyboard_create(scrSettings);

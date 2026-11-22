@@ -172,6 +172,10 @@ FORMAT) erases the card and formats all of it as FAT32: this station's log is pa
 memory meanwhile and put back; other files on the card are lost. Use it for a new card (most
 64 GB and larger cards come as exFAT, which RigDeck cannot read) or one partitioned small. The
 Device page shows the card's size and its file system's size, so a small partition shows up there.
+**Console log to the card** (on by default): everything the board prints on its USB console also
+goes to `RigDeck/logs/console_YYYYMMDD_HHMM.txt` on the card, as it happens (a new file at each
+start, when the clock gets set and each UTC day; a time mark every minute). Without a clock the
+file is `console_19761018_0000.txt`. Files dated more than 7 days back are removed.
 
 ## Choosing the radio
 

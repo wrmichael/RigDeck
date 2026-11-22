@@ -11,6 +11,7 @@
 #include "driver/sdmmc_host.h"
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
 #include "sdcard.h"
+#include "sdlog.h"
 
 static const char *TAG = "sdcard";
 #define MOUNT "/sdcard"
@@ -74,6 +75,7 @@ bool sdcard_start(char *info, size_t n)
 int sdcard_format(char *msg, size_t n)
 {
     esp_err_t err;
+    sdlog_pause(true);                                 // no file open on the card while it is formatted
     if (s_mounted) {
         ESP_LOGW(TAG, "formatting the microSD card (FAT32, whole card)");
         err = esp_vfs_fat_sdcard_format(MOUNT, s_card);
@@ -87,10 +89,12 @@ int sdcard_format(char *msg, size_t n)
     }
     if (err != ESP_OK) {
         snprintf(msg, n, "Formatting the card failed (%s)%s", esp_err_to_name(err), s_mounted ? "" : ": is a card in?");
+        sdlog_pause(false);
         return -1;
     }
     s_mounted = true;
     mkdir(MOUNT "/RigDeck", 0777);
+    sdlog_pause(false);
     describe(msg, n);
     ESP_LOGI(TAG, "formatted: %s", msg);
     return 0;

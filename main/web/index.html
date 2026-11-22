@@ -248,6 +248,8 @@ table.log th{color:var(--dim);font-weight:500}
       <label for="dvContrast">Screen contrast</label><span><input type="range" id="dvContrast" min="50" max="150" style="width:220px;vertical-align:middle"> <span id="dvContrastV"></span></span>
     </div>
     <p class="hint">Brightness changes at once. Contrast (100 % = normal) applies after a restart.</p>
+    <div id="dvLogs" class="hint"></div>
+    <label><input type="checkbox" id="dvConsole"> Console log to the microSD card (RigDeck/logs/console_<i>date</i>_<i>time</i>.txt, a new file each start and each day, kept 7 days)</label>
     <div id="dvStor" style="white-space:pre-line"></div>
     <div class="row" style="margin-top:8px"><button id="eraseall" class="danger">Erase all logs (every station)</button> <button id="sdformat" class="danger">Format microSD card</button></div>
     <p class="hint">With a microSD card (FAT32) in at start-up the logs live on the card, in the RigDeck folder, one set of files per station callsign (e.g. AC9HP_log.adi, AC9HP_archive.adi). Contacts logged in the board's memory move onto the card at that start. On the card, deleted contacts are kept for good in AC9HP_deleted.adi and a cleared current log is kept as AC9HP_deleted_<i>date</i>_<i>time</i>.adi. Insert or remove the card with the power off.</p>
@@ -383,6 +385,7 @@ function render(){
     cfgLoaded=true;
     for(const k in S.cfg){const e=$("s_"+k);if(e) e.value=k==="civAddr"?"0x"+(+S.cfg[k]).toString(16).toUpperCase():S.cfg[k];}
     for(const [id,key] of [["dvBright","bright"],["dvContrast","contrast"]]) if(S.cfg[key]!==undefined){$(id).value=S.cfg[key];$(id+"V").textContent=S.cfg[key]+" %";}
+    if(S.cfg.consoleLog!==undefined) $("dvConsole").checked=!!+S.cfg.consoleLog;
   }
   // SSB / CW logger
   {const MN={0:"LSB",1:"USB",2:"AM",3:"CW",4:"RTTY",5:"FM",7:"CW-R",8:"RTTY-R",23:"DV"}, cw=r.rmode===3||r.rmode===7;
@@ -457,6 +460,7 @@ document.querySelector("nav").addEventListener("click",e=>{
   document.querySelectorAll("nav button").forEach(b=>b.className=b.dataset.tab===t?"on":"");
   ["op","qlog","log","set"].forEach(x=>$("tab-"+x).classList.toggle("hide",x!==t));
   if(t==="log"&&!LG.edit) lgLoad();
+  if(t==="set") loadConsoleLogs();
 });
 document.body.addEventListener("click",e=>{
   const b=e.target.closest("button,tr"); if(!b) return; const d=b.dataset;
@@ -493,6 +497,17 @@ $("eraseall").onclick=async()=>{
   const j=await cmd("eraselogs",{confirm:"yes"});
   if(j&&j.ok) banner(`All logs erased (${j.files} files)`);
 };
+$("dvConsole").onchange=()=>{cmd("set",{consoleLog:$("dvConsole").checked?"1":"0"});setTimeout(loadConsoleLogs,1500);};
+async function loadConsoleLogs(){
+  try{
+    const j=await (await fetch("/api/consolelogs",{cache:"no-store"})).json();
+    const el=$("dvLogs");
+    if(!j.files.length){el.textContent=j.on?"Console logs: none yet":"Console logs: none (needs a microSD card at start-up)";return;}
+    el.innerHTML="Console logs (newest first): "+j.files.map(f=>`<a href="/consolelog?f=${encodeURIComponent(f.name)}" download="${f.name}">${f.name.slice(8,-4).replace("_"," ")}</a> (${f.size>=1e6?(f.size/1e6).toFixed(1)+" MB":Math.max(1,Math.round(f.size/1e3))+" kB"})`).join(", ")+
+      ` <button type="button" id="dvLogsR">Refresh</button>`;
+    $("dvLogsR").onclick=loadConsoleLogs;
+  }catch(e){ $("dvLogs").textContent=""; }
+}
 $("sdformat").onclick=async()=>{
   if(prompt("Erase EVERYTHING on the microSD card and format it (FAT32, whole card)?\n\nThis station's log is kept: it waits in the board's memory and goes back on the card. Other stations' logs and the kept deleted/cleared logs on the card are lost. Copy the RigDeck folder to a PC first if you want them.\n\nType FORMAT to go ahead:")!=="FORMAT") return;
   banner("Formatting the card: up to a minute…");
