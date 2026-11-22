@@ -523,6 +523,16 @@ int main() {
             CHECK(app.logPath() == in + "/AC9HP_log.adi" && slurpP(app.logPath()).find("K9FMT") != std::string::npos);
             app.command("eraselogs", {{"confirm", "yes"}});
         }
+        {   // parks: worked today on this band and mode, from the log
+            App app;
+            app.begin(in);
+            app.radio.freq = 14074000;
+            CHECK(app.command("logqso", {{"call", "K4PRK"}, {"freq", "14.074"}}).find("\"ok\":true") != std::string::npos);   // the digital mode in use: FT8
+            CHECK(app.seq.workedToday("K4PRK") && !app.seq.workedToday("N4OTH"));
+            app.radio.freq = 7074000;
+            CHECK(!app.seq.workedToday("K4PRK"));                     // another band
+            app.command("eraselogs", {{"confirm", "yes"}});
+        }
         {   // almost full internal store: a warning with a rough count of contacts left
             App app;
             app.fsInfo = [](bool, uint64_t& t, uint64_t& u) { t = 2000000; u = 1880000; return true; };

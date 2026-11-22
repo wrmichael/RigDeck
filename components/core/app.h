@@ -193,6 +193,8 @@ private:
     int eraseAllLogs();                                // every log file of every station; returns files removed
     std::deque<QsoRecord> recent_;
     HashIndex worked_;                                 // "CALL|band"
+    HashIndex workedDay_;                              // "CALL|band|mode|YYYYMMDD" (parks: once a day)
+    static std::string dayKey(std::string_view rec);
     int logCount_ = 0, archiveCount_ = 0;
     bool archiveBehind_ = false;                     // a QSO is in the current log but not in the archive
     // storage figures, refreshed every 30 s by the network thread

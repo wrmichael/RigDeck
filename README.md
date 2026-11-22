@@ -297,6 +297,10 @@ of these controllers). Select **CW** on the touch screen or **FT-CW** on the web
 
 - Works exactly like FT8 from the operator's side: 15 s slots, even/odd, the same messages
   (CQ, grid, dB report, R+report, RR73, 73), Manual / Auto CQ / Auto hunt, tap a decode to call.
+  Auto hunt answers the strongest CQ from a station not yet worked on this band (current log or
+  archive, any mode). Directed CQs (CQ DX, CQ NA, CQ SOTA ...) are left to you, except parks:
+  **CQ POTA** and **CQ WWFF** are answered once per UTC day, band and mode, as park activations
+  count. A station that did not answer after the set number of calls is skipped for 10 minutes.
 - On the air it is machine-timed Morse on an audio tone, radio in USB-D like FT8: for example
   `CQ AC9HP EM69 7Q`. The last two characters are a check group; a copy that does not match it
   (or does not read as a standard message) is discarded, and the decoder uses it to repair one or

@@ -235,8 +235,12 @@ void Sequencer::onDecodes(const std::vector<Decode>& list, int parity) {
         ParsedMsg p;
         if (!parseMsg(d.text, p) || p.from.empty() || p.from == myCall) continue;
         if (p.kind == K_CQ) {
-            if (!p.cqTag.empty()) continue;                       // directed CQ (DX, POTA, ...): leave to the operator
-            if (workedBefore && workedBefore(p.from)) continue;
+            if (!p.cqTag.empty()) {
+                // Directed CQ: left to the operator (CQ DX may not want us), except parks: a POTA or
+                // WWFF activator can be worked again each UTC day on each band and mode.
+                bool park = p.cqTag == "POTA" || p.cqTag == "WWFF";
+                if (!park || !workedToday || workedToday(p.from)) continue;
+            } else if (workedBefore && workedBefore(p.from)) continue;
             auto ig = ignore_.find(p.from);
             if (ig != ignore_.end() && ig->second > t) continue;
             if (!cq || d.snr > cq->snr) { cq = &d; cqP = p; }

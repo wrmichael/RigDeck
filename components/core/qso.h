@@ -35,6 +35,8 @@ public:
     // hooks
     std::function<void(const QsoLog&)> onLog;
     std::function<bool(const std::string&)> workedBefore;
+    // Parks (CQ POTA, CQ WWFF) count once per UTC day, band and mode: true = already worked today.
+    std::function<bool(const std::string&)> workedToday;
     std::function<int64_t()> now;
 
     // state (read by the UI)

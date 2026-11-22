@@ -91,6 +91,16 @@ void App::begin(const std::string& dataDir, const std::string& logDir) {
     seq.workedBefore = [this](const std::string& call) {
         return worked_.contains(call + "|" + bandName(radio.freq.load()));
     };
+    seq.workedToday = [this](const std::string& call) {
+        if (!clk::valid()) return false;
+        time_t t = (time_t)(clk::utcMs() / 1000);
+        struct tm tm;
+        gmtime_r(&t, &tm);
+        char d[12];
+        strftime(d, sizeof d, "%Y%m%d", &tm);
+        const char* m = mode_ == DM_FT4 ? "FT4" : mode_ == DM_CW ? "CW" : mode_ == DM_PSK31 ? "PSK31" : "FT8";
+        return workedDay_.contains(upperTrim(call) + "|" + bandName(radio.freq.load()) + "|" + m + "|" + d);
+    };
     seq.onLog = [this](const QsoLog& q) {           // called with mtx_ held
         QsoRecord r;
         r.call = q.call;
@@ -182,15 +192,24 @@ void App::logOpen() {
     if (logFn) logFn(("log: " + logPath() + " (" + std::to_string(logCount_) + " contacts), archive " + std::to_string(archiveCount_)).c_str());
 }
 
+// "CALL|band|mode|date" of a logged contact; the mode is the submode when there is one (FT4).
+std::string App::dayKey(std::string_view r) {
+    std::string m = upperTrim(adifField(r, "SUBMODE"));
+    if (m.empty()) m = upperTrim(adifField(r, "MODE"));
+    return upperTrim(adifField(r, "CALL")) + "|" + adifField(r, "BAND") + "|" + m + "|" + adifField(r, "QSO_DATE");
+}
+
 // After the files changed (edit, delete, switch): worked-before, counts, the recent list and the
 // unsent count, streaming through both files once.
 void App::logReload() {
     worked_.clear();
+    workedDay_.clear();
     archiveCount_ = logCount_ = 0;
     HashIndex inArchive;                               // which contacts the archive has (to spot any it lacks)
     adifForEach(archivePath(), [&](std::string_view r, int, long) {
         worked_.bulkAdd(adifField(r, "CALL") + "|" + adifField(r, "BAND"));
         inArchive.bulkAdd(sentKey(r));
+        workedDay_.bulkAdd(dayKey(r));
         archiveCount_++;
         return true;
     });
@@ -203,6 +222,7 @@ void App::logReload() {
         adifForEach(logPath(), [&](std::string_view r, int, long) {
             worked_.bulkAdd(adifField(r, "CALL") + "|" + adifField(r, "BAND"));
             logCount_++;
+            workedDay_.bulkAdd(dayKey(r));
             if (!inArchive.contains(sentKey(r))) missing++;
             if (!sent_.contains(sentKey(r))) unsent++;
             last.push_back(pstr(r));
@@ -211,6 +231,7 @@ void App::logReload() {
         });
     }
     worked_.finish();
+    workedDay_.finish();
     recent_.clear();
     for (auto& r : last) recent_.push_back(adifToQso(r));
     unsent_ = unsent;
@@ -489,6 +510,7 @@ int App::eraseAllLogs() {
     }
     recent_.clear();
     worked_.clear();
+    workedDay_.clear();
     logCount_ = archiveCount_ = 0;
     unsent_ = 0;
     archiveBehind_ = false;
@@ -1013,6 +1035,7 @@ void App::logQso(const QsoRecord& in) {              // mtx_ held
     if (appendAdif(logPath(), rec)) logCount_++;
     else saved = false;
     worked_.insert(q.call + "|" + bandName(q.freqHz));
+    workedDay_.insert(dayKey(rec));
     recent_.push_back(q);
     while (recent_.size() > 30) recent_.pop_front();
     status(saved ? "Logged " + q.call : "QSO with " + q.call + " could not be saved to the device (storage full?)");

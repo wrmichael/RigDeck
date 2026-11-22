@@ -270,6 +270,23 @@ int main() {
     q4.onDecodes(cqs, 1);
     CHECK(q4.dxCall.empty());                                        // TX disabled: do not start anything
 
+    // --- auto hunt: parks (POTA, WWFF) once a day per band and mode; other directed CQs never ---
+    {
+        Sequencer q5;
+        q5.myCall = "W9XYZ"; q5.myGrid = "EN37"; q5.opMode = 2; q5.txEnabled = true;
+        q5.now = q1.now;
+        q5.workedBefore = [](const std::string&) { return true; };        // worked them all before: parks still count
+        q5.workedToday = [](const std::string& c) { return c == "K4PRK"; };
+        std::vector<Decode> l;
+        for (auto txt : {"CQ POTA K4PRK EM73", "CQ DX VK2DEF QF56", "CQ WWFF DL1FF JO62", "CQ SOTA W7SUM DM43"}) { Decode d; d.text = txt; d.snr = 10 - (int)l.size(); l.push_back(d); }
+        q5.onDecodes(l, 1);
+        CHECK(q5.dxCall == "DL1FF");                                     // K4PRK worked today; DX and SOTA left alone
+        Sequencer q6 = q5; q6.clearQso();
+        q6.workedToday = [](const std::string&) { return false; };
+        q6.onDecodes(l, 1);
+        CHECK(q6.dxCall == "K4PRK");
+    }
+
     printf(fails ? "t_units: %d of %d FAILED\n" : "t_units: all %d checks passed\n", fails ? fails : checks, checks);
     return fails ? 1 : 0;
 }
