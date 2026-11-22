@@ -6,6 +6,10 @@
 //   head digit (1 field head, 2 SPA-1), KM/KY for keyer text.
 // QMX (CAT manual 1_04): TS-480 subset. IF carries frequency, TX state and mode; TQ keys the
 //   transmitter; MD6 is the digital mode; KY sends keyer text.
+// Kenwood / Elecraft (TS-2000, TS-480, TS-590, K2, K3): the same IF layout and FA, TX; / RX; for
+//   PTT, Kenwood's mode digits (1 LSB 2 USB 3 CW 4 FM 5 AM 6 FSK 7 CW-R 9 FSK-R); FT8 runs in USB.
+// Other Yaesu radios (FTDX10, FT-991A, FT-710, FTDX101, FT-891): the FTX-1 commands, but PC is
+//   three digits of watts without the FTX-1's head digit.
 #include "civ.h"
 #include "clock.h"
 #include <cstring>
@@ -14,6 +18,7 @@
 #include <cctype>
 
 void Radio::sendText(const std::string& s, bool front) {
+    if (proto == RP_NONE) return;
     std::lock_guard<std::mutex> lk(mtx_);
     std::vector<uint8_t> f(s.begin(), s.end());
     if (front) q_.push_front(f);
@@ -41,11 +46,19 @@ void Radio::tSetFreq(uint64_t hz) {
 
 void Radio::tSetUsbData() {
     if (proto == RP_YAESU) { sendText("MD0C;"); sendText("MD0;"); }      // DATA-U
+    else if (proto == RP_KENWOOD) { sendText("MD2;"); sendText("IF;"); } // USB
     else { sendText("Q90;"); sendText("MD6;"); sendText("MD;"); }        // IQ mode off, DIGI
 }
 
 void Radio::tSetRfPower(int percent) {
-    if (proto != RP_YAESU || pcHead_ < 1) return;                        // the QMX has no power setting
+    if (proto == RP_YAESU && pcHead_ == 0 && textId_ && textId_ != 800) {   // FTDX10 and friends: PC + watts
+        int w = (percent * 100 + 50) / 100;
+        if (w < 5) w = 5;
+        sendText(fmt("PC%03lld;", w));
+        sendText("PC;");
+        return;
+    }
+    if (proto != RP_YAESU || pcHead_ < 1) return;                        // QMX / Kenwood: left as the radio has it
     int maxW = pcHead_ == 2 ? 100 : 10;
     int w = (percent * maxW + 50) / 100;
     if (w < (pcHead_ == 2 ? 5 : 1)) w = pcHead_ == 2 ? 5 : 1;
@@ -62,6 +75,13 @@ static char yaesuMode(uint8_t m) {
     default: return 0;
     }
 }
+static char kenwoodMode(uint8_t m) {
+    switch (m) {
+    case 0x00: return '1'; case 0x01: return '2'; case 0x02: return '5'; case 0x03: return '3';
+    case 0x04: return '6'; case 0x05: return '4'; case 0x07: return '7'; case 0x08: return '9';
+    default: return 0;
+    }
+}
 static char qmxMode(uint8_t m) {
     switch (m) {
     case 0x00: return '1'; case 0x01: return '2'; case 0x03: return '3'; case 0x07: return '7';
@@ -70,13 +90,14 @@ static char qmxMode(uint8_t m) {
 }
 
 void Radio::tSetMode(uint8_t m) {
-    char c = proto == RP_YAESU ? yaesuMode(m) : qmxMode(m);
+    char c = proto == RP_YAESU ? yaesuMode(m) : proto == RP_KENWOOD ? kenwoodMode(m) : qmxMode(m);
     if (!c) { ng++; return; }
     if (proto == RP_YAESU) { sendText(std::string("MD0") + c + ";"); sendText("MD0;"); }
     else { sendText(std::string("MD") + c + ";"); sendText("MD;"); }
 }
 
 void Radio::tSetData(bool on) {
+    if (proto == RP_KENWOOD) { ng++; return; }                          // no data mode: FT8 runs in USB
     int m = mode.load();
     char c;
     if (proto == RP_YAESU) {
@@ -170,6 +191,9 @@ void Radio::textPoll() {                                                 // mtx_
             if (!strcmp(e, "PA")) { std::string s = fmt("PA%lld;", yaesuPaBand(freq.load())); q_.emplace_back(s.begin(), s.end()); }
             else push(e);
         }
+    } else if (proto == RP_KENWOOD) {
+        static const char* rx[] = {"IF;", "IF;", "IF;", "KS;"};
+        push(pttWanted ? "IF;" : rx[step % 4]);
     } else {
         static const char* rx[] = {"IF;", "SM;", "IF;", "KS;"};
         static const char* tx[] = {"IF;", "PC;", "SW;"};
@@ -203,6 +227,16 @@ static void fromYaesuMode(char c, std::atomic<int>& mode, std::atomic<int>& data
     mode = m; data = d;
 }
 
+static void fromKenwoodMode(char c, std::atomic<int>& mode, std::atomic<int>& data) {
+    int m = -1;
+    switch (c) {
+    case '1': m = 0x00; break; case '2': m = 0x01; break; case '3': m = 0x03; break; case '4': m = 0x05; break;
+    case '5': m = 0x02; break; case '6': m = 0x04; break; case '7': m = 0x07; break; case '9': m = 0x08; break;
+    default: return;
+    }
+    mode = m; data = 0;
+}
+
 static void fromQmxMode(char c, std::atomic<int>& mode, std::atomic<int>& data) {
     int m = -1, d = 0;
     switch (c) {
@@ -226,7 +260,7 @@ void Radio::textAnswer(const std::string& a) {
                    (c == "TX" && a.size() == 3) || (c == "RM" && a.size() >= 9);
     else alive = (c == "ID" && a.size() == 5) || (c == "IF" && a.size() >= 30);
     if (alive) lastRxMono = clk::monoMs();
-    if (c == "ID") return;
+    if (c == "ID") { if (alive) textId_ = atoi(a.c_str() + 2); return; }
     if (!connected()) return;                                            // nothing is believed until the radio is identified
     if (c == "FA") { freq = strtoull(a.c_str() + 2, nullptr, 10); return; }
     if (c == "KS") { keySpeed = num(a, 2); return; }
@@ -242,6 +276,7 @@ void Radio::textAnswer(const std::string& a) {
         else if (c == "RG" && a[2] == '0') level[0x02] = pct255(num(a, 3, 3));
         else if (c == "SQ" && a[2] == '0') level[0x03] = pct255(num(a, 3, 3));
         else if (c == "MG") level[0x0B] = num(a, 2, 3);
+        else if (c == "PC" && a.size() == 5) level[0x0A] = num(a, 2, 3);  // FTDX10 and friends: watts of 100
         else if (c == "PC" && a.size() >= 6) {
             pcHead_ = a[2] - '0';
             int w = (int)(atof(a.substr(3, 3).c_str()) + 0.5);            // the field head can report e.g. "7.5"
@@ -258,13 +293,15 @@ void Radio::textAnswer(const std::string& a) {
         else if (c == "RA" && a.size() >= 4) att = a[3] != '0' ? 12 : 0;
         return;
     }
-    // QMX
+    // QMX and Kenwood / Elecraft: the same IF layout (TS-480)
+    const bool ken = proto == RP_KENWOOD;
     if (c == "IF" && a.size() >= 30) {
         freq = strtoull(a.substr(2, 11).c_str(), nullptr, 10);
-        pttState = a[28] == '1';
-        fromQmxMode(a[29], mode, dataMode);
+        if (pttMethod.load() == PTT_CAT) pttState = a[28] == '1';
+        if (ken) fromKenwoodMode(a[29], mode, dataMode); else fromQmxMode(a[29], mode, dataMode);
     }
-    else if (c == "MD") fromQmxMode(a[2], mode, dataMode);
+    else if (c == "MD") { if (ken) fromKenwoodMode(a[2], mode, dataMode); else fromQmxMode(a[2], mode, dataMode); }
+    else if (ken) return;                                                // the rest is the QMX's
     else if (c == "TQ") pttState = a[2] == '1';
     else if (c == "SM") { int v = num(a, 2) * 120 / 54; smeter = v < 0 ? 0 : v > 255 ? 255 : v; }   // dB -> Icom scale, S9 = 120
     else if (c == "PC") { int v = num(a, 2) * 213 / 50; po = v > 255 ? 255 : v; }                    // tenths of a watt; 5 W = full scale

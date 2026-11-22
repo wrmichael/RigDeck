@@ -19,8 +19,11 @@ struct Settings {
     std::string staPass;
     int civAddr = 0x88;                  // IC-7100 default CI-V address
     int civBaud = 19200;
-    int radioType = 0;                   // 0 = find out, 1 = Icom, 2 = Yaesu FTX-1, 3 = QRP Labs QMX / QMX+
-    int catBaud = 38400;                 // FTX-1 "CAT-1 RATE" (the QMX and IC-705 are USB-native: no baud rate)
+    int radioType = 0;                   // 0 = find out, 1 = Icom, 2 = Yaesu, 3 = QRP Labs QMX / QMX+,
+                                         // 4 = Kenwood / Elecraft, 5 = no CAT (SignaLink or other sound card)
+    int pttMethod = 0;                   // 0 = CAT command, 1 = serial RTS line (Digirig), 2 = DTR, 3 = VOX
+    long long dialHz = 14074000;         // no CAT: the dial frequency the band buttons last set
+    int catBaud = 38400;                 // text CAT rate tried first (FTX-1 "CAT-1 RATE"; others are searched)
     int txFreq = 1500;                   // audio offset of our signal, Hz
     int txLevel = 50;                    // digital drive level, percent of full scale
     int opMode = OP_MANUAL;

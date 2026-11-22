@@ -32,6 +32,10 @@ const char* civModelName(uint8_t a) {
     switch (a) {
     case 0x88: return "IC-7100";
     case 0xA4: return "IC-705";
+    case 0x94: return "IC-7300";
+    case 0x98: return "IC-7610";
+    case 0xA2: return "IC-9700";
+    case 0xAC: return "IC-905";
     default: return "Icom";
     }
 }
@@ -63,6 +67,7 @@ bool CivParser::feed(uint8_t byte, CivFrame& out) {
 }
 
 void Radio::send(uint8_t cmd, const std::vector<uint8_t>& data, bool front) {
+    if (proto == RP_NONE) return;
     std::lock_guard<std::mutex> lk(mtx_);
     auto f = civBuild(addr, CTRL, cmd, data);
     if (front) q_.push_front(f);
@@ -70,6 +75,7 @@ void Radio::send(uint8_t cmd, const std::vector<uint8_t>& data, bool front) {
 }
 
 void Radio::setFreq(uint64_t hz) {
+    if (proto == RP_NONE) { freq = hz; return; }           // no CAT: the band buttons set the dial
     if (isText()) return tSetFreq(hz);
     uint8_t b[5];
     civFreqToBcd(hz, b);
@@ -87,8 +93,16 @@ void Radio::setUsbData() {
 
 void Radio::ptt(bool on) {
     pttWanted = on;
+    int m = pttMethod.load();
+    if (m == PTT_RTS || m == PTT_DTR) {                    // a serial port's line keys the radio
+        if (pttLine) pttLine(on);
+        pttState = on;
+        return;
+    }
+    if (m == PTT_VOX || proto == RP_NONE) { pttState = on; return; }   // the transmit audio keys it
     if (proto == RP_YAESU) return sendText(on ? "TX1;" : "TX0;", true);
     if (proto == RP_QMX) return sendText(on ? "TQ1;" : "TQ0;", true);
+    if (proto == RP_KENWOOD) return sendText(on ? "TX;" : "RX;", true);
     send(0x1C, {0x00, (uint8_t)(on ? 0x01 : 0x00)}, true);
 }
 
@@ -154,9 +168,10 @@ void Radio::vfo(uint8_t sub) {
     send(0x04, {});
 }
 
-bool Radio::connected() const { return clk::monoMs() - lastRxMono.load() < 3000; }
+bool Radio::connected() const { return proto.load() == RP_NONE || clk::monoMs() - lastRxMono.load() < 3000; }
 
 void Radio::poll() {
+    if (proto == RP_NONE) return;
     int64_t now = clk::monoMs();
     std::vector<uint8_t> out;
     {
@@ -245,7 +260,7 @@ void Radio::setProto(int p) {
     q_.clear();
     line_.clear();
     parser_ = CivParser();
-    pcHead_ = 0; yMode_ = 0; pollStep_ = 0; extStep_ = 0;
+    pcHead_ = 0; yMode_ = 0; textId_ = 0; pollStep_ = 0; extStep_ = 0;
     freq = 0; mode = -1; dataMode = -1; filter = -1; att = -1; keySpeed = -1;
     smeter = 0; po = 0; swr = 0; alc = 0; pttState = false;
     for (auto& l : level) l = -1;
@@ -254,13 +269,33 @@ void Radio::setProto(int p) {
 
 const char* Radio::modelName() const {
     switch (proto.load()) {
-    case RP_YAESU: return pcHead_ == 2 ? "FTX-1 optima" : "FTX-1";
+    case RP_YAESU:
+        switch (textId_) {                              // ID answers of the Yaesu radios that share these commands
+        case 761: return "FTDX10";
+        case 670: return "FT-991A";
+        case 681: return "FTDX101D";
+        case 682: return "FTDX101MP";
+        case 650: return "FT-891";
+        case 800: case 0: return pcHead_ == 2 ? "FTX-1 optima" : "FTX-1";
+        default: return pcHead_ == 2 ? "FTX-1 optima" : pcHead_ == 1 ? "FTX-1" : "Yaesu";
+        }
     case RP_QMX: return "QMX";
+    case RP_NONE: return "No CAT";
+    case RP_KENWOOD:
+        switch (textId_) {
+        case 17: return "Elecraft K2/K3";
+        case 19: return "TS-2000";
+        case 20: return "TS-480";
+        case 21: return "TS-590S";
+        case 22: return "TS-990S";
+        case 23: return "TS-590SG";
+        default: return "Kenwood";
+        }
     default: return civModelName(addr);
     }
 }
 
-size_t Radio::cwMax(int proto) { return proto == RP_YAESU ? 50 : proto == RP_QMX ? 72 : 90; }
+size_t Radio::cwMax(int proto) { return proto == RP_YAESU ? 50 : proto == RP_QMX || proto == RP_KENWOOD ? 72 : proto == RP_NONE ? 0 : 90; }
 
 void Radio::sendCw(const std::string& text) {
     std::string t;
@@ -280,7 +315,8 @@ void Radio::sendCw(const std::string& text) {
 
 void Radio::stopCw() {
     if (proto == RP_YAESU) return sendText("KY00;", true);
-    if (proto == RP_QMX) return sendText("KY                         ;", true);   // 24 spaces after the separator stop the keyer
+    if (kenwoodish()) return sendText("KY                         ;", true);   // 24 spaces after the separator stop the keyer
+    if (proto == RP_NONE) return;
     send(0x17, {0xFF}, true);
 }
 
@@ -290,6 +326,8 @@ void Radio::setKeySpeed(int wpm) {
     char b[16];
     if (proto == RP_YAESU) { snprintf(b, sizeof b, "KS%03d;", wpm); sendText(b); sendText("KS;"); }
     else if (proto == RP_QMX) { snprintf(b, sizeof b, "KS%d;", wpm); sendText(b); sendText("KS;"); }
+    else if (proto == RP_KENWOOD) { snprintf(b, sizeof b, "KS%03d;", wpm); sendText(b); sendText("KS;"); }
+    else if (proto == RP_NONE) return;
     else {
         int v = ((wpm - 6) * 255 + 21) / 42;
         send(0x14, {0x0C, (uint8_t)(((v / 1000) << 4) | ((v / 100) % 10)), (uint8_t)((((v / 10) % 10) << 4) | (v % 10))});

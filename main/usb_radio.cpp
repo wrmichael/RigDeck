@@ -4,6 +4,9 @@
 //  IC-705:  the micro-USB port is one composite device: two CDC-ACM serial ports and USB audio.
 //  FTX-1:   like the IC-7100: a hub, a CP2105 dual serial bridge (first port = CAT-1) and an audio codec.
 //  QMX/QMX+: one composite device: CDC-ACM serial port(s) and 24-bit USB audio.
+//  IC-7300 / IC-7610 / IC-9700, FTDX10 / FT-991A / FT-710: like the IC-7100 / FTX-1 (CP210x + codec).
+//  Digirig: a hub with a CP2102 (CAT, PTT on RTS) and a CM108 sound card.
+//  SignaLink USB: only a sound card; it keys the radio itself (VOX) - Settings > Radio "No CAT".
 //
 // Endpoint budget: an ESP32-S3 has only 8 host channels. Hub (2) + three control pipes (3) + CI-V
 // bulk in/out (2) leaves exactly one for audio, so the receive and transmit audio streams are never
@@ -41,7 +44,7 @@ static App* s_app;
 enum PortKind { PK_CP210X, PK_CDC };
 // Which radios can be behind each kind of port (bit per RadioProto).
 static const struct { uint16_t vid; PortKind kind; uint8_t ifaces; uint8_t protos; } kPortTypes[] = {
-    {SILABS_VID, PK_CP210X, 2, (1 << RP_CIV) | (1 << RP_YAESU)},
+    {SILABS_VID, PK_CP210X, 2, (1 << RP_CIV) | (1 << RP_YAESU) | (1 << RP_KENWOOD)},
     {ICOM_VID, PK_CDC, 8, 1 << RP_CIV},
     {STM_VID, PK_CDC, 8, 1 << RP_QMX},
 };
@@ -57,6 +60,8 @@ static bool cdcRx(const uint8_t* data, size_t len, void*) {
     s_app->radio.onRx(data, len);
     return true;
 }
+
+static bool ignoreRx(const uint8_t*, size_t, void*) { return true; }   // a port used only for its PTT line
 
 static bool gpsRx(const uint8_t* data, size_t len, void*) {
     s_app->gpsRx(data, len);
@@ -89,6 +94,22 @@ static bool cp210xSetup(cdc_acm_dev_hdl_t h, uint8_t iface, uint32_t baud) {
     // DTR and RTS held low: on Icom radios these lines can be mapped to PTT / CW keying.
     cdc_acm_host_send_custom_request(h, CP210X_REQ_OUT, CP210X_SET_MHS, 0x0300, iface, 0, nullptr);
     return true;
+}
+
+// PTT on a serial port's RTS or DTR line (Settings > PTT), e.g. a Digirig: RTS keys the radio.
+static void setPttLine(bool on) {
+    const int m = s_app->radio.pttMethod.load();
+    const bool rts = m == PTT_RTS && on, dtr = m == PTT_DTR && on;
+    xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
+    if (s_cdc) {
+        esp_err_t e;
+        if (s_civKind == PK_CP210X)       // SET_MHS: bit 0 DTR, bit 1 RTS, bits 8/9 = write those two
+            e = cdc_acm_host_send_custom_request(s_cdc, CP210X_REQ_OUT, CP210X_SET_MHS, (uint16_t)(0x0300 | (dtr ? 1 : 0) | (rts ? 2 : 0)), s_civIface, 0, nullptr);
+        else
+            e = cdc_acm_host_set_control_line_state(s_cdc, dtr, rts);
+        if (e != ESP_OK) ESP_LOGW(TAG, "PTT line could not be set (%s)", esp_err_to_name(e));
+    } else if (on) ESP_LOGW(TAG, "PTT by %s, but no serial port is connected", m == PTT_RTS ? "RTS" : "DTR");
+    xSemaphoreGive(s_cdcMtx);
 }
 
 // Opens one serial port and sets it to `baud`, 8N1, DTR and RTS low. Returns nullptr if the
@@ -157,10 +178,17 @@ static int buildProbes(uint8_t protos, Probe* out) {
     if ((protos & (1 << RP_CIV)) && (type == 0 || type == 1)) {
         const uint32_t baud = (uint32_t)s_app->cfg.civBaud;
         out[n++] = {RP_CIV, configured, baud};
-        if (configured != 0x88) out[n++] = {RP_CIV, 0x88 /* IC-7100 */, baud};
-        if (configured != 0xA4) out[n++] = {RP_CIV, 0xA4 /* IC-705 */, baud};
+        // factory addresses: IC-7100, IC-705, IC-7300, IC-9700, IC-7610, IC-905
+        static const uint8_t kAddrs[] = {0x88, 0xA4, 0x94, 0xA2, 0x98, 0xAC};
+        for (uint8_t a : kAddrs) if (a != configured) out[n++] = {RP_CIV, a, baud};
     }
-    if ((protos & (1 << RP_YAESU)) && (type == 0 || type == 2)) out[n++] = {RP_YAESU, 0, (uint32_t)s_app->cfg.catBaud};
+    // Text CAT over a CP210x: the configured rate first, then the usual ones (FTDX10 / FT-991A /
+    // K2 default 4800, TS-2000 9600, FTX-1 38400). A USB-native port has no rate: one try.
+    uint32_t bauds[5] = {(uint32_t)s_app->cfg.catBaud, 4800, 9600, 19200, 38400};
+    int nb = 1;
+    for (int i = 1; i < 5; i++) if (bauds[i] != bauds[0]) bauds[nb++] = bauds[i];
+    if ((protos & (1 << RP_YAESU)) && (type == 0 || type == 2)) for (int i = 0; i < nb; i++) out[n++] = {RP_YAESU, 0, bauds[i]};
+    if ((protos & (1 << RP_KENWOOD)) && (type == 0 || type == 4)) for (int i = 0; i < nb; i++) out[n++] = {RP_KENWOOD, 0, bauds[i]};
     if ((protos & (1 << RP_QMX)) && (type == 0 || type == 3)) out[n++] = {RP_QMX, 0, 115200};
     return n;
 }
@@ -172,6 +200,49 @@ static void serialTask(void*) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         uint8_t addrs[12];
         int n = 0;
+        // Settings > Radio "No CAT" (SignaLink, or a Digirig without a CAT cable): no radio to find.
+        // The frequency is the one the band buttons set; a serial port, if there is one, is opened
+        // only for PTT on RTS / DTR.
+        Radio& rad = s_app->radio;
+        if (s_app->cfg.radioType == 5) {
+            if (rad.proto != RP_NONE) {
+                xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
+                cdc_acm_dev_hdl_t old = s_cdc;
+                s_cdc = nullptr;
+                xSemaphoreGive(s_cdcMtx);
+                if (old) cdc_acm_host_close(old);
+                rad.setProto(RP_NONE);
+                rad.freq = (uint64_t)s_app->cfg.dialHz;
+                s_app->usbSerial = true;
+                ESP_LOGI(TAG, "no CAT: dial %.3f MHz, PTT by %s", s_app->cfg.dialHz / 1e6,
+                         rad.pttMethod == PTT_RTS ? "RTS" : rad.pttMethod == PTT_DTR ? "DTR" : "VOX (the sound card keys the radio)");
+            }
+            s_app->usbSerial = true;                                 // also after a PTT port came and went
+            const int m = rad.pttMethod.load();
+            if (!s_cdc && (m == PTT_RTS || m == PTT_DTR) && usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) == ESP_OK) {
+                for (int i = 0; i < n && !s_cdc; i++)
+                    for (const auto& pt : kPortTypes)
+                        for (uint8_t iface = 0; iface < pt.ifaces && !s_cdc; iface++) {
+                            cdc_acm_dev_hdl_t h = openPort(pt.vid, pt.kind, addrs[i], iface, 9600, ignoreRx);
+                            if (!h) continue;
+                            xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
+                            s_cdc = h; s_civDev = addrs[i]; s_civIface = iface; s_civKind = pt.kind; s_civVid = pt.vid;
+                            xSemaphoreGive(s_cdcMtx);
+                            ESP_LOGI(TAG, "serial port for PTT: USB address %d, interface %d", addrs[i], iface);
+                        }
+            }
+            continue;
+        }
+        if (rad.proto == RP_NONE) {                                  // switched back from "No CAT"
+            xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
+            cdc_acm_dev_hdl_t old = s_cdc;
+            s_cdc = nullptr;
+            xSemaphoreGive(s_cdcMtx);
+            if (old) cdc_acm_host_close(old);
+            s_app->usbSerial = false;
+            rad.setProto(RP_CIV);
+            rad.addr = (uint8_t)s_app->cfg.civAddr;
+        }
         if (s_cdc) {
             // The GPS port: when it cannot be opened (on the IC-705 the USB host often has no endpoint
             // memory left next to CI-V and audio), back off instead of retrying every second; each
@@ -199,7 +270,7 @@ static void serialTask(void*) {
         Radio& radio = s_app->radio;
         for (int i = 0; i < n && !s_app->usbSerial; i++) {
             for (const auto& pt : kPortTypes) {
-                Probe probes[6];
+                Probe probes[24];
                 const int np = buildProbes(pt.protos, probes);
                 for (uint8_t iface = 0; np && iface < pt.ifaces && !s_app->usbSerial; iface++) {
                     cdc_acm_dev_hdl_t h = openPort(pt.vid, pt.kind, addrs[i], iface, probes[0].baud, cdcRx);
@@ -460,6 +531,7 @@ static void usbLibTask(void* arg) {
 void usbradio_start(App& app) {
     s_app = &app;
     s_cdcMtx = xSemaphoreCreateMutex();
+    s_app->radio.pttLine = setPttLine;
     s_evq = xQueueCreate(8, sizeof(AudioEv));
     app.radio.write = civWrite;
 

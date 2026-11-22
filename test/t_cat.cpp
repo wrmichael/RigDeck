@@ -18,7 +18,8 @@ static int64_t mono() { return simMs; }
 // A radio that answers the way the manuals describe.
 struct FakeText {
     Radio* r = nullptr;
-    bool yaesu = true;
+    bool yaesu = true, kenwood = false;
+    std::string yid = "ID0800";
     uint64_t freq = 14074000;
     char mode = '2';
     bool tx = false, bk = false;
@@ -31,12 +32,14 @@ struct FakeText {
             if (d[i] != ';') { line += (char)d[i]; continue; }
             std::string c; c.swap(line);
             log.push_back(c);
-            if (yaesu) yaesuCmd(c); else qmxCmd(c);
+            if (kenwood) kenwoodCmd(c); else if (yaesu) yaesuCmd(c); else qmxCmd(c);
         }
     }
     void yaesuCmd(const std::string& c) {
         char b[48];
-        if (c == "ID") say("ID0800");
+        if (c == "ID") say(yid);
+        else if (c == "PC" && yid != "ID0800") { snprintf(b, sizeof b, "PC%03d", watts); say(b); }
+        else if (c.compare(0, 2, "PC") == 0 && c.size() == 5 && yid != "ID0800") watts = atoi(c.c_str() + 2);
         else if (c == "FA") { snprintf(b, sizeof b, "FA%09llu", (unsigned long long)freq); say(b); }
         else if (c.compare(0, 2, "FA") == 0) { if (c.size() != 11) say("?"); else freq = strtoull(c.c_str() + 2, nullptr, 10); }
         else if (c == "MD0") say(std::string("MD0") + mode);
@@ -62,6 +65,22 @@ struct FakeText {
         else if (c == "KY01") keyed += km;
         else if (c == "KY00") keyed += "<STOP>";
         else if (c == "SV") vfo ^= 1;
+        else say("?");
+    }
+    void kenwoodCmd(const std::string& c) {             // TS-2000 (no TQ, no MD6, TX; / RX;)
+        char b[64];
+        if (c == "ID") say("ID019");
+        else if (c == "IF") {
+            snprintf(b, sizeof b, "IF%011llu     +000000000%d%c%d00000 ", (unsigned long long)freq, tx ? 1 : 0, mode, vfo);
+            say(b);
+        }
+        else if (c.compare(0, 2, "FA") == 0 && c.size() > 2) freq = strtoull(c.c_str() + 2, nullptr, 10);
+        else if (c == "MD") say(std::string("MD") + mode);
+        else if (c.compare(0, 2, "MD") == 0) mode = c[2];
+        else if (c == "TX") tx = true;
+        else if (c == "RX") tx = false;
+        else if (c == "KS") { snprintf(b, sizeof b, "KS%03d", ks); say(b); }
+        else if (c.compare(0, 2, "KS") == 0) ks = atoi(c.c_str() + 2);
         else say("?");
     }
     void qmxCmd(const std::string& c) {
@@ -164,6 +183,78 @@ int main() {
         CHECK(sent(f, "KY AC9HP DE W9XYZ UR 5NN 5N"));  // 24 characters per command
         r.vfo(0xB0); run(r, 1500);
         CHECK(f.vfo == 1);
+    }
+    {   // ---------------- Kenwood TS-2000
+        Radio r; FakeText f; f.r = &r; f.kenwood = true; f.mode = '2'; f.freq = 7074000;
+        r.write = [&f](const uint8_t* d, size_t n) { f.rx(d, n); return true; };
+        r.setProto(RP_KENWOOD);
+        r.requestId();
+        run(r, 3000);
+        CHECK(r.connected() && r.freq == 7074000 && r.mode == 1 && !strcmp(r.modelName(), "TS-2000"));
+        r.setFreq(14074000); r.setUsbData(); run(r, 1500);
+        CHECK(f.freq == 14074000 && f.mode == '2' && sent(f, "FA14074000") && !sent(f, "MD6") && !sent(f, "Q90"));
+        r.ptt(true); run(r, 1000);
+        CHECK(f.tx && r.pttState && sent(f, "TX") && !sent(f, "TQ1"));
+        r.ptt(false); run(r, 1000);
+        CHECK(!f.tx && !r.pttState && sent(f, "RX"));
+        r.setMode(0x05, 1); run(r, 1000);
+        CHECK(f.mode == '4' && r.mode == 5);
+        r.setKeySpeed(25); run(r, 1000);
+        CHECK(f.ks == 25 && sent(f, "KS025"));
+        // PTT on the serial port's RTS line (Digirig) with CAT for the frequency
+        std::vector<bool> line;
+        r.pttLine = [&line](bool on) { line.push_back(on); };
+        r.pttMethod = PTT_RTS;
+        r.ptt(true); run(r, 600);
+        CHECK(line.size() == 1 && line[0] && !f.tx && r.pttState);
+        r.ptt(false); run(r, 600);
+        CHECK(line.size() == 2 && !line[1] && !r.pttState);
+        // a Kenwood must not pass for a Yaesu
+        r.pttMethod = PTT_CAT;
+        r.setProto(RP_YAESU); run(r, 4000);
+        CHECK(!r.connected());
+    }
+    {   // ---------------- Yaesu FTDX10: FTX-1 commands, PC in plain watts
+        Radio r; FakeText f; f.r = &r; f.yid = "ID0761"; f.watts = 50;
+        r.write = [&f](const uint8_t* d, size_t n) { f.rx(d, n); return true; };
+        r.setProto(RP_YAESU);
+        r.requestId();
+        run(r, 3000);
+        CHECK(r.connected() && !strcmp(r.modelName(), "FTDX10") && r.level[0x0A] == 50);
+        r.setRfPower(25); run(r, 2000);
+        CHECK(f.watts == 25 && sent(f, "PC025") && r.level[0x0A] == 25);
+    }
+    {   // ---------------- no CAT (SignaLink): the band buttons set the dial, VOX keys the radio
+        Radio r;
+        int writes = 0;
+        r.write = [&writes](const uint8_t*, size_t) { writes++; return true; };
+        r.setProto(RP_NONE);
+        CHECK(r.connected() && !strcmp(r.modelName(), "No CAT"));
+        r.setFreq(10136000); r.setUsbData(); r.setRfPower(50); r.ptt(true); run(r, 2000);
+        CHECK(r.freq == 10136000 && r.pttState && writes == 0);
+        r.ptt(false);
+        CHECK(!r.pttState);
+    }
+    {   // ---------------- no CAT through the app: the band button's dial is remembered
+        const char* dir = "test/out/nocat";
+        mkdir(dir, 0755);
+        cleanDir(dir);
+        {
+            App app;
+            app.begin(dir);
+            app.command("set", {{"radioType", "5"}});
+            CHECK(app.radio.pttMethod == PTT_VOX);              // no CAT and PTT "CAT": the sound card's VOX
+            app.radio.setProto(RP_NONE);
+            app.usbSerial = true;
+            app.command("band", {{"hz", "7074000"}});
+            for (int i = 0; i < 20; i++) { simMs += 10; app.tick(); }
+            CHECK(app.radio.freq == 7074000 && app.cfg.dialHz == 7074000);
+            app.command("set", {{"pttMethod", "1"}});
+            CHECK(app.radio.pttMethod == PTT_RTS);
+        }
+        App app2;
+        app2.begin(dir);
+        CHECK(app2.cfg.dialHz == 7074000 && app2.cfg.radioType == 5 && app2.cfg.pttMethod == 1);
     }
     {   // ---------------- a CI-V port echoes: it must not pass for a text radio
         Radio r;

@@ -179,9 +179,33 @@ file is `console_19761018_0000.txt`. Files dated more than 7 days back are remov
 
 ## Choosing the radio
 
+Radios and interfaces:
+
+| Radio / interface | How it connects | Status |
+|---|---|---|
+| IC-7100, IC-705, FTX-1, QMX | one USB cable | tested |
+| IC-7300, IC-7610, IC-9700, IC-905 | one USB cable (CI-V + sound card) | should work, untested |
+| FTDX10, FT-991A, FT-710, FTDX101 | one USB cable (CAT at the radio's rate + sound card) | should work, untested |
+| TS-2000, TS-480, TS-590, K2, K3 | Digirig with the radio's CAT cable (or a CP2102 USB-RS232 cable + sound card on a hub) | should work, untested |
+| SignaLink USB (any radio) | Radio "No CAT": the SignaLink keys the radio on its own | should work, untested |
+| Digirig without a CAT cable | Radio "No CAT", PTT "Serial RTS" | should work, untested |
+
+- **No CAT** (Settings > Radio): RigDeck cannot read the frequency, so the band buttons set the
+  dial frequency it logs (remembered across restarts); set the radio to the same band by hand.
+  PTT is VOX (the SignaLink keys on the audio) unless Settings > PTT says RTS or DTR.
+- **PTT** (Settings > Radio): CAT command (default), the serial port's **RTS** (Digirig) or **DTR**
+  line, or **VOX**. RTS / DTR work with CAT on the same port too.
+- Only Silicon Labs CP210x USB-serial chips (as in Digirig and most radios) are driven; FTDI,
+  Prolific and CH340 cables are not yet.
+- The board has one USB-A port: two USB devices (a SignaLink and a separate CAT cable) need a
+  powered USB hub. A Digirig is one device (it has a hub inside).
+
 Settings > Radio is **Find automatically** by default: every serial port on the USB bus is tried as
-Icom CI-V (configured address, 88h, A4h), as Yaesu CAT and as QMX CAT, and the first that answers
-is used. You can swap radios without changing anything. Pick a specific radio there only if the
+Icom CI-V (configured address, then the factory addresses of the IC-7100 88h, IC-705 A4h, IC-7300
+94h, IC-9700 A2h, IC-7610 98h, IC-905 ACh), as Yaesu CAT, as Kenwood / Elecraft CAT (on a
+Silicon Labs CP210x port at the configured rate, then 4800, 9600, 19200 and 38400) and as QMX CAT,
+and the first that answers is used. The search can take up to a minute for a radio far down the
+list; choosing the radio's family in Settings > Radio makes it quicker. You can swap radios without changing anything. Pick a specific radio there only if the
 search ever settles on the wrong one. The radio-GPS clock option works with the Icoms only (any radio
 works with a GPS module on the board, see below).
 

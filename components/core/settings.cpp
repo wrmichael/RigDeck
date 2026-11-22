@@ -67,7 +67,9 @@ bool Settings::set(const std::string& k, const std::string& v) {
     if (k == "logHost") { if (v.size() > 63) return false; logHost = v; return true; }
     if (k == "civAddr") return toInt(v, 1, 0xDF, civAddr);
     if (k == "civBaud") return toInt(v, 4800, 115200, civBaud);
-    if (k == "radioType") return toInt(v, 0, 3, radioType);
+    if (k == "radioType") return toInt(v, 0, 5, radioType);
+    if (k == "pttMethod") return toInt(v, 0, 3, pttMethod);
+    if (k == "dialHz") { long long x = atoll(v.c_str()); if (x < 100000 || x > 470000000LL) return false; dialHz = x; return true; }
     if (k == "catBaud") return toInt(v, 4800, 115200, catBaud);
     if (k == "keyWpm") { if (v == "0") { keyWpm = 0; return true; } return toInt(v, 6, 48, keyWpm); }
     if (k.size() == 6 && k.compare(0, 5, "macro") == 0 && k[5] >= '1' && k[5] <= '6') {
@@ -108,7 +110,7 @@ std::string Settings::serialize(bool secrets) const {
     auto I = [&](const char* k, int v) { snprintf(b, sizeof b, "%d", v); S(k, b); };
     S("call", call); S("grid", grid); S("op", op); S("mySig", mySig); S("mySigInfo", mySigInfo); S("cqTag", cqTag); S("apSsid", apSsid); S("staSsid", staSsid); S("logHost", logHost);
     if (secrets) { S("apPass", apPass); S("staPass", staPass); }
-    I("radioType", radioType); I("catBaud", catBaud); I("keyWpm", keyWpm);
+    I("radioType", radioType); I("pttMethod", pttMethod); s += "dialHz=" + std::to_string(dialHz) + "\n"; I("catBaud", catBaud); I("keyWpm", keyWpm);
     for (int i = 0; i < 6; i++) { snprintf(b, sizeof b, "macro%d", i + 1); S(b, macro[i]); }
     I("civAddr", civAddr); I("civBaud", civBaud); I("txFreq", txFreq); I("autoAlc", autoAlc); I("txLevel", txLevel);
     I("opMode", opMode); I("cqParity", cqParity); I("useRR73", useRR73); I("maxRetries", maxRetries);

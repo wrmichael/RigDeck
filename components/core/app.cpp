@@ -519,6 +519,7 @@ void App::storRefresh() {
 }
 
 void App::syncSeq() {
+    radio.pttMethod = cfg.radioType == 5 && cfg.pttMethod == PTT_CAT ? PTT_VOX : cfg.pttMethod;   // no CAT: VOX unless a line is set
     seq.myCall = cfg.call;
     seq.myGrid = cfg.grid;
     seq.cqTag = cfg.cqTag;
@@ -873,6 +874,10 @@ void App::tick() {
         radio.setFreq((uint64_t)bandReqHz_);
         radio.setUsbData();
         radio.setRfPower(cfg.rfPower);
+        if (radio.proto == RP_NONE && cfg.dialHz != bandReqHz_) {   // no CAT: remember the dial for the next start
+            cfg.dialHz = bandReqHz_;
+            cfg.save(dir_ + "/settings.txt");
+        }
         bandReqHz_ = 0;
     }
     // Nobody watching: stop automatic transmissions (same idea as the WSJT-X "Tx watchdog").
@@ -1216,6 +1221,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         if (txState_ == ST_TX) return err("not while transmitting");
         radio.setFreq((uint64_t)hz);
         radio.freq = (uint64_t)hz;                                   // show it at once; the radio's reply confirms
+        if (radio.proto == RP_NONE) { cfg.dialHz = hz; cfg.save(dir_ + "/settings.txt"); }
         return ok();
     }
     if (c == "rmode" || c == "rdata" || c == "rvfo") {

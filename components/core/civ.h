@@ -3,6 +3,11 @@
 //   RP_CIV    Icom CI-V (IC-7100, IC-705): binary frames
 //   RP_YAESU  Yaesu "new CAT" as spoken by the FTX-1: ASCII commands ending in ';'
 //   RP_QMX    QRP Labs QMX / QMX+: Kenwood TS-480 style ASCII commands ending in ';'
+//   RP_NONE   no CAT at all (a SignaLink or other plain USB sound card): the frequency is what the
+//             band buttons set, and PTT is the sound card's VOX or a serial port's RTS / DTR line
+//   RP_KENWOOD Kenwood / Elecraft text CAT (TS-2000, TS-480, TS-590, K2, K3): like the QMX's, with
+//             TX; / RX; for PTT and Kenwood's mode numbers
+//   Yaesu radios other than the FTX-1 (FTDX10, FT-991A, FT-710, FTDX101, FT-891) speak RP_YAESU too.
 // Whatever the radio, the public state uses Icom's numbering (mode codes, command-14 level and
 // command-16 function sub-codes); the text protocols are translated in cat.cpp.
 #pragma once
@@ -35,14 +40,20 @@ private:
     bool in_ = false;
 };
 
-enum RadioProto { RP_CIV = 0, RP_YAESU = 1, RP_QMX = 2 };
+enum RadioProto { RP_CIV = 0, RP_YAESU = 1, RP_QMX = 2, RP_NONE = 3, RP_KENWOOD = 4 };
+enum PttMethod { PTT_CAT = 0, PTT_RTS = 1, PTT_DTR = 2, PTT_VOX = 3 };
 
 class Radio {
 public:
     std::atomic<int> proto{RP_CIV};
     void setProto(int p);                              // also forgets everything learned from the previous radio
     const char* modelName() const;
-    bool isText() const { return proto.load() != RP_CIV; }
+    bool isText() const { int p = proto.load(); return p != RP_CIV && p != RP_NONE; }
+    bool kenwoodish() const { int p = proto.load(); return p == RP_QMX || p == RP_KENWOOD; }
+    // PTT by a serial port's RTS or DTR line (Digirig and similar interfaces) or by the sound card's
+    // VOX instead of a CAT command. pttLine is set by the USB code: it drives the line.
+    std::atomic<int> pttMethod{PTT_CAT};
+    std::function<void(bool)> pttLine;
 
     // The radio's own CW keyer sends text (the radio must be in CW mode). Used by the logger macros.
     void sendCw(const std::string& text);
@@ -107,6 +118,7 @@ private:
     std::string line_;
     int pcHead_ = 0;                                   // Yaesu FTX-1: 1 = field head (10 W), 2 = SPA-1 (100 W)
     int yMode_ = 0;                                    // last raw mode character from a text radio
+    int textId_ = 0;                                   // the radio's answer to ID; (model number)
     std::mutex mtx_;
     CivParser parser_;
     std::deque<std::vector<uint8_t>> q_;
