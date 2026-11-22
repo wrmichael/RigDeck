@@ -574,8 +574,12 @@ async function lgLoad(){
   if(demo) return;
   trLoad();
   const j=await cmd("logread",{file:$("lgFile").value,from:LG.from,n:LG.n,q:$("lgQ").value.trim()});
-  if(!j||!j.ok) return;
+  if(!j||!j.ok){LG.cn=-1;return;}                     // try again on the next state update
   LG.total=j.total;LG.items=j.items;
+  // The count above comes from memory, the list from the file: if they disagree (the file was busy),
+  // read the list again shortly, a few times at most.
+  const expect=$("lgFile").value==="all"?S.log.all:S.log.n;
+  if(!$("lgQ").value.trim()&&j.total!==expect&&(LG.retry=(LG.retry||0)+1)<=3) setTimeout(lgLoad,2000); else LG.retry=0;
   $("lgPage").textContent=j.total?`${LG.from+1}–${Math.min(LG.from+LG.n,j.total)} of ${j.total}`:"no contacts";
   $("lgPrev").disabled=LG.from===0;$("lgNext").disabled=LG.from+LG.n>=j.total;
   const d=s=>s&&s.length===8?`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6)}`:"", t=s=>s?`${s.slice(0,2)}:${s.slice(2,4)}`:"";
