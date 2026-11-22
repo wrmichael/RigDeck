@@ -1,6 +1,6 @@
 {
   "name": "RigDeck",
-  "version": "0.9.38",
+  "version": "0.9.39",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
   "builds": [
