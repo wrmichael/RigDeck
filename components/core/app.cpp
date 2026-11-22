@@ -11,6 +11,7 @@
 #include <cmath>
 #include <chrono>
 #include <set>
+#include <cerrno>
 #include <sys/stat.h>
 #include <dirent.h>
 
@@ -440,12 +441,19 @@ std::string App::logReadJson(bool archive, int from, int n, const std::string& f
     std::string path = archive ? archivePath() : logPath(), flt = upperTrim(filter);
     std::vector<int, PsAlloc<int>> match;            // file indices that match, oldest first
     int total = 0;
-    adifForEach(path, [&](std::string_view r, int i, long) {
+    errno = 0;
+    bool opened = adifForEach(path, [&](std::string_view r, int i, long) {
         if (flt.empty()) total++;
         else if (upperTrim(adifField(r, "CALL")).find(flt) != std::string::npos) match.push_back(i);
         return true;
     });
     if (!flt.empty()) total = (int)match.size();
+    if (logFn) {
+        char b[200];
+        snprintf(b, sizeof b, "logread %s: %s, %d record(s) (count %d)%s%s", archive ? "archive" : "current", path.c_str(), total,
+                 archive ? archiveCount_ : logCount_, opened ? "" : " - cannot open: ", opened ? "" : strerror(errno));
+        logFn(b);
+    }
     std::vector<int> want;                             // file index of each item on the page, in page order
     for (int k = std::max(0, from); k < total && k < from + n; k++)
         want.push_back(flt.empty() ? total - 1 - k : match[match.size() - 1 - k]);
@@ -1712,7 +1720,9 @@ void App::uiLogTail(size_t max, std::vector<UiLogEntry>& out) {
     std::lock_guard<std::mutex> lk(mtx_);
     RecVec recs;
     int first = -1;
-    adifTail(logPath(), max, recs, first);
+    errno = 0;
+    if (!adifTail(logPath(), max, recs, first) && logCount_ > 0 && logFn)
+        logFn(("logbook: cannot open " + logPath() + ": " + strerror(errno)).c_str());
     if (first < 0) first = logCount_ - (int)recs.size();
     for (size_t i = recs.size(); i > 0 && out.size() < max; i--) {
         std::string_view r = recs[i - 1];

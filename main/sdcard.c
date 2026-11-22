@@ -23,7 +23,7 @@ static esp_err_t mount(bool formatIfUnreadable)
 {
     esp_vfs_fat_sdmmc_mount_config_t mc = {
         .format_if_mount_failed = formatIfUnreadable,
-        .max_files = 5,
+        .max_files = 10,                            // log files, a rewrite's temp file, the console log, downloads
         .allocation_unit_size = 64 * 1024,
     };
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
