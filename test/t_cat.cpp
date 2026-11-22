@@ -439,6 +439,16 @@ int main() {
             CHECK(okr(app.command("set", {{"call", "AC9HP"}})));
             CHECK(app.seq.workedBefore("K1OLD") && !app.seq.workedBefore("N0NEW"));
             CHECK(app.stateJson(0, 0, false).find("\"station\":\"AC9HP\"") != std::string::npos);
+            // a contact only in the current log (not in the archive) is copied there before clearing
+            {
+                FILE* fa = fopen(app.logPath().c_str(), "a");
+                fputs("<CALL:5>K1ONE <QSO_DATE:8>20260102 <TIME_ON:4>1300 <BAND:3>20m <MODE:3>FT8 <EOR>\n", fa);
+                fclose(fa);
+                app.command("set", {{"call", "W1AW"}}); app.command("set", {{"call", "AC9HP"}});   // reload the files
+            }
+            CHECK(app.stateJson(0, 0, false).find("\"behind\":true") != std::string::npos);
+            CHECK(okr(app.command("clearlog", {{"confirm", "yes"}})) && slurpP(app.archivePath()).find("K1ONE") != std::string::npos);
+            CHECK(app.stateJson(0, 0, false).find("\"behind\":false") != std::string::npos);
             // internal store: a cleared log is gone (the archive keeps the contacts)
             CHECK(okr(app.command("clearlog", {{"confirm", "yes"}})) && !exists(app.logPath()));
         }
@@ -449,7 +459,7 @@ int main() {
             app.fsInfo = [](bool sdc, uint64_t& t, uint64_t& u) { t = sdc ? 4000000000ULL : 2000000; u = sdc ? 1000 : 1990000; return true; };
             (void)fakeT;
             app.begin(in, sd);
-            CHECK(app.logPath() == sd + "/AC9HP_log.adi" && !exists(in + "/AC9HP_archive.adi") && nrec(slurpP(app.archivePath())) == 1);
+            CHECK(app.logPath() == sd + "/AC9HP_log.adi" && !exists(in + "/AC9HP_archive.adi") && nrec(slurpP(app.archivePath())) == 2);
             CHECK(exists(in + "/W1AW-P_archive.adi"));                    // other stations stay where they are until used
             std::string js = app.stateJson(0, 0, false);
             CHECK(js.find("\"stor\":{\"sd\":true") != std::string::npos && js.find("\"sdT\":4000000000") != std::string::npos);
@@ -460,10 +470,10 @@ int main() {
                 app.command("logqso", {{"call", call}, {"mode", "SSB"}, {"freq", "14.250"}, {"rs", std::to_string(i)}});
             }
             App::UiState u; app.uiState(u);
-            CHECK(u.logN == 3000 && u.logAll == 3001 && u.logSd && u.station == "AC9HP");
+            CHECK(u.logN == 3000 && u.logAll == 3002 && u.logSd && u.station == "AC9HP");
             std::string pg = app.command("logread", {{"n", "3"}, {"from", "0"}});
             CHECK(pg.find("\"total\":3000") != std::string::npos && pg.find("{\"i\":2999,") != std::string::npos && pg.find("\"RST_SENT\":\"2999\"") != std::string::npos);
-            pg = app.command("logread", {{"file", "all"}, {"n", "2"}, {"from", "3000"}});
+            pg = app.command("logread", {{"file", "all"}, {"n", "2"}, {"from", "3000"}});   // the two oldest: K1ONE, K1OLD
             CHECK(pg.find("{\"i\":0,") != std::string::npos && pg.find("K1OLD") != std::string::npos);
             std::vector<App::UiLogEntry> tail;
             app.uiLogTail(2, tail);
@@ -472,17 +482,17 @@ int main() {
             CHECK(okr(app.command("logdel", {{"i", "1500"}})));
             CHECK(nrec(slurpP(sd + "/AC9HP_deleted.adi")) == 1 && app.command("logtrash", {}).find("\"keep\":true") != std::string::npos);
             app.uiState(u);
-            CHECK(u.logN == 2999 && u.logAll == 3000);
+            CHECK(u.logN == 2999 && u.logAll == 3001);
             CHECK(okr(app.command("logrestore", {{"i", "0"}})));
             app.uiState(u);
-            CHECK(u.logN == 3000 && u.logAll == 3001 && slurpP(app.logPath()).find("<RST_SENT:4>1500") != std::string::npos);
-            // send unsent: the whole archive goes out in batches (K1OLD was sent before)
+            CHECK(u.logN == 3000 && u.logAll == 3002 && slurpP(app.logPath()).find("<RST_SENT:4>1500") != std::string::npos);
+            // send unsent: the whole archive goes out in batches (K1OLD was sent before, K1ONE was not)
             CHECK(okr(app.command("set", {{"logProto", "2"}, {"logHost", "127.0.0.1"}, {"logPort", "9"}})));
             std::string r = app.command("logsync", {{"file", "all"}});
-            CHECK(r.find("\"queued\":3000") != std::string::npos);
+            CHECK(r.find("\"queued\":3001") != std::string::npos);
             int sentN = 0;
             while (app.netOnce()) sentN++;
-            CHECK(sentN == 3000);
+            CHECK(sentN == 3001);
             CHECK(app.command("logsync", {{"file", "all"}}).find("\"queued\":0") != std::string::npos);
             app.command("set", {{"logProto", "0"}});
             // a cleared log on the card is renamed and kept

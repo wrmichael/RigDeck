@@ -179,7 +179,6 @@ void App::logOpen() {
     sentLoad();
     logReload();
     if (!logOnSd_) trashPurge();
-    archiveBehind_ = logCount_ > archiveCount_;
     if (logFn) logFn(("log: " + logPath() + " (" + std::to_string(logCount_) + " contacts), archive " + std::to_string(archiveCount_)).c_str());
 }
 
@@ -188,11 +187,15 @@ void App::logOpen() {
 void App::logReload() {
     worked_.clear();
     archiveCount_ = logCount_ = 0;
+    HashIndex inArchive;                               // which contacts the archive has (to spot any it lacks)
     adifForEach(archivePath(), [&](std::string_view r, int, long) {
         worked_.bulkAdd(adifField(r, "CALL") + "|" + adifField(r, "BAND"));
+        inArchive.bulkAdd(sentKey(r));
         archiveCount_++;
         return true;
     });
+    inArchive.finish();
+    int missing = 0;
     std::deque<PStr> last;
     int unsent = 0;
     {
@@ -200,6 +203,7 @@ void App::logReload() {
         adifForEach(logPath(), [&](std::string_view r, int, long) {
             worked_.bulkAdd(adifField(r, "CALL") + "|" + adifField(r, "BAND"));
             logCount_++;
+            if (!inArchive.contains(sentKey(r))) missing++;
             if (!sent_.contains(sentKey(r))) unsent++;
             last.push_back(pstr(r));
             if (last.size() > 30) last.pop_front();
@@ -210,6 +214,7 @@ void App::logReload() {
     recent_.clear();
     for (auto& r : last) recent_.push_back(adifToQso(r));
     unsent_ = unsent;
+    archiveBehind_ = missing > 0;
 }
 
 // Edit (fields) or delete (fields == nullptr) record idx of the current log or the archive. The
@@ -1448,9 +1453,29 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
     }
     if (c == "clearlog") {                                           // start a new current log; the archive keeps everything
         if (arg(a, "confirm") != "yes") return err("confirm=yes required");
-        if (archiveBehind_ && arg(a, "force") != "yes")
-            return err("The archive is missing contacts that are in the current log. Download the current log first.");
-        if (txState_ == ST_TX) return err("not while transmitting");
+        // Contacts the archive lacks (a failed write, an archive-only delete) are copied into it first,
+        // so clearing never loses one. (Quick: allowed while transmitting.)
+        if (archiveBehind_) {
+            HashIndex inArchive;
+            adifForEach(archivePath(), [&](std::string_view r, int, long) { inArchive.bulkAdd(sentKey(r)); return true; });
+            inArchive.finish();
+            int copied = 0;
+            bool fresh = !fileExists(archivePath());
+            FILE* f = fopen(archivePath().c_str(), "a");
+            if (!f) return err("Could not write the archive (storage full?); the current log was not cleared");
+            if (fresh) fputs(adifHeader().c_str(), f);
+            bool okw = true;
+            adifForEach(logPath(), [&](std::string_view r, int, long) {
+                if (inArchive.contains(sentKey(r))) return true;
+                okw = okw && fwrite(r.data(), 1, r.size(), f) == r.size() && fputc('\n', f) != EOF;
+                copied++;
+                return okw;
+            });
+            okw = (fclose(f) == 0) && okw;
+            if (!okw) return err("Could not write the archive (storage full?); the current log was not cleared");
+            archiveCount_ += copied;
+            if (logFn) logFn(("clear log: copied " + std::to_string(copied) + " contact(s) the archive did not have").c_str());
+        }
         std::string kept;
         if (logOnSd_ && fileExists(logPath())) {            // on the card the cleared log is kept, renamed
             char ts[32] = "nodate";
@@ -1570,7 +1595,6 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
     }
     if (c == "eraselogs") {                                          // current log and archive, and worked-before with them
         if (arg(a, "confirm") != "yes") return err("confirm=yes required");
-        if (txState_ == ST_TX) return err("not while transmitting");
         int n = eraseAllLogs();
         status("All logs erased (" + std::to_string(n) + " files)");
         return "{\"ok\":true,\"files\":" + jnum(n) + "}";

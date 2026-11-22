@@ -364,7 +364,7 @@ function render(){
   pskSince=S.psk.seq;
   $("pskinfo").textContent=`RX ${S.psk.f} Hz (tracking ${S.psk.afc} Hz), signal quality ${S.psk.q}%`;
   // log
-  $("logn").textContent=(S.stor?S.stor.station+": ":"")+S.log.n+" contacts in the current log, "+S.log.all+" in the archive"+(S.stor&&S.stor.sd?" (on the microSD card)":"")+(S.log.behind?" (archive incomplete: download the current log)":"");
+  $("logn").textContent=(S.stor?S.stor.station+": ":"")+S.log.n+" contacts in the current log, "+S.log.all+" in the archive"+(S.stor&&S.stor.sd?" (on the microSD card)":"")+(S.log.behind?" (some are not in the archive yet: clearing the current log copies them there first)":"");
   const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
   const stn=(S.stor&&S.stor.station)||"rigdeck";
   $("dlcur").download=`${stn}-current-${stamp}.adi`;$("dlall").download=`${stn}-archive-${stamp}.adi`;
