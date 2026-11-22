@@ -164,10 +164,14 @@ them empty to keep the current password. **Restart** restarts the controller (ne
 baud-rate and GPS changes). CW macros have a label box (the button name) and a text box.
 
 **Device** tab (also on the web page, Settings, Device): **Brightness** (changes at once),
-**Contrast** (100 % = as designed; higher makes panels darker and text brighter; applies after a
-restart), where the log is and the free space in the board's memory and on the microSD card
+**Contrast** (100 % = as designed; higher makes panels darker and text brighter, lower greys
+everything; applies after a restart, which it offers), where the log is and the free space in the board's memory and on the microSD card
 (shown separately), a rough count of contacts that still fit, and **Erase all logs** (asks twice;
-on the web page you type NUKE).
+on the web page you type NUKE). **Format microSD card** (asks twice; on the web page you type
+FORMAT) erases the card and formats all of it as FAT32: this station's log is parked in the board's
+memory meanwhile and put back; other files on the card are lost. Use it for a new card (most
+64 GB and larger cards come as exFAT, which RigDeck cannot read) or one partitioned small. The
+Device page shows the card's size and its file system's size, so a small partition shows up there.
 
 ## Choosing the radio
 

@@ -116,6 +116,7 @@ public:
     // Storage: the platform reports size and use of the internal store (sd=false) or the card.
     bool (*fsInfo)(bool sd, uint64_t& total, uint64_t& used) = nullptr;
     std::string sdInfo;                                // set before begin(): "", or what the card is / why it is not used
+    int (*sdFormat)(std::string& msg) = nullptr;       // format the card (0 ok; msg = what it is now / why not)
     void setNetInfo(const std::string& s);
     // Home-network (station) link, reported by the platform and controlled from Settings.
     struct StaStatus { std::string state = "off", ssid, ip, reason; int rssi = 0; };

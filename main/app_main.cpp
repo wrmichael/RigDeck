@@ -113,6 +113,14 @@ extern "C" void app_main(void) {
     s_app.sdInfo = sdi;
 #endif
     s_app.fsInfo = fsInfo;
+#if CONFIG_IDF_TARGET_ESP32P4
+    s_app.sdFormat = [](std::string& msg) {
+        char m[96];
+        int r = sdcard_format(m, sizeof m);
+        msg = m;
+        return r;
+    };
+#endif
     s_app.begin("/fs", logDir);
     ESP_LOGI(TAG, "RigDeck %s, call=%s grid=%s, free heap %u kB", s_app.fwVersion.c_str(), s_app.cfg.call.c_str(), s_app.cfg.grid.c_str(),
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_DEFAULT) / 1024));

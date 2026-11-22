@@ -401,6 +401,22 @@ int main() {
             app.uiState(u);
             CHECK(u.logN == 0 && u.logAll == 0 && !app.seq.workedBefore("K1OLD"));
         }
+        {   // formatting the card keeps this station's log (parked in the board's memory meanwhile)
+            App app;
+            app.fsInfo = [](bool sdc, uint64_t& t, uint64_t& u) { t = sdc ? 4000000000ULL : 2000000; u = 100000; return true; };
+            app.sdFormat = [](std::string& msg) { cleanDir("test/out/stor/sd"); msg = "TEST, card 4.0 GB, files 4.0 GB"; return 0; };
+            app.begin(in, sd);
+            CHECK(okr(app.command("logqso", {{"call", "K9FMT"}, {"mode", "SSB"}, {"freq", "14.250"}})));
+            put(sd + "/OTHER_log.adi", "<EOH>\n");
+            std::string r = app.command("sdformat", {{"confirm", "yes"}});
+            CHECK(okr(r) && !exists(sd + "/OTHER_log.adi") && !exists(in + "/AC9HP_log.adi"));
+            CHECK(slurpP(app.logPath()).find("K9FMT") != std::string::npos && slurpP(app.archivePath()).find("K9FMT") != std::string::npos);
+            CHECK(app.stateJson(0, 0, false).find("TEST, card 4.0 GB") != std::string::npos && !app.rebootReq);
+            app.sdFormat = [](std::string& msg) { msg = "Formatting the card failed (ESP_FAIL)"; return -1; };
+            CHECK(!okr(app.command("sdformat", {{"confirm", "yes"}})));
+            CHECK(app.logPath() == in + "/AC9HP_log.adi" && slurpP(app.logPath()).find("K9FMT") != std::string::npos);
+            app.command("eraselogs", {{"confirm", "yes"}});
+        }
         {   // almost full internal store: a warning with a rough count of contacts left
             App app;
             app.fsInfo = [](bool, uint64_t& t, uint64_t& u) { t = 2000000; u = 1880000; return true; };

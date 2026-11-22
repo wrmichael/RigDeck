@@ -22,12 +22,14 @@ const int W = 1024, H = 600;
 const int HEAD_H = 58, SLOT_H = 6, WF_Y = HEAD_H + SLOT_H, WF_H = 90, LINE_Y = WF_Y + WF_H, LINE_H = 36;
 const int MAIN_Y = LINE_Y + LINE_H, BOT_H = 64, MAIN_H = H - MAIN_Y - BOT_H, TABLE_W = 620, PANEL_X = 628;
 
-// Every colour goes through C(); the Contrast setting (50-150 %) stretches it around mid-grey, so
-// higher contrast makes the dark panels darker and the text brighter. Read once at start-up.
+// Every colour goes through C(); the Contrast setting (50-150 %) stretches each channel around a
+// dark grey (the UI is mostly dark panels with light text), so higher contrast makes panels darker
+// and text and dim labels much brighter; lower contrast greys everything towards the panels.
+// Read once at start-up.
 int gContrast = 100;
 inline lv_color_t C(uint32_t rgb) {
     if (gContrast != 100) {
-        auto f = [](int v) { v = 128 + (v - 128) * gContrast / 100; return v < 0 ? 0 : v > 255 ? 255 : v; };
+        auto f = [](int v) { v = 60 + (v - 60) * gContrast / 100; return v < 0 ? 0 : v > 255 ? 255 : v; };
         rgb = (uint32_t)(f((rgb >> 16) & 255) << 16 | f((rgb >> 8) & 255) << 8 | f(rgb & 255));
     }
     return lv_color_hex(rgb);
@@ -306,6 +308,10 @@ void onConfirmYes(lv_event_t*) {
     std::map<std::string, std::string> args = g_confirm.args;
     args["confirm"] = "yes";
     onConfirmNo(nullptr);
+    if (c && !strcmp(c, "sdfmt1")) {
+        confirm("Format microSD card - last chance", "Really erase the card?\nIt takes up to a minute; wait for it.", "Format", "sdformat");
+        return;
+    }
     if (c && !strcmp(c, "nuke1")) {                    // erasing every log asks twice
         confirm("Erase all logs - last chance", "Really erase every contact of every station?\nThere is no undo.", "Erase all", "eraselogs");
         return;
@@ -1239,8 +1245,13 @@ void onBright(lv_event_t* e) {
 void onContrast(lv_event_t* e) {
     int v = lv_slider_get_value(sContrast);
     setText(sContrastL, std::to_string(v) + " %");
-    if (lv_event_get_code(e) == LV_EVENT_RELEASED && cmd("set", {{"contrast", std::to_string(v)}}))
-        note(v == gContrast ? "Contrast saved" : "Contrast saved: Restart to apply it");
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED && cmd("set", {{"contrast", std::to_string(v)}}) && v != gContrast)
+        confirm("Contrast", "The new contrast applies after a restart.\nRestart now?", "Restart", "reboot");
+}
+void onSdFormat(lv_event_t*) {
+    confirm("Format microSD card", "Erase EVERYTHING on the microSD card and format it (FAT32, whole card)? This station's "
+            "log is kept: it waits in the board's memory and goes back on the card. Other stations' logs and kept "
+            "deleted/cleared logs on the card are lost.", "Format", "sdfmt1");
 }
 void onNuke(lv_event_t*) {
     confirm("Erase all logs", "Erase EVERY log on this RigDeck: current logs, archives, deleted contacts and cleared logs of all "
@@ -1413,6 +1424,7 @@ void buildSettingsScreen() {
         label(pg, 0, 300, f16, DIM, "Logs go on a microSD card (FAT32) when one is in at start-up; anything logged in the board's\n"
                                     "memory moves onto the card then. Files are named after the station callsign.");
         button(pg, 0, 356, 260, 52, LV_SYMBOL_TRASH " Erase all logs", onNuke, nullptr, 0x9a2a2a);
+        button(pg, 280, 356, 300, 52, LV_SYMBOL_SD_CARD " Format microSD card", onSdFormat, nullptr, 0x9a2a2a);
     }
 
     sKb = lv_keyboard_create(scrSettings);

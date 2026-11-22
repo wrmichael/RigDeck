@@ -249,7 +249,7 @@ table.log th{color:var(--dim);font-weight:500}
     </div>
     <p class="hint">Brightness changes at once. Contrast (100 % = normal) applies after a restart.</p>
     <div id="dvStor" style="white-space:pre-line"></div>
-    <div class="row" style="margin-top:8px"><button id="eraseall" class="danger">Erase all logs (every station)</button></div>
+    <div class="row" style="margin-top:8px"><button id="eraseall" class="danger">Erase all logs (every station)</button> <button id="sdformat" class="danger">Format microSD card</button></div>
     <p class="hint">With a microSD card (FAT32) in at start-up the logs live on the card, in the RigDeck folder, one set of files per station callsign (e.g. AC9HP_log.adi, AC9HP_archive.adi). Contacts logged in the board's memory move onto the card at that start. On the card, deleted contacts are kept for good in AC9HP_deleted.adi and a cleared current log is kept as AC9HP_deleted_<i>date</i>_<i>time</i>.adi. Insert or remove the card with the power off.</p>
     <h3 style="margin-top:16px">Clock</h3>
     <div class="row"><span id="clkinfo"></span><button data-trim="-100">-0.1 s</button><button data-trim="-20">-20 ms</button><button data-trim="20">+20 ms</button><button data-trim="100">+0.1 s</button></div>
@@ -493,9 +493,16 @@ $("eraseall").onclick=async()=>{
   const j=await cmd("eraselogs",{confirm:"yes"});
   if(j&&j.ok) banner(`All logs erased (${j.files} files)`);
 };
+$("sdformat").onclick=async()=>{
+  if(prompt("Erase EVERYTHING on the microSD card and format it (FAT32, whole card)?\n\nThis station's log is kept: it waits in the board's memory and goes back on the card. Other stations' logs and the kept deleted/cleared logs on the card are lost. Copy the RigDeck folder to a PC first if you want them.\n\nType FORMAT to go ahead:")!=="FORMAT") return;
+  banner("Formatting the card: up to a minute…");
+  const j=await cmd("sdformat",{confirm:"yes"});
+  if(j&&j.ok) banner("Card formatted: "+j.info);
+};
 for(const [id,key] of [["dvBright","bright"],["dvContrast","contrast"]]){
   $(id).oninput=()=>{$(id+"V").textContent=$(id).value+" %";};
-  $(id).onchange=()=>{cmd("set",{[key]:$(id).value});if(key==="contrast")banner("Contrast saved: restart the device to apply it");};
+  $(id).onchange=async()=>{const j=await cmd("set",{[key]:$(id).value});
+    if(j&&j.ok&&key==="contrast"&&confirm("The new contrast applies after a restart. Restart RigDeck now?"))cmd("reboot",{});};
 }
 // SSB / CW logger
 // Frequency and mode follow the radio until the operator types a frequency or picks SSB / CW.

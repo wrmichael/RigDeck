@@ -1515,6 +1515,38 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         status(c == "logedit" ? "Contact updated" : "Contact " + call + " deleted");
         return ok();
     }
+    if (c == "sdformat") {
+        if (arg(a, "confirm") != "yes") return err("confirm=yes required");
+        if (!sdFormat) return err("This board has no microSD card slot");
+        if (txState_ == ST_TX) return err("not while transmitting");
+        bool wasSd = logOnSd_;
+        if (wasSd) {                                    // keep this station's log in the board's memory meanwhile
+            long need = 0;
+            for (const char* k : kLogKinds) need += fileSize(stationFile(k));
+            long long room = (long long)intTotal_.load() - (long long)intUsed_.load() - (long long)intTotal_.load() / 10;
+            if (need > room)
+                return err("This station's log (" + std::to_string(need / 1000) + " kB) does not fit in the board's memory while the card is formatted. "
+                           "Download the logs, Erase all logs, then format.");
+            for (const char* k : kLogKinds) moveInto(stationFile(k), dir_ + "/" + station_ + "_" + k, strcmp(k, "sent.txt") != 0);
+        }
+        std::string msg;
+        int r = sdFormat(msg);
+        if (r != 0) {
+            if (wasSd) { logOnSd_ = false; logDir_ = dir_; logOpen(); }
+            status(msg + (wasSd ? ". The log stays in the board's memory." : ""));
+            return err(msg);
+        }
+        sdInfo = msg;
+        storMono_ = -100000;                            // new free-space figures on the next network-thread pass
+        if (wasSd) {
+            logOpen();                                  // moves this station's log back onto the card
+            status("microSD card formatted (" + msg + "); this station's log is back on it");
+        } else {
+            status("microSD card formatted (" + msg + "); restarting to use it");
+            rebootReq = true;
+        }
+        return "{\"ok\":true,\"info\":" + jstr(msg) + "}";
+    }
     if (c == "eraselogs") {                                          // current log and archive, and worked-before with them
         if (arg(a, "confirm") != "yes") return err("confirm=yes required");
         if (txState_ == ST_TX) return err("not while transmitting");
