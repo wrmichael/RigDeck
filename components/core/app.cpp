@@ -1880,7 +1880,9 @@ std::string App::spectrumJson() {
     uint32_t seq;
     spec_.snapshot(b, seq);
     static const char hex[] = "0123456789abcdef";
-    std::string o = "{\"seq\":" + jnum(seq) + ",\"hz\":11.71875,\"d\":\"";
+    std::string o;
+    o.reserve(Spectrum::BINS * 2 + 64);
+    o += "{\"seq\":" + jnum(seq) + ",\"hz\":11.71875,\"d\":\"";
     for (int i = 0; i < Spectrum::BINS; i++) { o += hex[b[i] >> 4]; o += hex[b[i] & 15]; }
     return o + "\"}";
 }
@@ -1922,7 +1924,9 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     std::lock_guard<std::mutex> lk(mtx_);                          // polling is not operator activity (TX watchdog)
     int64_t now = clk::utcMs(), L = slotLen();
     uint64_t f = radio.freq.load();
-    std::string o = "{";
+    std::string o;
+    o.reserve(withCfg ? 24576 : 16384);                // one big block (external RAM) instead of many growing ones
+    o += "{";
     o += "\"utc\":" + jnum(now);
     o += std::string(",\"clk\":{\"ok\":") + jbool(clk::valid()) + ",\"src\":" + jstr(clk::source()) + ",\"age\":" + jnum(clk::ageMs() / 1000) + "}";
     o += std::string(",\"mode\":\"") + modeName(mode_) + "\",\"op\":" + jnum(cfg.opMode);

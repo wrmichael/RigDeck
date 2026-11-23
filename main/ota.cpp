@@ -200,6 +200,7 @@ struct ChunkSession {
     psa_hash_operation_t sha = PSA_HASH_OPERATION_INIT;
     std::string ver;
     int bad = 0;                                       // pieces that arrived damaged (and were sent again)
+    bool hashFail = false;                             // the SHA engine itself failed (e.g. no internal memory)
     int64_t lastUs = 0;
 };
 static ChunkSession s_cs;
@@ -259,8 +260,7 @@ static esp_err_t chunk(httpd_req_t* req) {
         s_cs.total = total;
         s_cs.hashed = piece[23] == 1;
         s_cs.hashLen = s_cs.hashed && total > 32 ? total - 32 : total;
-        psa_crypto_init();
-        psa_hash_setup(&s_cs.sha, PSA_ALG_SHA_256);
+        if (psa_crypto_init() != PSA_SUCCESS || psa_hash_setup(&s_cs.sha, PSA_ALG_SHA_256) != PSA_SUCCESS) s_cs.hashFail = true;
     }
     if (!s_cs.active || total != s_cs.total) return reply(req, false, "No update in progress. Start again.");
     s_cs.lastUs = esp_timer_get_time();
@@ -268,7 +268,7 @@ static esp_err_t chunk(httpd_req_t* req) {
     if (off != s_cs.written) return reply(req, false, "pieces out of order. Start again.");
 
     size_t hn = off < s_cs.hashLen ? std::min(n, s_cs.hashLen - (size_t)off) : 0;
-    if (hn) psa_hash_update(&s_cs.sha, piece, hn);
+    if (hn && psa_hash_update(&s_cs.sha, piece, hn) != PSA_SUCCESS) s_cs.hashFail = true;
     for (size_t i = hn; i < n; i++)
         if (off + i >= s_cs.hashLen && off + i - s_cs.hashLen < 32) s_cs.tail[off + i - s_cs.hashLen] = piece[i];
     if (esp_ota_write(s_cs.h, piece, n) != ESP_OK) { csAbort(); return reply(req, false, "Writing failed. RigDeck keeps its current firmware."); }
@@ -282,17 +282,24 @@ static esp_err_t chunk(httpd_req_t* req) {
     // Last piece: whole-image checks, switch, restart.
     uint8_t got[32];
     size_t shaLen = 0;
-    psa_hash_finish(&s_cs.sha, got, sizeof got, &shaLen);
-    bool rxOk = !s_cs.hashed || memcmp(got, s_cs.tail, 32) == 0;
+    if (psa_hash_finish(&s_cs.sha, got, sizeof got, &shaLen) != PSA_SUCCESS) s_cs.hashFail = true;
+    bool hashFail = s_cs.hashFail;
+    bool rxOk = hashFail || !s_cs.hashed || memcmp(got, s_cs.tail, 32) == 0;
+    ESP_LOGI(TAG, "before the final check: internal %u kB free, largest %u kB%s",
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA) / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA) / 1024),
+             hashFail ? "; the SHA engine failed during the upload" : "");
     esp_err_t e = esp_ota_end(s_cs.h);
     const esp_partition_t* part = s_cs.part;
     std::string ver = s_cs.ver;
     int bad = s_cs.bad;
     s_cs = ChunkSession();
+    (void)hashFail;
     if (e != ESP_OK) {
-        ESP_LOGE(TAG, "update check failed, sha of pieces %s, %d piece(s) resent", rxOk ? "ok" : "MISMATCH", bad);
+        ESP_LOGE(TAG, "update check failed, sha of pieces %s, %d piece(s) resent", hashFail ? "not computed" : rxOk ? "ok" : "MISMATCH", bad);
         return reply(req, false, std::string("The image did not pass the final check (") + esp_err_to_name(e) +
-                                     (rxOk ? "; every piece arrived intact" : "; pieces intact but the whole does not match") +
+                                     (hashFail ? "; the board ran short of internal memory for the check"
+                                               : rxOk ? "; every piece arrived intact" : "; pieces intact but the whole does not match") +
                                      "). RigDeck keeps its current firmware.");
     }
     if (esp_ota_set_boot_partition(part) != ESP_OK) return reply(req, false, "Could not switch to the new firmware.");
