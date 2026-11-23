@@ -32,3 +32,5 @@ CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_p4.csv"
 # A firmware update from the web page that fails to start goes back to the previous one.
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Allocation hook for the internal-RAM low-point tracer (main/memtrace.c).
+CONFIG_HEAP_USE_HOOKS=y

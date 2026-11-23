@@ -72,7 +72,22 @@ extern std::atomic<bool> g_sdlogBusy;
 // Internal-RAM low-point tracer: each time the lowest-ever free internal RAM drops by 1 kB or more
 // (after the first minute), one line says what was going on at that moment, so the peak can be
 // traced to its cause (TX starting, a decode, a web request, a card write, Wi-Fi...).
+extern "C" void memtrace_recent(char* out, size_t cap, int ms);
+
+// A failed allocation is noted here (any task) and reported by the control task.
+static std::atomic<uint32_t> s_failSize{0}, s_failCaps{0};
+static std::atomic<TaskHandle_t> s_failTask{nullptr};
+static void allocFailed(size_t size, uint32_t caps, const char* fn) {
+    (void)fn;
+    s_failSize = (uint32_t)size; s_failCaps = caps; s_failTask = xTaskGetCurrentTaskHandle();
+}
+
 static void lowPointTrace(int64_t now) {
+    if (uint32_t fs = s_failSize.exchange(0)) {
+        TaskHandle_t t = s_failTask.load();
+        ESP_LOGW(TAG, "memory: an allocation of %u bytes (caps 0x%x) failed in task %s",
+                 (unsigned)fs, (unsigned)s_failCaps.load(), t ? pcTaskGetName(t) : "?");
+    }
     static size_t reported = 0;
     size_t low = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
     if (now < 60000) { reported = low; return; }
@@ -87,12 +102,16 @@ static void lowPointTrace(int64_t now) {
     if (g_sdlogBusy) add("console log card write");
 #endif
     if (what.empty()) add("nothing RigDeck tracks (Wi-Fi/USB background)");
+    char who[240];
+    memtrace_recent(who, sizeof who, 150);
+    if (who[0]) { what += "; big internal allocations in the last 150 ms: "; what += who; }
     ESP_LOGW(TAG, "RAM low point: internal %u kB lowest (now %u kB free, largest block %u kB) while %s",
              (unsigned)(low / 1024), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
              (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024), what.c_str());
 }
 
 static void controlTask(void*) {
+    heap_caps_register_failed_alloc_callback(allocFailed);
     int64_t lastMem = 0;
     for (;;) {
         s_app.tick();
