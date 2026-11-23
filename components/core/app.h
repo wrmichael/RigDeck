@@ -268,6 +268,8 @@ private:
     std::string levelModel_, levelCand_;               // radio whose manual TX level is in use / being detected
     int64_t levelCandMono_ = 0;
     void levelTrack(int64_t mono);
+    int64_t saveDueMono_ = 0;                          // quick settings (TX offset, even/odd) saved a little later
+    void saveSoon();
     bool waitShown_ = false;                           // the "press Next QSO" note was shown
     // Dead man's switch: internet reachability (-1 not checked, 0 lost, 1 there), checked every
     // 20 s by the network thread; lost after 3 failed checks in a row.

@@ -926,6 +926,7 @@ void App::tick() {
     if (seq.waitNext && !waitShown_) status("QSO finished. Press Next QSO to start the next one (POTA mode)");
     waitShown_ = seq.waitNext;
     bool conn = radio.connected();
+    if (saveDueMono_ && mono >= saveDueMono_) { saveDueMono_ = 0; cfg.save(dir_ + "/settings.txt"); }
     if (conn) levelTrack(mono);
     if (conn && !wasConn_ && cfg.keyWpm > 0) radio.setKeySpeed(cfg.keyWpm);
     wasConn_ = conn;
@@ -1444,11 +1445,13 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
     }
     if (c == "txfreq") {
         if (!cfg.set("txFreq", arg(a, "hz"))) return err("200-2900 Hz");
+        saveSoon();                                                  // kept over a restart
         return ok();
     }
     if (c == "parity") {
         if (!cfg.set("cqParity", arg(a, "v"))) return err("0 or 1");
         seq.cqParity = seq.txParity = cfg.cqParity;
+        saveSoon();
         return ok();
     }
     if (c == "tune") {
@@ -1902,6 +1905,8 @@ void App::levelTrack(int64_t mono) {
     } else return;
     cfg.save(dir_ + "/settings.txt");
 }
+
+void App::saveSoon() { saveDueMono_ = clk::monoMs() + 5000; }
 
 int App::wdLeftSec() const {                                       // seconds until the TX watchdog trips, -1 = not counting
     if (!seq.txEnabled || cfg.watchdogMin <= 0) return -1;

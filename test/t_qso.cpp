@@ -199,6 +199,13 @@ static void scenario(const char* title, const char* mode, int64_t slotLen, bool 
     CHECK(A.app.txLevelNow() >= 18.0f && A.app.txLevelNow() <= 24.4f);
     CHECK(B.app.txLevelNow() >= 18.0f && B.app.txLevelNow() <= 24.4f);
     }
+    if (steady && !strcmp(mode, "FT8")) {                        // the TX offset survives a restart
+        A.app.command("txfreq", {{"hz", "1234"}});
+        runSim(A, B, 10, slotLen, slowB);                          // saved a few seconds later
+        App again;
+        again.begin(da);
+        CHECK(again.cfg.txFreq == 1234);
+    }
     if (steady) {   // the learned level survives a restart
         App again;
         again.begin(da);
