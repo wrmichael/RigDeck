@@ -133,17 +133,18 @@ The QMX appears as one USB device (STMicroelectronics VID 0483) with a CDC seria
 
 ## TX watchdog and the traffic light
 
-The TX watchdog (Settings, `TX watchdog, minutes`, default 6, 0 = off) turns transmit off when nobody
-has touched the controls for that long. Any click or key on the web page, any touch on the screen, or
-any command counts as "operator present". An open web page on its own does not: the page polls the
-device all the time, so that would never let the watchdog trip.
+The TX watchdog (Settings, `TX watchdog, minutes`, default 6, 0 = off) turns transmit off when no
+operator has been present for that long. The web control page is a remote control point: while it is
+open **and in view** in a browser, the operator counts as present. When the tab is hidden, the window
+minimised, the phone locked or the browser closed, the watchdog counts down. Any touch on the screen,
+click, key or command also counts as present.
 
 The web page shows a floating traffic light in the bottom-right corner, wherever you scroll:
 
 | Light | Meaning |
 |---|---|
 | Green | TX enabled, more than half the watchdog time left. Pulses while transmitting. |
-| Yellow | TX enabled, past half of the watchdog time. Tap the light (or anything) to restart it. |
+| Yellow | TX enabled, past half of the watchdog time (the page was hidden for a while). Tap the light, or anything, to restart it. |
 | Red | TX off: never enabled, halted, the watchdog timed out, or the dead man's switch stopped it. |
 
 The text next to it shows the time left, for example `TX 4m`, or `TX now 4m` while transmitting.

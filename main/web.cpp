@@ -69,6 +69,9 @@ static esp_err_t hIndex(httpd_req_t* req) {
 static esp_err_t hState(httpd_req_t* req) {
     std::map<std::string, std::string> a;
     parseForm(query(req), a);
+    // An open, visible control page is the remote control point: the operator is present (TX watchdog).
+    // A hidden tab, minimised window or locked phone sends act=0 and lets the watchdog count down.
+    if (a["act"] == "1") s_app->activity();
     return sendJson(req, s_app->stateJson((uint32_t)strtoul(a["since"].c_str(), nullptr, 10),
                                            (uint32_t)strtoul(a["psk"].c_str(), nullptr, 10), a["cfg"] == "1"));
 }

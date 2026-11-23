@@ -942,7 +942,7 @@ void App::tick() {
     if (seq.txEnabled && cfg.watchdogMin > 0 && mono - lastUiMono_ > (int64_t)cfg.watchdogMin * 60000) {
         seq.txEnabled = false;
         watchdogTripped_ = true;
-        status("TX watchdog: no operator activity for " + std::to_string(cfg.watchdogMin) + " min, transmit disabled");
+        status("TX watchdog: no operator present (control page closed or hidden) for " + std::to_string(cfg.watchdogMin) + " min, transmit disabled");
     }
 
     if (txState_ == ST_TX) {

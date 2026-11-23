@@ -88,7 +88,7 @@ table.log th{color:var(--dim);font-weight:500}
 </header>
 <div id="slot"><i></i></div>
 <div id="banner"></div>
-<button id="tl" type="button" title="Transmit status. Tap to show you are here (restarts the TX watchdog)."><i></i><i></i><i></i><span>TX off</span></button>
+<button id="tl" type="button" title="Transmit status. While this page is open and in view you count as present; tap to restart the watchdog after it was hidden."><i></i><i></i><i></i><span>TX off</span></button>
 <div id="txline"></div>
 <nav>
   <button data-tab="op" class="on">Operate</button><button data-tab="qlog">SSB / CW log</button><button data-tab="log">Log</button><button data-tab="set">Settings</button>
@@ -445,7 +445,7 @@ function trafficLight(tx){
   }
   if(tx.on) t=t.replace(/^TX( on)?/,"TX now");
   el.className=c+(tx.on?" on":""); el.querySelector("span").textContent=t;
-  el.title=(c==="r"?"Not transmitting. ":c==="y"?"Past half of the TX watchdog time. ":"Ready to transmit. ")+"Tap to show you are here (restarts the TX watchdog).";
+  el.title=(c==="r"?"Not transmitting. ":c==="y"?"Past half of the TX watchdog time. ":"Ready to transmit. ")+"While this page is open and in view you count as present; tap to restart the watchdog after it was hidden.";
 }
 // No answer from the device: all three colours flash together, which no TX state ever shows.
 let pollFails=0;
@@ -465,7 +465,7 @@ async function poll(){
     else{
       const t0=performance.now();
       const ac=new AbortController(), to=setTimeout(()=>ac.abort(),3000);
-      const r=await fetch(`/api/state?since=${since}&psk=${pskSince}&cfg=${cfgLoaded&&render.call!==undefined?0:1}`,{signal:ac.signal});
+      const r=await fetch(`/api/state?since=${since}&psk=${pskSince}&cfg=${cfgLoaded&&render.call!==undefined?0:1}&act=${document.visibilityState==="visible"?1:0}`,{signal:ac.signal});
       clearTimeout(to);
       S=await r.json();
       lastRtt=performance.now()-t0;
