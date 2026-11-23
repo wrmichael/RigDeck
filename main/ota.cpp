@@ -22,6 +22,8 @@
 #include "esp_partition.h"
 #include "esp_heap_caps.h"
 #include "psa/crypto.h"
+#include "esp_rom_crc.h"
+#include "esp_timer.h"
 
 static const char* TAG = "ota";
 static App* s_app;
@@ -182,6 +184,124 @@ static esp_err_t upload(httpd_req_t* req) {
     return reply(req, true, "RigDeck " + ver + " installed. Restarting now; reconnect in about 30 seconds.");
 }
 
+
+// ---- Chunked upload with a CRC per piece (used by the web page since 0.9.50) -------------------
+// POST /api/otachunk?off=N&total=T&crc=C with up to 64 kB of the app image as the body. Each piece is
+// checked with CRC-32 as soon as it has arrived; a damaged piece is not written and the page sends it
+// again. The pieces must come in order; the last one finishes the update. The page already strips the
+// first 64 kB of a complete flasher image, so `total` is the app image size.
+struct ChunkSession {
+    bool active = false;
+    esp_ota_handle_t h = 0;
+    const esp_partition_t* part = nullptr;
+    size_t total = 0, written = 0, hashLen = 0;
+    bool hashed = false;
+    uint8_t tail[32] = {};
+    psa_hash_operation_t sha = PSA_HASH_OPERATION_INIT;
+    std::string ver;
+    int bad = 0;                                       // pieces that arrived damaged (and were sent again)
+    int64_t lastUs = 0;
+};
+static ChunkSession s_cs;
+static const size_t kPiece = 65536;
+
+static void csAbort() {
+    if (s_cs.active) { esp_ota_abort(s_cs.h); psa_hash_abort(&s_cs.sha); }
+    s_cs = ChunkSession();
+}
+
+static bool queryNum(httpd_req_t* req, const char* key, uint32_t& out) {
+    char q[128], v[24];
+    if (httpd_req_get_url_query_str(req, q, sizeof q) != ESP_OK) return false;
+    if (httpd_query_key_value(q, key, v, sizeof v) != ESP_OK) return false;
+    out = (uint32_t)strtoul(v, nullptr, 0);
+    return true;
+}
+
+static esp_err_t chunk(httpd_req_t* req) {
+    uint32_t off = 0, total = 0, crc = 0;
+    if (!queryNum(req, "off", off) || !queryNum(req, "total", total) || !queryNum(req, "crc", crc))
+        return reply(req, false, "bad request");
+    size_t n = req->content_len;
+    if (n == 0 || n > kPiece || off + n > total) return reply(req, false, "bad piece size");
+    if (s_busy.exchange(true)) return reply(req, false, "An update is already running");
+    struct Done { ~Done() { s_busy = false; } } done;
+    if (s_cs.active && esp_timer_get_time() - s_cs.lastUs > 60000000LL) csAbort();   // stale session
+
+    static uint8_t* piece = nullptr;                   // 64 kB in external RAM, kept for later updates
+    if (!piece) piece = (uint8_t*)heap_caps_malloc(kPiece, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!piece) return reply(req, false, "Not enough memory");
+    if (!recvAll(req, piece, n)) return reply(req, false, "piece interrupted");
+    uint32_t c = esp_rom_crc32_le(0, piece, n);
+    if (c != crc) {
+        s_cs.bad++;
+        ESP_LOGW(TAG, "piece at %u (%u bytes) arrived damaged: CRC %08x, expected %08x", (unsigned)off, (unsigned)n,
+                 (unsigned)c, (unsigned)crc);
+        httpd_resp_set_type(req, "application/json");
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"retry\":true,\"err\":\"damaged piece\"}");
+    }
+
+    if (off == 0) {                                    // first piece: check it and start
+        csAbort();
+        std::string bad = checkHeader(piece, s_cs.ver);
+        if (!bad.empty()) return reply(req, false, bad + " Nothing was changed.");
+        s_cs.part = esp_ota_get_next_update_partition(nullptr);
+        if (!s_cs.part)
+            return reply(req, false, "This board's flash layout has no update slot yet. Install this version once "
+                                     "with the browser flasher over USB; after that, updates work from here.");
+        if (total > s_cs.part->size) return reply(req, false, "That image is too big for the update slot.");
+        ESP_LOGI(TAG, "update to %s, %u bytes in pieces, into %s", s_cs.ver.c_str(), (unsigned)total, s_cs.part->label);
+        s_app->command("halt", {});
+        s_app->setOtaStatus("Preparing (erasing the update slot)...");
+        if (esp_ota_begin(s_cs.part, OTA_WITH_SEQUENTIAL_WRITES, &s_cs.h) != ESP_OK)
+            return reply(req, false, "Could not start the update. Nothing was changed.");
+        s_cs.active = true;
+        s_cs.total = total;
+        s_cs.hashed = piece[23] == 1;
+        s_cs.hashLen = s_cs.hashed && total > 32 ? total - 32 : total;
+        psa_crypto_init();
+        psa_hash_setup(&s_cs.sha, PSA_ALG_SHA_256);
+    }
+    if (!s_cs.active || total != s_cs.total) return reply(req, false, "No update in progress. Start again.");
+    s_cs.lastUs = esp_timer_get_time();
+    if (off + n <= s_cs.written) return reply(req, true, "already have it");      // a resend of a piece we kept
+    if (off != s_cs.written) return reply(req, false, "pieces out of order. Start again.");
+
+    size_t hn = off < s_cs.hashLen ? std::min(n, s_cs.hashLen - off) : 0;
+    if (hn) psa_hash_update(&s_cs.sha, piece, hn);
+    for (size_t i = hn; i < n; i++)
+        if (off + i >= s_cs.hashLen && off + i - s_cs.hashLen < 32) s_cs.tail[off + i - s_cs.hashLen] = piece[i];
+    if (esp_ota_write(s_cs.h, piece, n) != ESP_OK) { csAbort(); return reply(req, false, "Writing failed. RigDeck keeps its current firmware."); }
+    s_cs.written += n;
+    s_app->setOtaStatus("Updating RigDeck: " + std::to_string((int)(s_cs.written * 100 / s_cs.total)) + " %");
+    if (s_cs.written < s_cs.total) {
+        httpd_resp_set_type(req, "application/json");
+        return httpd_resp_sendstr(req, "{\"ok\":true}");
+    }
+
+    // Last piece: whole-image checks, switch, restart.
+    uint8_t got[32];
+    size_t shaLen = 0;
+    psa_hash_finish(&s_cs.sha, got, sizeof got, &shaLen);
+    bool rxOk = !s_cs.hashed || memcmp(got, s_cs.tail, 32) == 0;
+    esp_err_t e = esp_ota_end(s_cs.h);
+    const esp_partition_t* part = s_cs.part;
+    std::string ver = s_cs.ver;
+    int bad = s_cs.bad;
+    s_cs = ChunkSession();
+    if (e != ESP_OK) {
+        ESP_LOGE(TAG, "update check failed, sha of pieces %s, %d piece(s) resent", rxOk ? "ok" : "MISMATCH", bad);
+        return reply(req, false, std::string("The image did not pass the final check (") + esp_err_to_name(e) +
+                                     (rxOk ? "; every piece arrived intact" : "; pieces intact but the whole does not match") +
+                                     "). RigDeck keeps its current firmware.");
+    }
+    if (esp_ota_set_boot_partition(part) != ESP_OK) return reply(req, false, "Could not switch to the new firmware.");
+    ESP_LOGI(TAG, "update to %s complete, %d piece(s) had to be resent", ver.c_str(), bad);
+    xTaskCreate(restartTask, "otarst", 3072, nullptr, 2, nullptr);
+    return reply(req, true, "RigDeck " + ver + " installed" + (bad ? " (" + std::to_string(bad) + " damaged piece(s) were resent)" : std::string()) +
+                                ". Restarting now; reconnect in about 30 seconds.");
+}
+
 // A freshly updated image starts "on trial". Once it has run for a minute it is kept; if it crashes
 // or resets before that, the bootloader goes back to the previous firmware.
 static void validTask(void*) {
@@ -210,4 +330,6 @@ void ota_start(App& app) {
 void ota_register(httpd_handle_t srv) {
     static const httpd_uri_t u = {"/api/ota", HTTP_POST, upload, nullptr};
     httpd_register_uri_handler(srv, &u);
+    static const httpd_uri_t c = {"/api/otachunk", HTTP_POST, chunk, nullptr};
+    httpd_register_uri_handler(srv, &c);
 }
