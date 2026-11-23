@@ -32,6 +32,7 @@ li b{color:#fff}
 code{font:16px var(--mono);background:var(--pan2);padding:2px 6px;border-radius:4px}
 a{color:var(--amb)}
 footer{margin-top:40px;color:var(--dim);font-size:16px}
+.chan{display:flex;flex-direction:column;gap:6px;margin:10px 0 4px}.chan label{cursor:pointer}.chan small{opacity:.7;margin-left:4px}
 esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:not(:defined) [slot=not-allowed]{display:none}
 </style>
 </head>
@@ -41,7 +42,11 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
   <p class="tag">FT8 / FT4 / FT-CW station, ADIF logger and control head for your radio.</p>
 
   <div class="card">
-    <div class="ver">Latest firmware: <b id="ver">…</b> &nbsp;·&nbsp; Waveshare ESP32-P4-WIFI6-Touch-LCD-7B</div>
+    <div class="ver">Waveshare ESP32-P4-WIFI6-Touch-LCD-7B</div>
+    <div class="chan" role="radiogroup" aria-label="Firmware channel">
+      <label><input type="radio" name="ch" value="stable" checked> <b>Stable</b> <span id="vStable">…</span> <small>tested, recommended</small></label>
+      <label><input type="radio" name="ch" value="beta"> <b>Beta</b> <span id="vBeta">…</span> <small>newest features, may have bugs</small></label>
+    </div>
     <ol>
       <li>Connect the board's <b>USB-C port</b> to this computer with a data cable (not the USB-A port the radio plugs into).</li>
       <li>Press <b>Install RigDeck</b>, pick the board's serial port (often "USB Serial" or "CH343"), and follow the steps.</li>
@@ -49,12 +54,12 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
       <li>When it restarts, join the Wi-Fi network <b>RigDeck</b> (password <code>ft8ft8ft8</code>) and open <b>http://192.168.4.1</b>, or use the touch screen.</li>
     </ol>
     <div class="row">
-      <esp-web-install-button manifest="manifest.json">
+      <esp-web-install-button id="inst" manifest="stable/manifest.json">
         <button slot="activate" class="btn">Install RigDeck</button>
         <div slot="unsupported" class="note">This browser cannot flash devices. Use <b>Chrome</b> or <b>Edge</b> on a Windows, Mac, Linux or ChromeOS computer.</div>
         <div slot="not-allowed" class="note">Flashing needs a secure (https) page. Open this page from its GitHub Pages address.</div>
       </esp-web-install-button>
-      <a class="btn alt" id="dl" href="firmware/rigdeck.bin" download>Download .bin</a>
+      <a class="btn alt" id="dl" href="stable/rigdeck.bin" download>Download .bin</a>
       <a class="btn alt" id="wc" href="firmware/rigdeck-wifi-chip.bin" download style="display:none">Wi-Fi chip firmware</a>
     </div>
     <div class="warn">Download your log from the RigDeck web page (Log tab) before installing, just in case. Ticking "Erase device" deletes the log, settings and Wi-Fi name.</div>
@@ -68,16 +73,25 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
   <p>Or open Espressif's <a href="https://espressif.github.io/esptool-js/">online flasher</a>, connect, and add the file at address 0x0.</p>
 
   <h2>About</h2>
-  <p>RigDeck runs FT8, FT4, FT-CW and PSK31, logs SSB/CW contacts with CW macros, keeps an ADIF log, sends contacts to your logging program, and works as a touch-screen control head. Radios: Icom IC-7100 and IC-705, Yaesu FTX-1, QRP Labs QMX / QMX+, over one USB cable.</p>
+  <p>RigDeck runs FT8, FT4, FT-CW and PSK31, logs SSB/CW contacts with CW macros, keeps an ADIF log, sends contacts to your logging program, and works as a touch-screen control head. Radios: Icom IC-7100 and IC-705, Yaesu FTX-1, QRP Labs QMX / QMX+ over one USB cable; beta adds more Icom, Yaesu, Kenwood and Elecraft (KX2/KX3/K3/K2) radios and sound-card interfaces (SignaLink, Digirig).</p>
   <p><a href="https://github.com/wrmichael/RigDeck">Source code, manual and release notes on GitHub</a> · MIT licence</p>
 
   <footer>RigDeck by AC9HP. Flashing uses <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>; nothing is installed on your computer.</footer>
 </main>
 <script>
-fetch("manifest.json").then(r => r.json()).then(m => {
-  document.getElementById("ver").textContent = m.version;
-  document.getElementById("dl").setAttribute("download", "rigdeck-" + m.version + ".bin");
-}).catch(() => { document.getElementById("ver").textContent = "(not released yet)"; });
+const CH = {stable: {m: "stable/manifest.json", bin: "stable/rigdeck.bin", el: "vStable"},
+            beta:   {m: "manifest.json",        bin: "firmware/rigdeck.bin", el: "vBeta"}};
+const ver = {};
+for (const k in CH) fetch(CH[k].m).then(r => r.json()).then(m => {
+  ver[k] = m.version; document.getElementById(CH[k].el).textContent = m.version; pick();
+}).catch(() => { document.getElementById(CH[k].el).textContent = "(not released yet)"; });
+function pick() {
+  const k = document.querySelector("input[name=ch]:checked").value;
+  document.getElementById("inst").setAttribute("manifest", CH[k].m);
+  const dl = document.getElementById("dl");
+  dl.href = CH[k].bin; dl.setAttribute("download", "rigdeck-" + (ver[k] || k) + ".bin");
+}
+document.querySelectorAll("input[name=ch]").forEach(e => e.onchange = pick);
 fetch("firmware/rigdeck-wifi-chip.bin", {method: "HEAD"}).then(r => {
   if (r.ok) { document.getElementById("wc").style.display = ""; document.getElementById("wcnote").style.display = ""; }
 }).catch(() => {});

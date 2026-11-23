@@ -247,7 +247,8 @@ The firmware puts the radio in USB-D (USB with DATA mode on) whenever you pick a
 ## Install without building (browser flasher)
 
 Open **https://wrmichael.github.io/RigDeck/** in Chrome or Edge, connect the board's USB-C port to the
-computer, and press **Install RigDeck**. When updating, leave "Erase device" unticked to keep the log
+computer, pick **Stable** (tested, recommended) or **Beta** (newest features), and press **Install RigDeck**.
+When updating, leave "Erase device" unticked to keep the log
 and settings. The same page offers the .bin for esptool (address 0x0).
 
 ### Making a release (maintainer)
@@ -258,7 +259,10 @@ and settings. The same page offers the .bin for esptool (address 0x0).
    with an updated `docs\manifest.json`.
 3. `git add docs version.txt`, `git commit -m "Release x.y.z"`, `git push`. GitHub Pages (Settings >
    Pages > Deploy from branch `main`, folder `/docs`) then serves the new firmware within a minute or two.
-4. Optionally attach the .bin to a GitHub release.
+   This is the **Beta** channel (`docs/manifest.json`, `docs/firmware/`).
+4. To make a beta **Stable** after testing it on real radios: copy `docs/firmware/rigdeck.bin` and
+   `docs/manifest.json` to `docs/stable/` (in the manifest, the path becomes `rigdeck.bin`), tag the
+   commit (`git tag v1.0.0`, `git push --tags`) and attach the .bin to a GitHub release.
 
 The version shows on the touch screen (Settings) and on the web page (Settings tab, bottom).
 
