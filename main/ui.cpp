@@ -11,6 +11,9 @@
 #include <cstring>
 #include <string>
 #include <cctype>
+#include <cmath>
+#include <cstring>
+#include <cstdlib>
 #include <vector>
 #include <map>
 #include <algorithm>
@@ -1682,11 +1685,18 @@ void buildLut() {                                    // black, blue, cyan, yello
 void ui_bind(App* app) { g_app = app; }
 void (*ui_brightness_fn)(int percent) = nullptr;
 
-// Start-up logo: the AC9HP brand in gold, over everything for a few seconds while the radio
-// connects. A tap closes it early.
-extern "C" const lv_image_dsc_t logo_ac9hp;
+// Start-up screen: the station's callsign, large, in polished gold (Audiowide font), with
+// "RigDeck by AC9HP" under it; over everything for a few seconds while the radio connects. The gold
+// is computed here from the letter shapes: a soft bevel lit from the upper left with a highlight,
+// metal bands across the letter height, a fine brushed texture, a dark rim and a warm shadow.
+extern "C" const uint8_t audiowide_call_ttf[];
+extern "C" const size_t audiowide_call_ttf_len;
 static lv_obj_t* gSplash;
-static void splashGone(lv_anim_t*) { if (gSplash) { lv_obj_delete(gSplash); gSplash = nullptr; } }
+static lv_draw_buf_t* gLogoBuf;
+static void splashGone(lv_anim_t*) {
+    if (gSplash) { lv_obj_delete(gSplash); gSplash = nullptr; }
+    if (gLogoBuf) { lv_draw_buf_destroy(gLogoBuf); gLogoBuf = nullptr; }
+}
 static void splashFade(lv_obj_t* o) {
     if (!o || o != gSplash) return;
     lv_anim_t a;
@@ -1699,8 +1709,138 @@ static void splashFade(lv_obj_t* o) {
     lv_anim_start(&a);
     lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
 }
+
+static void boxBlur(const float* in, float* out, float* tmp, int w, int h, int r) {   // one separable pass
+    for (int y = 0; y < h; y++) {
+        const float* row = in + y * w;
+        float acc = 0;
+        for (int x = -r; x <= r; x++) acc += row[x < 0 ? 0 : x >= w ? w - 1 : x];
+        for (int x = 0; x < w; x++) {
+            tmp[y * w + x] = acc / (2 * r + 1);
+            int xa = x + r + 1, xr = x - r;
+            acc += row[xa >= w ? w - 1 : xa] - row[xr < 0 ? 0 : xr];
+        }
+    }
+    for (int x = 0; x < w; x++) {
+        float acc = 0;
+        for (int y = -r; y <= r; y++) acc += tmp[(y < 0 ? 0 : y >= h ? h - 1 : y) * w + x];
+        for (int y = 0; y < h; y++) {
+            out[y * w + x] = acc / (2 * r + 1);
+            int ya = y + r + 1, yr = y - r;
+            acc += tmp[(ya >= h ? h - 1 : ya) * w + x] - tmp[(yr < 0 ? 0 : yr) * w + x];
+        }
+    }
+}
+static void gauss(const float* in, float* out, float* t1, float* t2, int w, int h, int r) {   // 3 box passes
+    boxBlur(in, t1, t2, w, h, r);
+    boxBlur(t1, out, t2, w, h, r);
+    boxBlur(out, t1, t2, w, h, r);
+    memcpy(out, t1, sizeof(float) * w * h);
+}
+
+// Gold text into an ARGB8888 draw buffer of w x h (black background). False if out of memory.
+static bool goldText(lv_draw_buf_t* buf, const char* text) {
+    const int w = buf->header.w, h = buf->header.h;
+    // 1. letter shapes: draw the text in white with the largest Audiowide size that fits
+    int size = h * 88 / 100;
+    lv_font_t* f = nullptr;
+    for (int tries = 0; tries < 4; tries++) {
+        f = lv_tiny_ttf_create_data(audiowide_call_ttf, audiowide_call_ttf_len, size);
+        if (!f) return false;
+        lv_point_t sz;
+        lv_text_get_size(&sz, text, f, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        if (sz.x <= w * 92 / 100 || tries == 3) break;
+        int ns = size * (w * 92 / 100) / sz.x;
+        lv_tiny_ttf_destroy(f);
+        size = ns;
+    }
+    lv_obj_t* cv = lv_canvas_create(lv_layer_top());
+    lv_canvas_set_draw_buf(cv, buf);
+    lv_canvas_fill_bg(cv, lv_color_black(), LV_OPA_TRANSP);
+    lv_layer_t layer;
+    lv_canvas_init_layer(cv, &layer);
+    lv_draw_label_dsc_t d;
+    lv_draw_label_dsc_init(&d);
+    d.font = f;
+    d.color = lv_color_white();
+    d.align = LV_TEXT_ALIGN_CENTER;
+    d.text = text;
+    int32_t lh = lv_font_get_line_height(f);
+    lv_area_t a = {0, (h - lh) / 2, w - 1, (h - lh) / 2 + lh - 1};
+    lv_draw_label(&layer, &d, &a);
+    lv_canvas_finish_layer(cv, &layer);
+    lv_obj_delete(cv);
+    lv_tiny_ttf_destroy(f);
+
+    // 2. coverage mask and its extent
+    const int n = w * h;
+    float* M = (float*)malloc(sizeof(float) * n * 5);
+    if (!M) return false;
+    float *hg = M + n, *t1 = M + 2 * n, *t2 = M + 3 * n, *sh = M + 4 * n;
+    uint8_t* px = (uint8_t*)buf->data;
+    const uint32_t stride = buf->header.stride;
+    int top = h, bot = 0;
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) {
+            float v = px[y * stride + x * 4 + 3] / 255.0f;
+            M[y * w + x] = v;
+            if (v > 0.5f) { if (y < top) top = y; if (y > bot) bot = y; }
+        }
+    if (bot <= top) { free(M); return false; }
+
+    // 3. bevel height field and the shadow
+    gauss(M, hg, t1, t2, w, h, 3);
+    gauss(M, sh, t1, t2, w, h, 4);
+    const float Lx = -0.55f, Ly = -0.75f, Lz = 0.36f, Ln = sqrtf(Lx * Lx + Ly * Ly + Lz * Lz);
+    const float lx = Lx / Ln, ly = Ly / Ln, lz = Lz / Ln;
+    float hx = lx, hy = ly, hz = lz + 1, hn = sqrtf(hx * hx + hy * hy + hz * hz);
+    hx /= hn; hy /= hn; hz /= hn;
+    struct Stop { float t, r, g, b; };
+    static const Stop st[] = {{0.00f, 255, 236, 160}, {0.18f, 250, 210, 92}, {0.42f, 184, 128, 26}, {0.50f, 122, 82, 10},
+                              {0.58f, 196, 142, 34},  {0.78f, 255, 214, 100}, {1.00f, 150, 100, 18}};
+    uint32_t seed = 12345;
+    for (int y = 0; y < h; y++) {
+        float t = (float)(y - top) / (float)(bot - top);
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        int k = 0;
+        while (k < 5 && t > st[k + 1].t) k++;
+        float u = (t - st[k].t) / (st[k + 1].t - st[k].t);
+        float br = st[k].r + (st[k + 1].r - st[k].r) * u, bg = st[k].g + (st[k + 1].g - st[k].g) * u,
+              bb = st[k].b + (st[k + 1].b - st[k].b) * u;
+        for (int x = 0; x < w; x++) {
+            int i = y * w + x;
+            float m = M[i];
+            float gx = (hg[y * w + (x < w - 1 ? x + 1 : x)] - hg[y * w + (x > 0 ? x - 1 : x)]) * 0.5f;
+            float gy = (hg[(y < h - 1 ? y + 1 : y) * w + x] - hg[(y > 0 ? y - 1 : y) * w + x]) * 0.5f;
+            float nx = -gx * 22, ny = -gy * 22, nz = 1, nn = sqrtf(nx * nx + ny * ny + nz * nz);
+            nx /= nn; ny /= nn; nz /= nn;
+            float dif = nx * lx + ny * ly + nz * lz; dif = dif < 0 ? 0 : dif;
+            float sp = nx * hx + ny * hy + nz * hz; sp = sp < 0 ? 0 : sp;
+            sp = powf(sp, 40);
+            seed = seed * 1664525u + 1013904223u;
+            float tex = 0.96f + 0.08f * ((seed >> 8) & 0xFFFF) / 65535.0f;
+            float shade = (0.55f + 0.65f * dif) * tex;
+            float r = br * shade + sp * 230, g = bg * shade + sp * 225, b = bb * shade + sp * 200;
+            // outside the letters: warm shadow (offset down-right) and a thin dark rim
+            int sx = x - 5, sy = y - 6;
+            float s = (sx >= 0 && sy >= 0) ? sh[sy * w + sx] : 0;
+            float rim = hg[i] > m ? (hg[i] - m) * 2.2f : 0;
+            rim = rim > 1 ? 1 : rim;
+            float or_ = 48 * s + 70 * rim, og = 32 * s + 48 * rim, ob = 5 * s + 8 * rim;
+            r = r * m + or_ * (1 - m); g = g * m + og * (1 - m); b = b * m + ob * (1 - m);
+            uint8_t* p = px + y * stride + x * 4;
+            p[0] = (uint8_t)(b > 255 ? 255 : b); p[1] = (uint8_t)(g > 255 ? 255 : g);
+            p[2] = (uint8_t)(r > 255 ? 255 : r); p[3] = 255;
+        }
+    }
+    free(M);
+    return true;
+}
+
 static void showSplash() {
-    const lv_image_dsc_t* img = &logo_ac9hp;
+    std::string call = g_app->cfg.call;
+    for (char& c : call) c = (char)toupper((unsigned char)c);
+    if (call.empty() || call == "N0CALL") call = "RigDeck";
     gSplash = lv_obj_create(lv_layer_top());
     lv_obj_remove_style_all(gSplash);
     lv_obj_set_size(gSplash, W, H);
@@ -1708,16 +1848,23 @@ static void showSplash() {
     lv_obj_set_style_bg_opa(gSplash, LV_OPA_COVER, 0);
     lv_obj_add_flag(gSplash, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(gSplash, [](lv_event_t* e) { splashFade((lv_obj_t*)lv_event_get_target(e)); }, LV_EVENT_CLICKED, nullptr);
-    lv_obj_t* im = lv_image_create(gSplash);
-    lv_image_set_src(im, img);
-    lv_obj_align(im, LV_ALIGN_CENTER, 0, -40);
+    gLogoBuf = lv_draw_buf_create(900, 200, LV_COLOR_FORMAT_ARGB8888, 0);
+    if (gLogoBuf && goldText(gLogoBuf, call.c_str())) {
+        lv_obj_t* im = lv_image_create(gSplash);
+        lv_image_set_src(im, gLogoBuf);
+        lv_obj_align(im, LV_ALIGN_CENTER, 0, -50);
+    }
     lv_obj_t* t = lv_label_create(gSplash);
-    lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(t, lv_color_hex(0xB89A5A), 0);
-    lv_label_set_text(t, ("RigDeck " + g_app->fwVersion).c_str());
-    lv_obj_align(t, LV_ALIGN_CENTER, 0, 110);
-    lv_timer_t* tm = lv_timer_create([](lv_timer_t* tt) { splashFade(gSplash); lv_timer_delete(tt); }, 3500, nullptr);
-    (void)tm;
+    lv_obj_set_style_text_font(t, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(t, lv_color_hex(0xD4AF5A), 0);
+    lv_label_set_text(t, "RigDeck by AC9HP");
+    lv_obj_align(t, LV_ALIGN_CENTER, 0, 85);
+    lv_obj_t* v = lv_label_create(gSplash);
+    lv_obj_set_style_text_font(v, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(v, lv_color_hex(0x8A7A55), 0);
+    lv_label_set_text(v, g_app->fwVersion.c_str());
+    lv_obj_align(v, LV_ALIGN_CENTER, 0, 125);
+    lv_timer_create([](lv_timer_t* tt) { splashFade(gSplash); lv_timer_delete(tt); }, 3500, nullptr);
 }
 
 extern "C" void ui_create(void) {

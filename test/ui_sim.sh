@@ -12,7 +12,8 @@ if [ ! -f test/out/lv/lv_conf.h ]; then
       -e 's/\(#define LV_USE_STDLIB_MALLOC \+\)LV_STDLIB_BUILTIN/\1LV_STDLIB_CLIB/' \
       -e 's/\(#define LV_USE_STDLIB_STRING \+\)LV_STDLIB_BUILTIN/\1LV_STDLIB_CLIB/' \
       -e 's/\(#define LV_USE_STDLIB_SPRINTF \+\)LV_STDLIB_BUILTIN/\1LV_STDLIB_CLIB/' \
-      -e 's/\(#define LV_FONT_MONTSERRAT_\(16\|20\|28\|36\) \+\)0/\11/' "$LVGL/lv_conf_template.h" > test/out/lv/lv_conf.h
+      -e 's/\(#define LV_FONT_MONTSERRAT_\(16\|20\|28\|36\) \+\)0/\11/' \
+      -e 's/\(#define LV_USE_TINY_TTF \+\)0/\11/' "$LVGL/lv_conf_template.h" > test/out/lv/lv_conf.h
 fi
 if [ ! -f test/out/lv/liblvgl.a ]; then
   find "$LVGL/src" -name "*.c" | while read f; do
@@ -21,5 +22,5 @@ if [ ! -f test/out/lv/liblvgl.a ]; then
   ar rcs test/out/lv/liblvgl.a test/out/lv/*.o
 fi
 g++ -std=c++17 -O2 -w -DLV_CONF_INCLUDE_SIMPLE -Itest/out/lv -I"$LVGL" -Icomponents/core -Icomponents/ft8_lib \
-    test/ui_sim.cpp main/ui.cpp main/logo_img.c components/core/*.cpp test/out/libft8.a test/out/lv/liblvgl.a -lm -lpthread -o test/out/ui_sim
+    test/ui_sim.cpp main/ui.cpp main/logo_font.c components/core/*.cpp test/out/libft8.a test/out/lv/liblvgl.a -lm -lpthread -o test/out/ui_sim
 ./test/out/ui_sim

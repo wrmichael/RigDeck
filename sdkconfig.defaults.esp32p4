@@ -34,3 +34,5 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_p4.csv"
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 # Allocation hook for the internal-RAM low-point tracer (main/memtrace.c).
 CONFIG_HEAP_USE_HOOKS=y
+# Start-up screen: the callsign drawn from a TTF (main/logo_font.c).
+CONFIG_LV_USE_TINY_TTF=y
