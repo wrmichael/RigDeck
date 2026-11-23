@@ -1857,7 +1857,7 @@ static bool goldText(lv_draw_buf_t* buf, const char* text) {
 static void showSplash() {
     std::string call = g_app->cfg.call;
     for (char& c : call) c = (char)toupper((unsigned char)c);
-    if (call.empty() || call == "N0CALL") call = "RigDeck";
+    if (call.empty() || call == "N0CALL") call = "RigDeck";      // mixed case: the font subset has a-z too
     gSplash = lv_obj_create(lv_layer_top());
     lv_obj_remove_style_all(gSplash);
     lv_obj_set_size(gSplash, W, H);

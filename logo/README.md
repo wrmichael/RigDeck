@@ -7,7 +7,7 @@ soft bevel lit from the upper left, highlight, metal bands, brushed texture, dar
 Font: Audiowide by Astigmatic, SIL Open Font License 1.1 (OFL.txt). The board carries only the
 characters a callsign needs (main/logo_font.c, about 5 kB), made with:
 
-    pyftsubset Audiowide-Regular.ttf --unicodes="U+0020,U+002F,U+0030-0039,U+0041-005A" \
+    pyftsubset Audiowide-Regular.ttf --unicodes="U+0020,U+002D,U+002F,U+0030-0039,U+0041-005A,U+0061-007A" \
         --output-file=audiowide_call.ttf --no-hinting --desubroutinize --drop-tables+=GPOS,GSUB,kern
 
 gold_logo.py renders the same look on a PC (PNG preview): `python3 gold_logo.py Audiowide-Regular.ttf AC9HP ac9hp.png 760 220`.

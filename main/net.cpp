@@ -8,6 +8,8 @@
 #include "freertos/task.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
+#include "esp_mac.h"
+#include <cctype>
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_sntp.h"
@@ -131,12 +133,34 @@ static void startSntp() {
     esp_sntp_init();
 }
 
+// Name the board gives the home router (DHCP host name): the hotspot name, made DNS-safe. A unit
+// still on the default hotspot name gets a unique suffix from its MAC address (RigDeck-1A2B3C).
+static void setHostname() {
+    if (!s_staNetif) return;
+    std::string n;
+    for (char ch : s_app->cfg.apSsid)
+        n += (isalnum((unsigned char)ch) || ch == '-') ? ch : '-';
+    while (!n.empty() && n.front() == '-') n.erase(0, 1);
+    while (!n.empty() && n.back() == '-') n.pop_back();
+    if (n.size() > 32) n.resize(32);
+    if (n.empty() || n == "RigDeck") {
+        uint8_t mac[6] = {};
+        esp_read_mac(mac, ESP_MAC_BASE);
+        char sfx[8];
+        snprintf(sfx, sizeof sfx, "%02X%02X%02X", mac[3], mac[4], mac[5]);
+        n = std::string("RigDeck-") + sfx;
+    }
+    esp_netif_set_hostname(s_staNetif, n.c_str());
+    ESP_LOGI(TAG, "home network host name: %s", n.c_str());
+}
+
 // Join (or re-join) the home network with the saved name and password. Creates the station
 // interface the first time, so this works without a restart.
 static void staJoin() {
     const Settings& c = s_app->cfg;
     if (c.staSsid.empty()) { s_want = false; setState("off"); return; }
     if (!s_staNetif) s_staNetif = esp_netif_create_default_wifi_sta();
+    setHostname();
     esp_wifi_set_mode(WIFI_MODE_APSTA);
     wifi_config_t sta = {};
     strlcpy((char*)sta.sta.ssid, c.staSsid.c_str(), sizeof sta.sta.ssid);
@@ -205,7 +229,7 @@ void net_start(App& app) {
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_ap();
     s_want = !app.cfg.staSsid.empty();
-    if (s_want) s_staNetif = esp_netif_create_default_wifi_sta();
+    if (s_want) { s_staNetif = esp_netif_create_default_wifi_sta(); setHostname(); }
     esp_timer_create_args_t ta = {};
     ta.callback = onRetryTimer;
     ta.name = "sta-retry";
