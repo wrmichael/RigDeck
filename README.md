@@ -23,10 +23,18 @@ Radios: Icom **IC-7100** (tested on the air), Icom **IC-705**, Yaesu **FTX-1** a
 
 ## Status
 
-Running on a Waveshare ESP32-P4-WIFI6-Touch-LCD-7B with ESP-IDF 6.1 and an IC-7100: the hotspot,
-web page, CI-V control, USB audio in both directions and transmit have been confirmed on the air
-by the first user. Other boards (ESP32-S3 in particular) are still untested, and so are the
-IC-705, Yaesu FTX-1 and QRP Labs QMX drivers (tested against simulated radios only).
+**Version 1.0.0** (2026-11-23), the first stable release. Running on the Waveshare
+ESP32-P4-WIFI6-Touch-LCD-7B with ESP-IDF 6.1, tested on the air with an IC-7100, an IC-705 and a
+SignaLink sound card (No CAT), on several units for many hours: FT8 contacts in Auto CQ and Auto hunt,
+logging to the microSD card and to Log4OM, firmware updates over Wi-Fi, internal memory steady with
+large headroom (lowest about 190 kB, DMA-capable about 155 kB).
+
+Known issues in 1.0.0:
+
+- Automatic TX audio level is confirmed on the IC-705 but not yet on the IC-7100: set the level
+  by hand there (it is remembered for that radio).
+- The Yaesu, Kenwood, Elecraft and other Icom drivers, the QMX and the Digirig PTT lines are tested
+  against simulated radios only.
 
 Checked on a PC with `sh test/build.sh`: FT8/FT4 encode/decode loopback, two simulated stations
 completing contacts (also with a slow decoder and in FT4), PSK31 loopback, log management, and the
