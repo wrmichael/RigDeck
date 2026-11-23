@@ -412,6 +412,11 @@ int main() {
     tap(871, 31);                                     // gear
     run(0.5);
     savePpm("test/out/ui/21_settings.ppm");
+    tap(170 + 16 + 270 + 200, 64 + 16 + 26);          // Callsign box: the callsign keyboard
+    run(0.5);
+    savePpm("test/out/ui/21b_settings_callkb.ppm");
+    tap(70, 575);                                     // keyboard key: close it
+    run(0.3);
     tap(85, 64 + 33 + 2 * 67);                        // Radio tab
     run(0.5);
     savePpm("test/out/ui/22_settings_radio.ppm");

@@ -1146,12 +1146,28 @@ void settingsKbHide() {
     if (ta) lv_obj_remove_state(ta, LV_STATE_FOCUSED);
     lv_keyboard_set_textarea(sKb, nullptr);
 }
+// Callsign / grid keyboard: digits and capitals on one page, with / and - (portable and suffix calls);
+// "1#" still reaches every other character.
+static const char* kCallKeys[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", LV_SYMBOL_BACKSPACE, "\n",
+                                  "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "/", "\n",
+                                  "A", "S", "D", "F", "G", "H", "J", "K", "L", "-", "\n",
+                                  "Z", "X", "C", "V", "B", "N", "M", "1#", LV_SYMBOL_OK, "\n",
+                                  LV_SYMBOL_KEYBOARD, LV_SYMBOL_LEFT, " ", LV_SYMBOL_RIGHT, ""};
+#define KC_K(w) (lv_buttonmatrix_ctrl_t)(w)
+#define KC_C(w) (lv_buttonmatrix_ctrl_t)((w) | LV_BUTTONMATRIX_CTRL_CHECKED)
+static const lv_buttonmatrix_ctrl_t kCallCtrl[] = {
+    KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_C(3),
+    KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2),
+    KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2),
+    KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_K(2), KC_C(3), KC_C(4),
+    KC_C(2), KC_C(2), KC_K(8), KC_C(2)};
 void onSettingsTa(lv_event_t* e) {
     lv_obj_t* ta = (lv_obj_t*)lv_event_get_target(e);
     const SField& f = kSet[(int)(intptr_t)lv_event_get_user_data(e)];
     lv_keyboard_set_textarea(sKb, ta);
     lv_keyboard_set_mode(sKb, f.kind == SK_NUM ? LV_KEYBOARD_MODE_NUMBER
-                              : f.kind == SK_UPPER || f.kind == SK_HEX || f.kind == SK_MACRO ? LV_KEYBOARD_MODE_TEXT_UPPER : LV_KEYBOARD_MODE_TEXT_LOWER);
+                              : f.kind == SK_UPPER ? LV_KEYBOARD_MODE_USER_2
+                              : f.kind == SK_HEX || f.kind == SK_MACRO ? LV_KEYBOARD_MODE_TEXT_UPPER : LV_KEYBOARD_MODE_TEXT_LOWER);
     lv_obj_remove_flag(sKb, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_height(sTabs, H - SET_HEAD - SET_KB);
     lv_obj_update_layout(sTabs);
@@ -1450,6 +1466,7 @@ void buildSettingsScreen() {
     }
 
     sKb = lv_keyboard_create(scrSettings);
+    lv_keyboard_set_map(sKb, LV_KEYBOARD_MODE_USER_2, kCallKeys, kCallCtrl);
     lv_obj_set_size(sKb, W, SET_KB);
     lv_obj_align(sKb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_text_font(sKb, f20, 0);
