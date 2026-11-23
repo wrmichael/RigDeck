@@ -706,6 +706,10 @@ async function otaSend(blob,name){
   let img=new Uint8Array(await blob.arrayBuffer());
   if(img[0]!==0xE9&&img.length>0x10000)img=img.subarray(0x10000);   // complete flasher image: the app starts at 64 kB
   if(img[0]!==0xE9)return end("That file is not RigDeck firmware (rigdeck-x.y.z.bin).");
+  // The image says how long it is (segments, checksum, SHA-256): a cut-off download is caught here.
+  let need=24;for(let k=0;k<img[1]&&need+8<=img.length;k++)need+=8+(img[need+4]|img[need+5]<<8|img[need+6]<<16|img[need+7]<<24);
+  need+=16-(need%16);if(img[23]===1)need+=32;
+  if(need>img.length)return end(`The download is incomplete (${img.length} of ${need} bytes). Try again in a few minutes.`);
   const P=32768,total=img.length;let resent=0;
   for(let off=0;off<total;){
     const piece=img.subarray(off,Math.min(total,off+P)),crc=crc32(piece);
@@ -737,8 +741,7 @@ async function otaNet(ch){
     m.textContent=`Downloading RigDeck ${man.version} …`;
     const r=await fetch(base+man.builds[0].parts[0].path,{cache:"no-store"});
     if(!r.ok)throw new Error("HTTP "+r.status);
-    const blob=await r.blob(),cl=+r.headers.get("content-length")||0;
-    if(cl&&blob.size!==cl&&!r.headers.get("content-encoding")){m.textContent=`Download incomplete (${blob.size} of ${cl} bytes). Try again in a few minutes.`;return;}
+    const blob=await r.blob();
     otaSend(blob,"RigDeck "+man.version+" ("+ch+")");
   }catch(e){m.textContent="Could not reach the RigDeck site from this browser ("+e.message+"). Is it online? Otherwise download the file on another device and use Install this file.";}
 }
