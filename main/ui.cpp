@@ -1682,9 +1682,9 @@ void buildLut() {                                    // black, blue, cyan, yello
 void ui_bind(App* app) { g_app = app; }
 void (*ui_brightness_fn)(int percent) = nullptr;
 
-// Start-up logo: the station's callsign in gold (AC9HP has its own; any other call gets the RigDeck
-// logo), over everything for a few seconds while the radio connects. A tap closes it early.
-extern "C" const lv_image_dsc_t logo_ac9hp, logo_rigdeck;
+// Start-up logo: the AC9HP brand in gold, over everything for a few seconds while the radio
+// connects. A tap closes it early.
+extern "C" const lv_image_dsc_t logo_ac9hp;
 static lv_obj_t* gSplash;
 static void splashGone(lv_anim_t*) { if (gSplash) { lv_obj_delete(gSplash); gSplash = nullptr; } }
 static void splashFade(lv_obj_t* o) {
@@ -1700,9 +1700,7 @@ static void splashFade(lv_obj_t* o) {
     lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
 }
 static void showSplash() {
-    std::string call = g_app->cfg.call;
-    for (char& c : call) c = (char)toupper((unsigned char)c);
-    const lv_image_dsc_t* img = call == "AC9HP" ? &logo_ac9hp : &logo_rigdeck;
+    const lv_image_dsc_t* img = &logo_ac9hp;
     gSplash = lv_obj_create(lv_layer_top());
     lv_obj_remove_style_all(gSplash);
     lv_obj_set_size(gSplash, W, H);
