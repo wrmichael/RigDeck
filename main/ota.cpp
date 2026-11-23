@@ -20,6 +20,8 @@
 #include "esp_ota_ops.h"
 #include "esp_app_format.h"
 #include "esp_partition.h"
+#include "esp_heap_caps.h"
+#include "psa/crypto.h"
 
 static const char* TAG = "ota";
 static App* s_app;
@@ -85,9 +87,10 @@ static esp_err_t upload(httpd_req_t* req) {
     if (len < 256 * 1024 || len > kMergedAppOffset + part->size)
         return reply(req, false, "That file is not RigDeck firmware (wrong size). Use rigdeck-x.y.z.bin.");
 
-    uint8_t* buf = (uint8_t*)malloc(kChunk);
+    // Internal RAM on purpose: flash writes from an external-RAM buffer go through extra copying.
+    uint8_t* buf = (uint8_t*)heap_caps_malloc(kChunk, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!buf) return reply(req, false, "Not enough memory");
-    struct Free { uint8_t* p; ~Free() { free(p); } } fr{buf};
+    struct Free { uint8_t* p; ~Free() { heap_caps_free(p); } } fr{buf};
 
     size_t got = std::min(kChunk, len);
     if (!recvAll(req, buf, got)) return reply(req, false, "Upload interrupted. Nothing was changed.");
@@ -117,9 +120,20 @@ static esp_err_t upload(httpd_req_t* req) {
     if (e != ESP_OK) return reply(req, false, std::string("Could not start the update (") + esp_err_to_name(e) + "). Nothing was changed.");
     struct Abort { esp_ota_handle_t& h; bool on = true; ~Abort() { if (on) esp_ota_abort(h); } } ab{h};
 
+    // SHA-256 of what arrived (all but the appended 32-byte hash), to tell a damaged transfer from a
+    // damaged flash write if the final check fails.
+    const bool hashed = buf[23] == 1;
+    const size_t hashLen = hashed && appLen > 32 ? appLen - 32 : appLen;
+    uint8_t tail[32] = {};
+    psa_crypto_init();
+    psa_hash_operation_t sha = PSA_HASH_OPERATION_INIT;
+    psa_hash_setup(&sha, PSA_ALG_SHA_256);
     size_t sent = 0;
     int lastPct = -1;
     for (;;) {
+        if (sent < hashLen) psa_hash_update(&sha, buf, std::min(got, hashLen - sent));
+        for (size_t i = 0; i < got; i++)
+            if (sent + i >= hashLen && sent + i - hashLen < 32) tail[sent + i - hashLen] = buf[i];
         e = esp_ota_write(h, buf, got);
         if (e != ESP_OK)
             return reply(req, false, std::string("Writing failed (") + esp_err_to_name(e) + "). RigDeck keeps its current firmware.");
@@ -134,11 +148,33 @@ static esp_err_t upload(httpd_req_t* req) {
         if (!recvAll(req, buf, got))
             return reply(req, false, "Upload interrupted. RigDeck keeps its current firmware.");
     }
+    uint8_t got_sha[32];
+    size_t shaLen = 0;
+    psa_hash_finish(&sha, got_sha, sizeof got_sha, &shaLen);
+    bool rxOk = !hashed || memcmp(got_sha, tail, 32) == 0;
     ab.on = false;
+    esp_log_level_set("esp_image", ESP_LOG_INFO);         // say which check fails, if one does
     e = esp_ota_end(h);                               // checks the whole image (segments and SHA-256)
-    if (e != ESP_OK)
-        return reply(req, false, std::string("The image is damaged or incomplete (") + esp_err_to_name(e) +
+    esp_log_level_set("esp_image", ESP_LOG_WARN);
+    if (e != ESP_OK) {
+        std::string why = rxOk ? "the file arrived intact" : "the file arrived damaged (SHA-256 mismatch)";
+        if (rxOk) {                                    // read the slot back: did flash keep what was written?
+            psa_hash_operation_t rb = PSA_HASH_OPERATION_INIT;
+            psa_hash_setup(&rb, PSA_ALG_SHA_256);
+            bool rdOk = true;
+            for (size_t off = 0; off < hashLen && rdOk; off += kChunk) {
+                size_t n = std::min(kChunk, hashLen - off);
+                rdOk = esp_partition_read(part, off, buf, n) == ESP_OK;
+                psa_hash_update(&rb, buf, n);
+            }
+            uint8_t fl[32];
+            psa_hash_finish(&rb, fl, sizeof fl, &shaLen);
+            why += rdOk && memcmp(fl, got_sha, 32) == 0 ? ", flash matches it" : ", but flash does not match what was written";
+        }
+        ESP_LOGE(TAG, "update check failed: %s", why.c_str());
+        return reply(req, false, std::string("The image did not pass the final check (") + esp_err_to_name(e) + "; " + why +
                                      "). RigDeck keeps its current firmware.");
+    }
     e = esp_ota_set_boot_partition(part);
     if (e != ESP_OK)
         return reply(req, false, std::string("Could not switch to the new firmware (") + esp_err_to_name(e) + ").");
