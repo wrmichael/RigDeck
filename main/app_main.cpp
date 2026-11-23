@@ -89,7 +89,8 @@ static void lowPointTrace(int64_t now) {
                  (unsigned)fs, (unsigned)s_failCaps.load(), t ? pcTaskGetName(t) : "?");
     }
     static size_t reported = 0;
-    size_t low = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+    // Internal DMA-capable RAM is the scarce part (USB, SD card, Wi-Fi link, SHA engine need it).
+    size_t low = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     if (now < 60000) { reported = low; return; }
     if (reported && low + 1024 > reported) return;
     reported = low;
@@ -105,9 +106,9 @@ static void lowPointTrace(int64_t now) {
     char who[240];
     memtrace_recent(who, sizeof who, 150);
     if (who[0]) { what += "; big internal allocations in the last 150 ms: "; what += who; }
-    ESP_LOGW(TAG, "RAM low point: internal %u kB lowest (now %u kB free, largest block %u kB) while %s",
-             (unsigned)(low / 1024), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
-             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024), what.c_str());
+    ESP_LOGW(TAG, "RAM low point: internal DMA-capable %u kB lowest (now %u kB free, largest block %u kB) while %s",
+             (unsigned)(low / 1024), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA) / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA) / 1024), what.c_str());
 }
 
 static void controlTask(void*) {

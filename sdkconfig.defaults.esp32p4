@@ -11,7 +11,8 @@ CONFIG_USB_HOST_DWC_DMA_CAP_MEMORY_IN_PSRAM=y
 
 # On-device touch interface: LVGL 9 on the Waveshare 7 inch display (settings as in Waveshare's examples).
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
-CONFIG_LV_USE_CLIB_MALLOC=y
+# LVGL allocations in PSRAM (main/lv_mem_psram.c), not in the scarce internal DMA-capable RAM.
+CONFIG_LV_USE_CUSTOM_MALLOC=y
 CONFIG_LV_USE_CLIB_STRING=y
 CONFIG_LV_USE_CLIB_SPRINTF=y
 CONFIG_LV_DEF_REFR_PERIOD=15
