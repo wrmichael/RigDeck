@@ -73,6 +73,10 @@ extern std::atomic<bool> g_sdlogBusy;
 // (after the first minute), one line says what was going on at that moment, so the peak can be
 // traced to its cause (TX starting, a decode, a web request, a card write, Wi-Fi...).
 extern "C" void memtrace_recent(char* out, size_t cap, int ms);
+// LVGL's memory functions live in main/lv_mem_psram.c; LVGL is linked after main, so pull that
+// object in explicitly (the linker would otherwise not take it from libmain.a).
+extern "C" void* lv_malloc_core(size_t size);
+void* volatile g_keepLvMem = (void*)&lv_malloc_core;
 
 // A failed allocation is noted here (any task) and reported by the control task.
 static std::atomic<uint32_t> s_failSize{0}, s_failCaps{0};
