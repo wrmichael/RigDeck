@@ -267,7 +267,7 @@ static esp_err_t chunk(httpd_req_t* req) {
     if (off + n <= s_cs.written) return reply(req, true, "already have it");      // a resend of a piece we kept
     if (off != s_cs.written) return reply(req, false, "pieces out of order. Start again.");
 
-    size_t hn = off < s_cs.hashLen ? std::min(n, s_cs.hashLen - off) : 0;
+    size_t hn = off < s_cs.hashLen ? std::min(n, s_cs.hashLen - (size_t)off) : 0;
     if (hn) psa_hash_update(&s_cs.sha, piece, hn);
     for (size_t i = hn; i < n; i++)
         if (off + i >= s_cs.hashLen && off + i - s_cs.hashLen < 32) s_cs.tail[off + i - s_cs.hashLen] = piece[i];
