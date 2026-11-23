@@ -37,6 +37,10 @@ main{padding-bottom:50px}
 #tl{position:fixed;right:14px;bottom:14px;z-index:60;display:flex;align-items:center;gap:8px;padding:6px 12px 6px 7px;border-radius:22px;background:rgba(11,16,20,.94);border:1px solid var(--line);font:600 14px var(--mono);color:var(--txt);box-shadow:0 2px 10px rgba(0,0,0,.5)}
 #tl i{width:20px;height:20px;border-radius:50%;background:#e5484d;box-shadow:0 0 8px #e5484d}
 #tl.g i{background:#2fd16a;box-shadow:0 0 10px #2fd16a}#tl.y i{background:#f2c230;box-shadow:0 0 10px #f2c230}
+#tl i+i{display:none}
+#tl.lost{border-color:#e5484d;gap:5px}#tl.lost i{display:block;width:14px;height:14px;animation:tll 1s steps(1) infinite}
+#tl.lost i:nth-of-type(2){background:#f2c230;box-shadow:0 0 8px #f2c230}#tl.lost i:nth-of-type(3){background:#2fd16a;box-shadow:0 0 8px #2fd16a}
+@keyframes tll{50%{opacity:.15}}
 #tl.on i{animation:tlp .8s ease-in-out infinite}@keyframes tlp{50%{opacity:.3}}
 @media (prefers-reduced-motion:reduce){#tl.on i{animation:none;outline:2px solid #fff}}
 #banner{display:none;padding:7px 14px;background:#4a3a10;color:#ffe6a6;border-bottom:1px solid #6b5416}
@@ -84,7 +88,7 @@ table.log th{color:var(--dim);font-weight:500}
 </header>
 <div id="slot"><i></i></div>
 <div id="banner"></div>
-<button id="tl" type="button" title="Transmit status. Tap to show you are here (restarts the TX watchdog)."><i></i><span>TX off</span></button>
+<button id="tl" type="button" title="Transmit status. Tap to show you are here (restarts the TX watchdog)."><i></i><i></i><i></i><span>TX off</span></button>
 <div id="txline"></div>
 <nav>
   <button data-tab="op" class="on">Operate</button><button data-tab="qlog">SSB / CW log</button><button data-tab="log">Log</button><button data-tab="set">Settings</button>
@@ -253,6 +257,12 @@ table.log th{color:var(--dim);font-weight:500}
     <div class="row"><span id="wcVer">Firmware: …</span></div>
     <div class="row"><input type="file" id="wcFile" accept=".bin"><button id="wcGo">Update Wi-Fi chip</button><span id="wcMsg" class="hint"></span></div>
     <p class="hint">Updates the firmware of the board's Wi-Fi chip with <b>rigdeck-wifi-chip.bin</b> (from the RigDeck release, or build it with build_wifi_chip.bat). Join the RigDeck hotspot and use 192.168.4.1 for this, keep the board powered, and allow about a minute. The chip keeps its old firmware unless the new one arrives complete, and RigDeck restarts when it is done.</p>
+    <h3 style="margin-top:16px">Update RigDeck</h3>
+    <div id="otaInfo" class="hint"></div>
+    <div class="row"><button id="otaStable">Install latest Stable from the internet</button><button id="otaBeta">Install latest Beta</button></div>
+    <div class="row"><input type="file" id="otaFile" accept=".bin"><button id="otaGo">Install this file</button></div>
+    <div id="otaMsg" class="hint"></div>
+    <p class="hint">Updates RigDeck over Wi-Fi, no USB cable needed. The internet buttons need this browser to be online (the board on your home network). Or download <b>rigdeck-x.y.z.bin</b> from the <a href="https://wrmichael.github.io/RigDeck/" target="_blank" rel="noopener">flasher page</a> and install the file. RigDeck stops transmitting, keeps its settings and logs, and restarts when done (about a minute). If the new version does not start properly, the board goes back to the one it had.</p>
     <h3 style="margin-top:16px">Device</h3>
     <div class="form">
       <label for="dvBright">Screen brightness</label><span><input type="range" id="dvBright" min="5" max="100" style="width:220px;vertical-align:middle"> <span id="dvBrightV"></span></span>
@@ -397,6 +407,7 @@ function render(){
   if(S.sta){const t=S.sta, q=t.rssi>=-60?"strong":t.rssi>=-70?"good":t.rssi>=-80?"fair":"weak", el=$("staInfo");
     el.textContent=t.state==="off"?"Home network: not set up":t.state==="connected"?`Home network: connected to "${t.ssid}", address ${t.ip}${t.rssi?`, signal ${t.rssi} dBm (${q})`:""}`:`Home network: ${t.state}${t.reason?" - "+t.reason:""}`;
     el.style.color=t.state==="connected"?"var(--rx)":t.state==="retrying"?"var(--tx)":"";}
+  if(S.ota){$("otaInfo").textContent="Installed: RigDeck "+S.ver+" (flash slot "+S.ota.slot+")";if(S.ota.upd&&!otaBusy)$("otaMsg").textContent=S.ota.upd;}
   if(S.wchip){$("wcVer").textContent="Firmware: "+(S.wchip.ver||"checking…");if(S.wchip.upd&&!wcBusy)$("wcMsg").textContent=S.wchip.upd;}
   if(S.msg&&S.msg!==render.lastMsg){render.lastMsg=S.msg;banner(S.msg);}
   if(tx.wd) banner("TX watchdog stopped automatic transmission. Press Enable TX to resume.");
@@ -436,6 +447,10 @@ function trafficLight(tx){
   el.className=c+(tx.on?" on":""); el.querySelector("span").textContent=t;
   el.title=(c==="r"?"Not transmitting. ":c==="y"?"Past half of the TX watchdog time. ":"Ready to transmit. ")+"Tap to show you are here (restarts the TX watchdog).";
 }
+// No answer from the device: all three colours flash together, which no TX state ever shows.
+let pollFails=0;
+function linkLost(){const el=$("tl");el.className="lost";el.querySelector("span").textContent="No link";
+  el.title="The page has lost contact with the device. Its transmit state is unknown.";}
 $("tl").onclick=async()=>{await cmd("ping");poll();};
 // Any click or key on the page counts as operator activity for the TX watchdog (at most every 15 s).
 let lastPing=0;
@@ -449,12 +464,15 @@ async function poll(){
     if(demo){S=demoState();}
     else{
       const t0=performance.now();
-      const r=await fetch(`/api/state?since=${since}&psk=${pskSince}&cfg=${cfgLoaded&&render.call!==undefined?0:1}`);
+      const ac=new AbortController(), to=setTimeout(()=>ac.abort(),3000);
+      const r=await fetch(`/api/state?since=${since}&psk=${pskSince}&cfg=${cfgLoaded&&render.call!==undefined?0:1}`,{signal:ac.signal});
+      clearTimeout(to);
       S=await r.json();
       lastRtt=performance.now()-t0;
     }
+    pollFails=0;
     render();
-  }catch(e){$("dUsb").className=$("dCiv").className=$("dAud").className="dot";$("clock").textContent="device not responding";}
+  }catch(e){if(++pollFails>=3)linkLost();$("dUsb").className=$("dCiv").className=$("dAud").className="dot";$("clock").textContent="device not responding";}
   busy=false;
 }
 // The device has no clock of its own on a hotspot: hand it this browser's UTC, corrected for latency.
@@ -674,6 +692,35 @@ $("wcGo").onclick=()=>{
   x.onerror=x.ontimeout=()=>end(sentAll?"The connection dropped at the end: the Wi-Fi chip is probably restarting with the new firmware. Reconnect in a minute and check the version above.":"Upload failed: connection lost. The Wi-Fi chip keeps its old firmware.");
   x.send(f);
 };
+// RigDeck firmware update over Wi-Fi: a file, or the newest release fetched from GitHub Pages by this browser.
+var otaBusy=false;
+const OTA_SITE="https://wrmichael.github.io/RigDeck/";
+function otaSend(blob,name){
+  const m=$("otaMsg");
+  if(!confirm(`Install ${name} on RigDeck? It stops transmitting and restarts when done.`))return;
+  otaBusy=true;["otaGo","otaStable","otaBeta"].forEach(i=>$(i).disabled=true);
+  const x=new XMLHttpRequest();let sentAll=false;
+  x.open("POST","/api/ota");x.timeout=300000;
+  x.upload.onprogress=e=>{if(e.lengthComputable){m.textContent=`Sending ${Math.round(e.loaded*100/e.total)} %`;sentAll=e.loaded>=e.total;}};
+  const end=t=>{m.textContent=t;otaBusy=false;["otaGo","otaStable","otaBeta"].forEach(i=>$(i).disabled=false);};
+  x.onload=()=>{let j={};try{j=JSON.parse(x.responseText);}catch(e){}end(j.ok?j.msg:(j.err||"Update failed"));};
+  x.onerror=x.ontimeout=()=>end(sentAll?"The connection dropped at the end: RigDeck is probably restarting with the new firmware. Reload this page in a minute and check the version.":"Upload failed: connection lost. RigDeck keeps its current firmware.");
+  x.send(blob);
+}
+$("otaGo").onclick=()=>{const f=$("otaFile").files[0];if(!f){$("otaMsg").textContent="Choose rigdeck-x.y.z.bin first";return;}otaSend(f,f.name);};
+async function otaNet(ch){
+  const m=$("otaMsg"),base=OTA_SITE+(ch==="stable"?"stable/":"");
+  try{
+    m.textContent="Checking "+ch+" …";
+    const man=await (await fetch(base+"manifest.json",{cache:"no-store"})).json();
+    if(man.version===S.ver&&!confirm(`RigDeck ${man.version} is already installed. Install it again?`)){m.textContent="Already up to date ("+man.version+").";return;}
+    m.textContent=`Downloading RigDeck ${man.version} …`;
+    const r=await fetch(base+man.builds[0].parts[0].path,{cache:"no-store"});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    otaSend(await r.blob(),"RigDeck "+man.version+" ("+ch+")");
+  }catch(e){m.textContent="Could not reach the RigDeck site from this browser ("+e.message+"). Is it online? Otherwise download the file on another device and use Install this file.";}
+}
+$("otaStable").onclick=()=>otaNet("stable");$("otaBeta").onclick=()=>otaNet("beta");
 $("save").onclick=async()=>{
   const a={};
   document.querySelectorAll("#form input,#form select").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=e.value;});

@@ -251,6 +251,22 @@ computer, pick **Stable** (tested, recommended) or **Beta** (newest features), a
 When updating, leave "Erase device" unticked to keep the log
 and settings. The same page offers the .bin for esptool (address 0x0).
 
+### Updating over Wi-Fi
+
+From version 0.9.45 on, RigDeck updates itself from the web page: **Settings > Update RigDeck**.
+- **Install latest Stable / Beta** fetches the newest release from the flasher site (the browser you
+  use needs internet, so the board should be on your home network) and sends it to the board.
+- **Install this file** takes a `rigdeck-x.y.z.bin` you downloaded from the flasher page.
+
+RigDeck stops transmitting, keeps its settings and logs, and restarts after about a minute. The board
+keeps its current firmware until the new one has arrived complete and checked. If the new version
+crashes or restarts within its first minute, the board goes back to the previous version by itself.
+
+A board that was installed before 0.9.45 needs **one more install over USB** (browser flasher, no erase)
+to get the new flash layout with the two update slots; the page says so if it is missing. Settings,
+the log and the Wi-Fi chip image stay where they are. A USB install always starts the version it wrote,
+even if a newer one was installed over Wi-Fi before.
+
 ### Making a release (maintainer)
 
 1. Put the new version number in `version.txt`.
@@ -262,7 +278,8 @@ and settings. The same page offers the .bin for esptool (address 0x0).
    This is the **Beta** channel (`docs/manifest.json`, `docs/firmware/`).
 4. To make a beta **Stable** after testing it on real radios: copy `docs/firmware/rigdeck.bin` and
    `docs/manifest.json` to `docs/stable/` (in the manifest, the path becomes `rigdeck.bin`), tag the
-   commit (`git tag v1.0.0`, `git push --tags`) and attach the .bin to a GitHub release.
+   commit (`git tag v1.0.0`, `git push --tags`) and attach the .bin to a GitHub release. Copy
+   `docs/firmware/otadata.bin` there too (path `otadata.bin` in the stable manifest).
 
 The version shows on the touch screen (Settings) and on the web page (Settings tab, bottom).
 

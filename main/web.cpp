@@ -11,6 +11,7 @@
 static const char* TAG = "web";
 #if CONFIG_IDF_TARGET_ESP32P4
 void wifichip_register(httpd_handle_t srv);
+void ota_register(httpd_handle_t srv);
 #include "sdlog.h"          // wifi_chip.cpp: firmware upload for the Wi-Fi chip
 #endif
 static App* s_app;
@@ -128,6 +129,7 @@ void web_start(App& app) {
     for (auto& u : uris) httpd_register_uri_handler(srv, &u);
 #if CONFIG_IDF_TARGET_ESP32P4
     wifichip_register(srv);
+    ota_register(srv);
     sdlog_register(srv);
 #endif
 }

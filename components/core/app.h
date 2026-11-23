@@ -113,6 +113,7 @@ public:
     std::atomic<bool> rebootReq{false};
     std::atomic<bool> ntpSynced{false};
     std::string fwVersion = "dev";
+    std::string otaUpd_;
     void (*logFn)(const char* line) = nullptr;      // platform log (serial monitor on the ESP32)                  // set by the platform (version.txt on the ESP32)
     bool (*haveRam)(size_t bytes) = nullptr;         // platform check before the big decoder allocations
     std::atomic<bool> memFail{false};
@@ -127,6 +128,8 @@ public:
     // Wi-Fi chip (co-processor): firmware version ("" = unknown) and the result of the last update
     void setWifiChip(const std::string& ver, const std::string& upd);
     void setWifiChipUpd(const std::string& upd);
+    void setOtaStatus(const std::string& msg);         // RigDeck firmware update progress / result
+    std::string otaInfo;                               // set before begin(): which flash slot is running
     void note(const std::string& msg);                 // status line message from platform code
     StaStatus staStatus();
     std::function<void(bool connect)> wifiControl;    // set by the platform: (re)join with saved settings / leave

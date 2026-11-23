@@ -592,6 +592,11 @@ void App::setWifiChipUpd(const std::string& upd) {
     wchipUpd_ = upd;
     if (!upd.empty()) status_ = upd;                 // also on the touch screen's status line
 }
+void App::setOtaStatus(const std::string& msg) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    otaUpd_ = msg;
+    if (!msg.empty()) status_ = msg;
+}
 App::StaStatus App::staStatus() {
     std::lock_guard<std::mutex> lk(mtx_);
     return sta_;
@@ -1935,6 +1940,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
          ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}" +
          ",\"inet\":" + jnum(cfg.deadman ? inet_.load() : -2) +
          ",\"wchip\":{\"ver\":" + jstr(wchipVer_) + ",\"upd\":" + jstr(wchipUpd_) + "}" +
+         ",\"ota\":{\"slot\":" + jstr(otaInfo) + ",\"upd\":" + jstr(otaUpd_) + "}" +
          ",\"stor\":{\"sd\":" + jbool(logOnSd_) + ",\"station\":" + jstr(station_) + ",\"sdInfo\":" + jstr(sdInfo) +
          ",\"intT\":" + jnum((long long)intTotal_.load()) + ",\"intU\":" + jnum((long long)intUsed_.load()) +
          ",\"sdT\":" + jnum((long long)sdTotal_.load()) + ",\"sdU\":" + jnum((long long)sdUsed_.load()) + ",\"left\":" + jnum(left_.load()) + "}";

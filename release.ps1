@@ -8,6 +8,7 @@
 #   build\rigdeck-<version>.bin      complete image for address 0x0 (attach this to a GitHub release)
 #   docs\firmware\rigdeck.bin        the same file, served by the flasher page
 #   docs\manifest.json               tells the flasher page which file and version
+#   docs\firmware\otadata.bin       blank update-slot selector (0x7C0000), a second part in the manifest
 # The image ends after the program, so the log/settings partition is not touched when it is written.
 
 $ErrorActionPreference = "Continue"   # idf.py and esptool write progress to stderr; failures are checked by exit code
@@ -22,12 +23,22 @@ $out = "rigdeck-$ver.bin"
 Push-Location build
 try {
     # flash_args holds the flash settings and every part with its address (bootloader, partition table, app).
-    python -m esptool --chip esp32p4 merge-bin -o $out "@flash_args"
+    # The update-slot selector (otadata) sits far up the flash, past the settings partition: merging it
+    # would pad the image over that partition and wipe it. It goes to the flasher as a separate part.
+    $args = Get-Content flash_args | Where-Object { $_ -notmatch "ota_data_initial" }
+    [System.IO.File]::WriteAllLines((Join-Path (Get-Location) "flash_args_merge"), $args)
+    python -m esptool --chip esp32p4 merge-bin -o $out "@flash_args_merge"
     if ($LASTEXITCODE -ne 0) { throw "merge-bin failed" }
 } finally { Pop-Location }
 
 New-Item -ItemType Directory -Force -Path docs\firmware | Out-Null
 Copy-Item -Force "build\$out" docs\firmware\rigdeck.bin
+# Blank otadata: after a USB install the board starts the firmware just written (not an older web update).
+$otaPart = ""
+if (Test-Path build\ota_data_initial.bin) {
+    Copy-Item -Force build\ota_data_initial.bin docs\firmware\otadata.bin
+    $otaPart = ",`n        { `"path`": `"firmware/otadata.bin`", `"offset`": 8126464 }"
+}
 
 $manifest = @"
 {
@@ -39,7 +50,7 @@ $manifest = @"
     {
       "chipFamily": "ESP32-P4",
       "parts": [
-        { "path": "firmware/rigdeck.bin", "offset": 0 }
+        { "path": "firmware/rigdeck.bin", "offset": 0 }$otaPart
       ]
     }
   ]

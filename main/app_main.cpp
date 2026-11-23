@@ -131,6 +131,7 @@ extern "C" void app_main(void) {
         return r;
     };
 #endif
+    ota_start(s_app);
     s_app.begin("/fs", logDir);
     ESP_LOGI(TAG, "RigDeck %s, call=%s grid=%s, free heap %u kB", s_app.fwVersion.c_str(), s_app.cfg.call.c_str(), s_app.cfg.grid.c_str(),
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_DEFAULT) / 1024));
