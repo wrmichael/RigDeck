@@ -91,6 +91,7 @@ static void purgeOld() {                       // console files dated more than 
 static const size_t CHUNK = 4096;
 static char* s_chunk;
 
+std::atomic<bool> g_sdlogBusy{false};                  // for the internal-RAM low-point tracer
 static void writerTask(void*) {
     char* chunk = s_chunk;
     FILE* f = nullptr;
@@ -141,7 +142,9 @@ static void writerTask(void*) {
             portEXIT_CRITICAL(&s_mux);
             if (dropped) fprintf(f, "[console log: %u messages lost, buffer full]\n", dropped);
             if (!n) break;
+            g_sdlogBusy = true;
             fileWrite(f, chunk, n);                                // via internal RAM (see adif.h)
+            g_sdlogBusy = false;
         }
         fflush(f);
         if (++sinceSync >= 10) { sinceSync = 0; fsync(fileno(f)); }   // on the card every ~5 s

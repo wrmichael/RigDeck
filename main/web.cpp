@@ -1,3 +1,4 @@
+#include <atomic>
 // HTTP server: the control page plus a small JSON API the page polls.
 #include "platform.h"
 #include <cstring>
@@ -52,6 +53,10 @@ static std::string query(httpd_req_t* req) {
     return q;
 }
 
+// What the web server is doing right now, for the internal-RAM low-point tracer (app_main.cpp).
+std::atomic<const char*> g_webNow{nullptr};
+struct WebBusy { WebBusy(const char* w) { g_webNow = w; } ~WebBusy() { g_webNow = nullptr; } };
+
 static esp_err_t sendJson(httpd_req_t* req, const std::string& js) {
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
@@ -59,6 +64,7 @@ static esp_err_t sendJson(httpd_req_t* req, const std::string& js) {
 }
 
 static esp_err_t hIndex(httpd_req_t* req) {
+    WebBusy wb("sending the page");
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     size_t n = index_html_end - index_html_start;
@@ -67,6 +73,7 @@ static esp_err_t hIndex(httpd_req_t* req) {
 }
 
 static esp_err_t hState(httpd_req_t* req) {
+    WebBusy wb("state");
     std::map<std::string, std::string> a;
     parseForm(query(req), a);
     // An open, visible control page is the remote control point: the operator is present (TX watchdog).
@@ -76,9 +83,10 @@ static esp_err_t hState(httpd_req_t* req) {
                                            (uint32_t)strtoul(a["psk"].c_str(), nullptr, 10), a["cfg"] == "1"));
 }
 
-static esp_err_t hSpec(httpd_req_t* req) { return sendJson(req, s_app->spectrumJson()); }
+static esp_err_t hSpec(httpd_req_t* req) { WebBusy wb("spectrum"); return sendJson(req, s_app->spectrumJson()); }
 
 static esp_err_t hCmd(httpd_req_t* req) {
+    WebBusy wb("command");
     if (req->content_len > 2048) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "too long");
     std::string body(req->content_len, 0);
     size_t got = 0;
@@ -95,6 +103,7 @@ static esp_err_t hCmd(httpd_req_t* req) {
 }
 
 static esp_err_t hLog(httpd_req_t* req) {
+    WebBusy wb("log download");
     httpd_resp_set_type(req, "text/plain");
     httpd_resp_set_hdr(req, "Content-Disposition", "attachment");   // the page supplies a dated file name
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");

@@ -1,3 +1,5 @@
+#include <string>
+#include <atomic>
 // RigDeck - ESP-IDF entry point.
 #include "platform.h"
 #include "ui.h"
@@ -62,10 +64,39 @@ static bool fsInfo(bool sd, uint64_t& total, uint64_t& used) {
 static void decodeTask(void*) { s_app.decodeLoop(); }
 static void netlogTask(void*) { s_app.netLoop(); }
 
+#if CONFIG_IDF_TARGET_ESP32P4
+extern std::atomic<const char*> g_webNow;
+extern std::atomic<bool> g_sdlogBusy;
+#endif
+
+// Internal-RAM low-point tracer: each time the lowest-ever free internal RAM drops by 1 kB or more
+// (after the first minute), one line says what was going on at that moment, so the peak can be
+// traced to its cause (TX starting, a decode, a web request, a card write, Wi-Fi...).
+static void lowPointTrace(int64_t now) {
+    static size_t reported = 0;
+    size_t low = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+    if (now < 60000) { reported = low; return; }
+    if (reported && low + 1024 > reported) return;
+    reported = low;
+    std::string what;
+    auto add = [&](const char* w) { what += what.empty() ? "" : ", "; what += w; };
+    if (s_app.txOnNow()) add("transmitting");
+    if (s_app.decodingNow()) add("decoding");
+#if CONFIG_IDF_TARGET_ESP32P4
+    if (const char* w = g_webNow.load()) { add("web request: "); what += w; }
+    if (g_sdlogBusy) add("console log card write");
+#endif
+    if (what.empty()) add("nothing RigDeck tracks (Wi-Fi/USB background)");
+    ESP_LOGW(TAG, "RAM low point: internal %u kB lowest (now %u kB free, largest block %u kB) while %s",
+             (unsigned)(low / 1024), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024), what.c_str());
+}
+
 static void controlTask(void*) {
     int64_t lastMem = 0;
     for (;;) {
         s_app.tick();
+        lowPointTrace(monoMs());
 #if CONFIG_IDF_TARGET_ESP32P4
         sdlog_enable(s_app.cfg.consoleLog != 0);
 #endif
