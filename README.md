@@ -413,6 +413,10 @@ feature off starts it fresh.
 - The level in use shows as "audio NN %" next to Po/ALC while transmitting.
 - Works with the Icoms and the FTX-1. The QMX has no ALC; it always gets full audio (see QMX).
 
+The manual level (Settings, `TX audio level %`) is remembered **per radio**: an IC-7100 may need 8 %
+and a SignaLink 45 %. When a unit moves to another radio, RigDeck puts back the level last used with
+that radio a few seconds after it recognises it. A radio it has never seen keeps the current level.
+
 ## Keeping the time
 
 FT8 needs the clock within about a second. RigDeck sets it from, best first: a GPS module with PPS,

@@ -20,6 +20,18 @@ int main() {
     // --- CI-V ---
     uint8_t b[5];
     civFreqToBcd(14074000, b);
+    {                                                            // manual TX level remembered per radio
+        Settings st;
+        CHECK(st.levelFor("IC-7100") == -1);
+        st.rememberLevel("IC-7100", 8);
+        st.rememberLevel("No CAT", 45);
+        st.rememberLevel("IC-7100", 9);
+        CHECK(st.levelFor("IC-7100") == 9 && st.levelFor("No CAT") == 45 && st.levelFor("IC-705") == -1);
+        CHECK(st.txLevels == "No CAT:45;IC-7100:9");
+        Settings t;
+        CHECK(t.set("txLevels", st.txLevels) && t.levelFor("No CAT") == 45);
+        CHECK(!t.set("txLevels", "a=b"));
+    }
     CHECK(b[0] == 0x00 && b[1] == 0x40 && b[2] == 0x07 && b[3] == 0x14 && b[4] == 0x00);
     CHECK(civBcdToFreq(b, 5) == 14074000);
     civFreqToBcd(432174550, b);

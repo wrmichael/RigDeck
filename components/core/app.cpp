@@ -926,6 +926,7 @@ void App::tick() {
     if (seq.waitNext && !waitShown_) status("QSO finished. Press Next QSO to start the next one (POTA mode)");
     waitShown_ = seq.waitNext;
     bool conn = radio.connected();
+    if (conn) levelTrack(mono);
     if (conn && !wasConn_ && cfg.keyWpm > 0) radio.setKeySpeed(cfg.keyWpm);
     wasConn_ = conn;
     if (bandReqHz_ && radio.connected()) {
@@ -1709,6 +1710,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         bool wifiChanged = wifi && (n.apSsid != cfg.apSsid || n.apPass != cfg.apPass);
         bool staChanged = wifi && (n.staSsid != cfg.staSsid || n.staPass != cfg.staPass);
         bool alcReset = n.txLevel != cfg.txLevel || n.autoAlc != cfg.autoAlc;   // start again from the new level
+        if (n.txLevel != cfg.txLevel && !levelModel_.empty()) n.rememberLevel(levelModel_, n.txLevel);   // per radio
         bool newStation = fileCall(n.call) != station_;
         if (newStation && txState_ == ST_TX) return err("Change the callsign when not transmitting");
         cfg = n;
@@ -1878,6 +1880,27 @@ std::string App::spectrumJson() {
     std::string o = "{\"seq\":" + jnum(seq) + ",\"hz\":11.71875,\"d\":\"";
     for (int i = 0; i < Spectrum::BINS; i++) { o += hex[b[i] >> 4]; o += hex[b[i] & 15]; }
     return o + "\"}";
+}
+
+// The manual TX audio level is remembered per radio: radios differ a lot in how much USB audio they
+// need (an IC-7100 wants ~8 %, a SignaLink ~45 %). Once a radio has been the same for 5 s (model
+// detection can take a few answers), its remembered level is put back; a radio seen for the first
+// time keeps the current level, which is then remembered for it. Caller holds the lock.
+void App::levelTrack(int64_t mono) {
+    std::string m = radio.modelName();
+    if (m.empty() || m == levelModel_) { levelCand_.clear(); return; }
+    if (m != levelCand_) { levelCand_ = m; levelCandMono_ = mono; return; }
+    if (mono - levelCandMono_ < 5000) return;
+    levelModel_ = m;
+    levelCand_.clear();
+    int l = cfg.levelFor(m);
+    if (l < 0) {
+        cfg.rememberLevel(m, cfg.txLevel);
+    } else if (l != cfg.txLevel) {
+        cfg.txLevel = l;
+        status("TX audio level " + std::to_string(l) + " % (remembered for the " + m + ")");
+    } else return;
+    cfg.save(dir_ + "/settings.txt");
 }
 
 int App::wdLeftSec() const {                                       // seconds until the TX watchdog trips, -1 = not counting

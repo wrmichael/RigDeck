@@ -263,6 +263,9 @@ private:
     StaStatus sta_;
     int64_t lastUiMono_ = 0, bandReqHz_ = 0;
     bool watchdogTripped_ = false, wasConn_ = false;
+    std::string levelModel_, levelCand_;               // radio whose manual TX level is in use / being detected
+    int64_t levelCandMono_ = 0;
+    void levelTrack(int64_t mono);
     bool waitShown_ = false;                           // the "press Next QSO" note was shown
     // Dead man's switch: internet reachability (-1 not checked, 0 lost, 1 there), checked every
     // 20 s by the network thread; lost after 3 failed checks in a row.

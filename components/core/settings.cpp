@@ -104,6 +104,11 @@ bool Settings::set(const std::string& k, const std::string& v) {
     if (k == "consoleLog") return toInt(v, 0, 1, consoleLog);
     if (k == "confirmQso") return toInt(v, 0, 1, confirmQso);
     if (k == "deadman") return toInt(v, 0, 1, deadman);
+    if (k == "txLevels") {
+        if (v.size() > 400 || v.find_first_of("\r\n=") != std::string::npos) return false;
+        txLevels = v;
+        return true;
+    }
     if (k == "deadmanHost") {
         std::string h = v;
         while (!h.empty() && h.back() == ' ') h.pop_back();
@@ -129,7 +134,7 @@ std::string Settings::serialize(bool secrets) const {
     I("watchdogMin", watchdogMin); I("rfPower", rfPower); I("logProto", logProto); I("logPort", logPort);
     I("cwWpm", cwWpm); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);
     I("gpsModule", gpsModule); I("gpsModBaud", gpsModBaud); I("gpsRxPin", gpsRxPin); I("gpsPpsPin", gpsPpsPin);
-    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("confirmQso", confirmQso); I("deadman", deadman); S("deadmanHost", deadmanHost);
+    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("confirmQso", confirmQso); I("deadman", deadman); S("deadmanHost", deadmanHost); S("txLevels", txLevels);
     return s;
 }
 
@@ -186,4 +191,36 @@ bool Settings::save(const std::string& path) const {
     if (!ok) { remove(tmp.c_str()); return false; }
     remove(path.c_str());                 // SPIFFS rename does not overwrite
     return rename(tmp.c_str(), path.c_str()) == 0;
+}
+
+int Settings::levelFor(const std::string& radio) const {
+    size_t p = 0;
+    while (p < txLevels.size()) {
+        size_t e = txLevels.find(';', p);
+        if (e == std::string::npos) e = txLevels.size();
+        std::string item = txLevels.substr(p, e - p);
+        size_t c = item.rfind(':');
+        if (c != std::string::npos && item.substr(0, c) == radio) {
+            int l = atoi(item.c_str() + c + 1);
+            return l >= 1 && l <= 100 ? l : -1;
+        }
+        p = e + 1;
+    }
+    return -1;
+}
+
+void Settings::rememberLevel(const std::string& radio, int lvl) {
+    if (radio.empty() || radio.find_first_of(";:=\r\n") != std::string::npos) return;
+    std::string out;
+    size_t p = 0;
+    while (p < txLevels.size()) {                      // every other radio's entry stays as it was
+        size_t e = txLevels.find(';', p);
+        if (e == std::string::npos) e = txLevels.size();
+        std::string item = txLevels.substr(p, e - p);
+        size_t c = item.rfind(':');
+        if (c != std::string::npos && item.substr(0, c) != radio && !item.empty()) out += (out.empty() ? "" : ";") + item;
+        p = e + 1;
+    }
+    out += (out.empty() ? "" : ";") + radio + ":" + std::to_string(lvl);
+    if (out.size() <= 400) txLevels = out;
 }

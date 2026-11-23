@@ -58,6 +58,9 @@ struct Settings {
     int contrast = 100;                  // display colour contrast, % (50 - 150; 100 = as designed)
     int confirmQso = 0;
     int deadman = 0;                     // 1 = no internet: finish the QSO in progress, then stop Auto CQ / hunt
+    std::string txLevels;
+    int levelFor(const std::string& radio) const;          // -1 = none remembered
+    void rememberLevel(const std::string& radio, int lvl);                // manual TX level per radio, "IC-7100:8;No CAT:45" (kept by RigDeck)
     std::string deadmanHost = "1.1.1.1:53";   // what is checked for "internet" (host or IP, optional :port, TCP)                  // POTA mode: Auto CQ / hunt wait for "Next QSO" after each QSO
     int consoleLog = 1;                  // 1 = copy the console log to the microSD card (RigDeck/logs)
 
