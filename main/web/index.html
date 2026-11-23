@@ -713,6 +713,8 @@ async function otaNet(ch){
   try{
     m.textContent="Checking "+ch+" …";
     const man=await (await fetch(base+"manifest.json",{cache:"no-store"})).json();
+    const vn=v=>v.split(".").map(Number).reduce((a,x)=>a*1000+(x||0),0);
+    if(vn(man.version)<vn("0.9.45")){m.textContent=`${ch} is ${man.version}, older than Wi-Fi updates (0.9.45). Install it over USB with the flasher page if you need it.`;return;}
     if(man.version===S.ver&&!confirm(`RigDeck ${man.version} is already installed. Install it again?`)){m.textContent="Already up to date ("+man.version+").";return;}
     m.textContent=`Downloading RigDeck ${man.version} …`;
     const r=await fetch(base+man.builds[0].parts[0].path,{cache:"no-store"});

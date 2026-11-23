@@ -69,7 +69,8 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
 
   <h2>Other ways to flash</h2>
   <p>The .bin above is a complete image that goes at address <code>0x0</code>. With esptool:</p>
-  <p><code>esptool --chip esp32p4 write-flash 0x0 rigdeck.bin</code></p>
+  <p><code>esptool --chip esp32p4 write-flash 0x0 rigdeck.bin 0x7C0000 otadata.bin</code></p>
+  <p>(otadata.bin, in the same folder as the .bin, makes the board start the version just written. Versions before 0.9.45 do not have it.)</p>
   <p>Or open Espressif's <a href="https://espressif.github.io/esptool-js/">online flasher</a>, connect, and add the file at address 0x0.</p>
 
   <h2>About</h2>
