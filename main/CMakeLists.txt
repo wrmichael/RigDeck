@@ -1,4 +1,4 @@
-set(srcs "app_main.cpp" "usb_radio.cpp" "net.cpp" "web.cpp" "gps_module.cpp" "ota.cpp" "memtrace.c")
+set(srcs "app_main.cpp" "usb_radio.cpp" "net.cpp" "web.cpp" "gps_module.cpp" "ota.cpp" "memtrace.c" "logo_img.c")
 if(IDF_TARGET STREQUAL "esp32p4")
     # Wi-Fi chip (ESP32-C6 co-processor) version and firmware update over ESP-Hosted
     # (a dependency in idf_component.yml, so its headers are already available here).

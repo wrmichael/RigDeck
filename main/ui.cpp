@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <cctype>
 #include <vector>
 #include <map>
 #include <algorithm>
@@ -1681,6 +1682,46 @@ void buildLut() {                                    // black, blue, cyan, yello
 void ui_bind(App* app) { g_app = app; }
 void (*ui_brightness_fn)(int percent) = nullptr;
 
+// Start-up logo: the station's callsign in gold (AC9HP has its own; any other call gets the RigDeck
+// logo), over everything for a few seconds while the radio connects. A tap closes it early.
+extern "C" const lv_image_dsc_t logo_ac9hp, logo_rigdeck;
+static lv_obj_t* gSplash;
+static void splashGone(lv_anim_t*) { if (gSplash) { lv_obj_delete(gSplash); gSplash = nullptr; } }
+static void splashFade(lv_obj_t* o) {
+    if (!o || o != gSplash) return;
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, o);
+    lv_anim_set_values(&a, LV_OPA_COVER, LV_OPA_TRANSP);
+    lv_anim_set_duration(&a, 600);
+    lv_anim_set_exec_cb(&a, [](void* v, int32_t x) { lv_obj_set_style_opa((lv_obj_t*)v, (lv_opa_t)x, 0); });
+    lv_anim_set_completed_cb(&a, splashGone);
+    lv_anim_start(&a);
+    lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);
+}
+static void showSplash() {
+    std::string call = g_app->cfg.call;
+    for (char& c : call) c = (char)toupper((unsigned char)c);
+    const lv_image_dsc_t* img = call == "AC9HP" ? &logo_ac9hp : &logo_rigdeck;
+    gSplash = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(gSplash);
+    lv_obj_set_size(gSplash, W, H);
+    lv_obj_set_style_bg_color(gSplash, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(gSplash, LV_OPA_COVER, 0);
+    lv_obj_add_flag(gSplash, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(gSplash, [](lv_event_t* e) { splashFade((lv_obj_t*)lv_event_get_target(e)); }, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t* im = lv_image_create(gSplash);
+    lv_image_set_src(im, img);
+    lv_obj_align(im, LV_ALIGN_CENTER, 0, -40);
+    lv_obj_t* t = lv_label_create(gSplash);
+    lv_obj_set_style_text_font(t, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(t, lv_color_hex(0xB89A5A), 0);
+    lv_label_set_text(t, ("RigDeck " + g_app->fwVersion).c_str());
+    lv_obj_align(t, LV_ALIGN_CENTER, 0, 110);
+    lv_timer_t* tm = lv_timer_create([](lv_timer_t* tt) { splashFade(gSplash); lv_timer_delete(tt); }, 3500, nullptr);
+    (void)tm;
+}
+
 extern "C" void ui_create(void) {
     gContrast = g_app->cfg.contrast;
     lv_obj_t* scr = lv_screen_active();
@@ -1811,4 +1852,5 @@ extern "C" void ui_create(void) {
     lv_timer_create(refresh, 200, nullptr);
     lv_timer_create(refreshWaterfall, 125, nullptr);
     refresh(nullptr);
+    showSplash();
 }
