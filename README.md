@@ -72,8 +72,7 @@ touch interface off.
 
 The IC-7100's USB-B socket is a USB hub with two CP210x serial bridges (one is CI-V) and a USB
 audio codec behind it. The board has to be a USB *host* that can drive a hub, a vendor serial chip
-and isochronous audio together. An Arduino Uno cannot (no USB host, no Wi-Fi, 2 kB RAM), and a
-classic ESP32 or a Heltec LoRa board cannot either (no USB host; Heltec V3 also has no PSRAM).
+and isochronous audio together.
 
 | Board | Verdict |
 |---|---|
