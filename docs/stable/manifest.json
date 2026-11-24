@@ -1,6 +1,6 @@
 {
   "name": "RigDeck",
-  "version": "0.9.40",
+  "version": "1.0.0",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
   "builds": [
@@ -10,6 +10,10 @@
         {
           "path": "rigdeck.bin",
           "offset": 0
+        },
+        {
+          "path": "otadata.bin",
+          "offset": 8126464
         }
       ]
     }
