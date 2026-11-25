@@ -83,7 +83,7 @@ public:
         uint64_t freq = 0;
         uint32_t decId = 0;
         std::string clkSrc, band, txText, nextText, dx, grid, status, net, call, myGrid, model;
-        std::string staState, staIp, staReason, wchipVer;
+        std::string staState, staIp, staReason, wchipVer, radioFw;
         // log storage: where the log is, free space on each store, rough contacts left
         bool logSd = false, sdIn = false;
         uint64_t intTotal = 0, intUsed = 0, sdTotal = 0, sdUsed = 0;

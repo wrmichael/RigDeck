@@ -81,6 +81,7 @@ table.log th{color:var(--dim);font-weight:500}
 .prio li span{flex:1;min-width:0}.prio li.off span{color:var(--dim)}
 .prio button{padding:4px 10px}
 tr.dnw td{opacity:.4}
+.dim{color:var(--dim)}
 .tblwrap{overflow-x:auto;max-height:340px;overflow-y:auto}
 table.aprs{border-collapse:collapse;font-size:13px;width:100%;min-width:560px}table.aprs th,table.aprs td{text-align:left;padding:3px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
 table.aprs td.cm{white-space:normal;min-width:140px;color:var(--dim)}table.aprs th{color:var(--dim);font-weight:500;position:sticky;top:0;background:var(--pan)}table.aprs .n{text-align:right;font-variant-numeric:tabular-nums}
@@ -399,6 +400,7 @@ table.imp th{color:var(--dim);font-weight:500}
     <div id="otaMsg" class="hint"></div>
     <p class="hint">Updates RigDeck over Wi-Fi, no USB cable needed. The internet buttons need this browser to be online (the board on your home network). Or download <b>rigdeck-x.y.z.bin</b> from the <a href="https://wrmichael.github.io/RigDeck/" target="_blank" rel="noopener">flasher page</a> and install the file. RigDeck stops transmitting, keeps its settings and logs, and restarts when done (about a minute). If the new version does not start properly, the board goes back to the one it had.</p>
     <h3 style="margin-top:16px">Device</h3>
+    <div id="dvAbout" class="form" style="margin-bottom:8px"></div>
     <div class="form">
       <label for="dvBright">Screen brightness</label><span><input type="range" id="dvBright" min="5" max="100" style="width:220px;vertical-align:middle"> <span id="dvBrightV"></span></span>
       <label for="dvContrast">Screen contrast</label><span><input type="range" id="dvContrast" min="50" max="150" style="width:220px;vertical-align:middle"> <span id="dvContrastV"></span></span>
@@ -538,6 +540,10 @@ function render(){
   $("logn").textContent=(S.stor?S.stor.station+": ":"")+S.log.n+" contacts in the current log, "+S.log.all+" in the archive"+(S.stor&&S.stor.sd?" (on the microSD card)":"")+(S.log.behind?" (some are not in the archive yet: clearing the current log copies them there first)":"");
   const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
   $("dlcur").download=dlName(stamp,"current","adi");$("dlall").download=dlName(stamp,"archive","adi");
+  { const r=S.radio||{},w=(S.wchip&&S.wchip.ver)||"";
+      const h=`<span class="dim">RigDeck</span><span>${esc(S.ver||"")}</span><span class="dim">Wi-Fi chip</span><span>${esc(w||"unknown")}</span>`+
+        `<span class="dim">Radio</span><span>${esc(r.model||"none connected")}</span>`+(r.fw?`<span class="dim">Radio firmware</span><span>${esc(r.fw)}</span>`:"");
+      if($("dvAbout").innerHTML!==h)$("dvAbout").innerHTML=h; }
   if(S.stor){const st=S.stor, sz=b=>b>=1e9?(b/1e9).toFixed(1)+" GB":b>=1e6?(b/1e6).toFixed(1)+" MB":Math.round(b/1e3)+" kB", fr=(t,u)=>`${sz(Math.max(0,t-u))} free of ${sz(t)}`;
     $("dvStor").textContent=`Log of station ${st.station}: ${st.sd?"on the microSD card":"in the board's own memory"}\n`+
       (st.intT?`Board memory: ${fr(st.intT,st.intU)}\n`:"")+(st.sd&&st.sdT?`microSD card: ${fr(st.sdT,st.sdU)}\n`:`microSD card: ${st.sdInfo||"none"}\n`)+

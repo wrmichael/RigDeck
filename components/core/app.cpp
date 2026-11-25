@@ -2034,6 +2034,7 @@ void App::uiState(UiState& u) {
     u.freq = radio.freq.load(); u.band = bandName(u.freq);
     u.rmode = radio.mode; u.data = radio.dataMode;
     u.model = radio.connected() ? radio.modelName() : "";
+    u.radioFw = radio.connected() ? radioFw_ : "";
     u.wpm = radio.keySpeed;
     u.txLvl = (int)lroundf(txLevelNow());
     u.staState = sta_.state; u.staIp = sta_.ip; u.staReason = sta_.reason; u.staRssi = sta_.rssi; u.wchipVer = wchipVer_;

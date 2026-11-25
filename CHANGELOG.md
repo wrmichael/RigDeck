@@ -3,6 +3,8 @@
 ## 1.1.4-beta
 - QMX / QMX+: RigDeck asks the radio for its firmware version (CAT VN;), shows it next to the model on the web
   page and writes it to the console log ("radio firmware: QMX 1_04_003").
+- Settings, Device (touch screen and web page) lists the RigDeck version, the Wi-Fi chip firmware, the radio and
+  its firmware.
 - The last console lines before a restart now reach the microSD card.
 
 ## 1.1.3-beta

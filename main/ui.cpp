@@ -1258,7 +1258,9 @@ std::string sizeText(uint64_t b) {
     return t;
 }
 std::string storText(const App::UiState& s) {
-    std::string t = "Log of station " + s.station + ": " + (s.logSd ? "on the microSD card" : "in the board's own memory") + "\n";
+    std::string t = "RigDeck " + g_app->fwVersion + (s.wchipVer.empty() ? "" : ", Wi-Fi chip " + s.wchipVer) + ".  Radio: " +
+                    (s.model.empty() ? std::string("none") : s.model + (s.radioFw.empty() ? "" : ", firmware " + s.radioFw)) + "\n";
+    t += "Log of station " + s.station + ": " + (s.logSd ? "on the microSD card" : "in the board's own memory") + "\n";
     if (s.intTotal) t += "Board memory: " + sizeText(s.intTotal > s.intUsed ? s.intTotal - s.intUsed : 0) + " free of " + sizeText(s.intTotal) + "\n";
     if (s.sdIn && s.sdTotal) t += "microSD card: " + sizeText(s.sdTotal > s.sdUsed ? s.sdTotal - s.sdUsed : 0) + " free of " + sizeText(s.sdTotal) + "\n";
     else t += "microSD card: " + (s.sdInfo.empty() ? std::string("none") : s.sdInfo) + "\n";
