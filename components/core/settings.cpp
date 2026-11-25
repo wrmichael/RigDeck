@@ -1,5 +1,6 @@
 #include "settings.h"
 #include "qso.h"
+#include "aprs.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cctype>
@@ -129,6 +130,34 @@ bool Settings::set(const std::string& k, const std::string& v) {
         return true;
     }
     if (k == "prioOn") return toInt(v, 0, 1, prioOn);
+    if (k == "aprsCall") { std::string c = upperTrim(v); if (!c.empty() && !aprs::validCallSsid(c)) return false; aprsCall = c; return true; }
+    if (k == "aprsFreq") { long long hz = atoll(v.c_str()); if (hz < 28000000 || hz > 450000000) return false; aprsFreq = hz; return true; }
+    if (k == "aprsBeaconMin") return toInt(v, 0, 120, aprsBeaconMin);
+    if (k == "aprsSym") { if (v.size() != 2 || v[0] < 33 || v[0] > 126 || v[1] < 33 || v[1] > 126) return false; aprsSym = v; return true; }
+    if (k == "aprsComment") { if (v.size() > 40) return false; for (unsigned char ch : v) if (ch < 32 || ch > 126 || ch == '|' || ch == '~') return false; aprsComment = v; return true; }
+    if (k == "aprsPath") {                              // e.g. WIDE1-1,WIDE2-1 (empty = direct only)
+        std::string t = upperTrim(v);
+        if (!t.empty()) {
+            int n = 0;
+            size_t p = 0;
+            while (true) {
+                size_t c = t.find(',', p);
+                std::string d = t.substr(p, c == std::string::npos ? std::string::npos : c - p);
+                if (!aprs::validCallSsid(d) || ++n > 8) return false;
+                if (c == std::string::npos) break;
+                p = c + 1;
+            }
+        }
+        aprsPath = t;
+        return true;
+    }
+    if (k == "aprsLat" || k == "aprsLon") {
+        std::string t = upperTrim(v);
+        if (!t.empty()) { char* e = nullptr; double d = strtod(t.c_str(), &e); if (*e || d < (k == "aprsLat" ? -90 : -180) || d > (k == "aprsLat" ? 90 : 180)) return false; }
+        (k == "aprsLat" ? aprsLat : aprsLon) = t;
+        return true;
+    }
+    if (k == "aprsLevel") return toInt(v, 1, 100, aprsLevel);
     if (k == "prio") { prio = prioText(parsePrio(v)); return true; }
     if (k == "dxKm") return toInt(v, 100, 20000, dxKm);
     if (k == "txLevels") {
@@ -161,7 +190,9 @@ std::string Settings::serialize(bool secrets) const {
     I("watchdogMin", watchdogMin); I("rfPower", rfPower); I("logProto", logProto); I("logPort", logPort);
     I("cwWpm", cwWpm); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);
     I("gpsModule", gpsModule); I("gpsModBaud", gpsModBaud); I("gpsRxPin", gpsRxPin); I("gpsPpsPin", gpsPpsPin);
-    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("confirmQso", confirmQso); I("deadman", deadman); S("dnw", dnw); I("prioOn", prioOn); S("prio", prio); I("dxKm", dxKm); S("deadmanHost", deadmanHost); S("txLevels", txLevels);
+    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("confirmQso", confirmQso); I("deadman", deadman); S("dnw", dnw); I("prioOn", prioOn); S("prio", prio); I("dxKm", dxKm);
+    S("aprsCall", aprsCall); s += "aprsFreq=" + std::to_string(aprsFreq) + "\n"; I("aprsBeaconMin", aprsBeaconMin); S("aprsSym", aprsSym); S("aprsComment", aprsComment);
+    S("aprsPath", aprsPath); S("aprsLat", aprsLat); S("aprsLon", aprsLon); I("aprsLevel", aprsLevel); S("deadmanHost", deadmanHost); S("txLevels", txLevels);
     return s;
 }
 

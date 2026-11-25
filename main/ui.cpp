@@ -1543,9 +1543,9 @@ void refresh(lv_timer_t*) {
         snprintf(b, sizeof b, "%u.%03u.%03u", (unsigned)(s.freq / 1000000), (unsigned)(s.freq / 1000 % 1000), (unsigned)(s.freq % 1000));
         setText(lFreq, b);
     } else setText(lFreq, "--.---.---");
-    static const char* modeNames[] = {"FT8", "FT4", "PSK31", "FT-CW"};
+    static const char* modeNames[] = {"FT8", "FT4", "PSK31", "FT-CW", "APRS"};
     snprintf(b, sizeof b, "%s  %s  %s\n%s", s.band.empty() ? "--" : s.band.c_str(), s.rmode == 1 ? (s.data == 1 ? "USB-D" : "USB") : "",
-             modeNames[s.mode < 0 || s.mode > 3 ? 0 : s.mode], s.model == "No CAT" ? "No CAT: tap the frequency" : s.model.c_str());
+             modeNames[s.mode < 0 || s.mode > 4 ? 0 : s.mode], s.model == "No CAT" ? "No CAT: tap the frequency" : s.model.c_str());
     setText(lSub, b);
     bool tx = s.txOn || s.ptt;
     if (tx) {
@@ -1657,7 +1657,13 @@ void refresh(lv_timer_t*) {
         changed = changed || !d.empty();
     }
     if (changed) rebuildTable();
-    bool psk = s.mode == DM_PSK31;
+    bool psk = s.mode == DM_PSK31 || s.mode == DM_APRS;
+    static int pskShownFor = -1;
+    if (psk && pskShownFor != s.mode) {
+        pskShownFor = s.mode;
+        setText(lPsk, s.mode == DM_APRS ? "APRS is operated from the web page.\nSelect FT8 or FT4 below to use this screen."
+                                        : "PSK31 is operated from the web page.\nSelect FT8 or FT4 below to use this screen.");
+    }
     if (psk == lv_obj_has_flag(lPsk, LV_OBJ_FLAG_HIDDEN)) {
         if (psk) lv_obj_remove_flag(lPsk, LV_OBJ_FLAG_HIDDEN);
         else lv_obj_add_flag(lPsk, LV_OBJ_FLAG_HIDDEN);

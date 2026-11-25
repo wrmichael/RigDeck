@@ -79,6 +79,9 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
     <li><a href="#ssbcw">SSB / CW logger</a></li>
     <li><a href="#control">Radio control screen</a></li>
     <li><a href="#modes">FT-CW and PSK31</a></li>
+    <li><a href="#aprs">APRS</a></li>
+    <li><a href="#trainer">CW trainer</a></li>
+    <li><a href="#listen">Listening in the browser</a></li>
     <li><a href="#time">Keeping the time</a></li>
     <li><a href="#wifi">Wi-Fi</a></li>
     <li><a href="#update">Updates and settings files</a></li>
@@ -90,10 +93,10 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 <header class="top">
   <h1>RigDeck User Guide</h1>
   <p>Set up RigDeck, connect your radio, and make and log FT8 contacts from the touch screen or any browser.</p>
-  <div class="meta"><span>For RigDeck 1.0.0 (Stable) and 1.0.1 (Beta)</span><span><a href="./">Flasher page</a></span><span><a href="https://github.com/wrmichael/RigDeck">Source and README on GitHub</a></span></div>
+  <div class="meta"><span>For RigDeck 1.0.0 (Stable) and 1.1.0 (Beta)</span><span><a href="./">Flasher page</a></span><span><a href="https://github.com/wrmichael/RigDeck">Source and README on GitHub</a></span></div>
 </header>
 
-<div class="beta">Items marked <span class="pill">BETA 1.0.1</span> are in the Beta channel only until they become Stable.</div>
+<div class="beta">Items marked <span class="pill">BETA</span> are in the Beta channel only until they become Stable.</div>
 
 <h2 id="start">Getting started</h2>
 <p>RigDeck is firmware for the <b>Waveshare ESP32-P4-WIFI6-Touch-LCD-7B</b>, a 7-inch touch board. Plug it into your radio's USB port and it decodes, transmits and logs FT8 and FT4 by itself or under your control. It also makes its own Wi-Fi hotspot, so a phone or laptop can run everything from a web page.</p>
@@ -115,7 +118,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 <ol class="steps">
   <li>On a phone or laptop, join the Wi-Fi network <b>RigDeck</b> (or RigDeck-XXXXXX). The password is <code>ft8ft8ft8</code>.</li>
   <li>Open <b>http://192.168.4.1</b>. You can also do everything below on the touch screen: the gear button at the top right opens Settings.</li>
-  <li>Settings, <b>Station</b>: enter your <b>callsign</b> and <b>grid</b>. RigDeck will not transmit until both are set. Optionally give the unit a <b>RigDeck name</b> <span class="pill">BETA 1.0.1</span> such as "Shack" or "Mobile": it shows at the top right of the web page and in the names of downloaded files.</li>
+  <li>Settings, <b>Station</b>: enter your <b>callsign</b> and <b>grid</b>. RigDeck will not transmit until both are set. Optionally give the unit a <b>RigDeck name</b> <span class="pill">BETA</span> such as "Shack" or "Mobile": it shows at the top right of the web page and in the names of downloaded files.</li>
   <li>Settings, <b>Wi-Fi</b>: change the hotspot password. To give RigDeck internet time and reach a logging PC, enter your home network (2.4 GHz) and press <b>Save + connect</b>.</li>
   <li>Press <b>Save</b>. Hotspot changes take effect after <b>Restart</b>; the home network is joined right away.</li>
 </ol>
@@ -208,7 +211,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 </ul>
 <div class="warn">You are the control operator. Stay with the station, or keep the web page open and in view, and check what your licence allows for automatic operation.</div>
 
-<h2 id="choosing">Choosing stations <span class="pill">BETA 1.0.1</span></h2>
+<h2 id="choosing">Choosing stations <span class="pill">BETA</span></h2>
 <p>Settings, Operating, <b>Choosing stations</b>.</p>
 <h3>Do-not-work list</h3>
 <p>Calls listed here are never called or answered, in any mode. If one answers your CQ it is ignored and RigDeck keeps calling. Their decodes are greyed out on the web page, and tapping one shows a message instead of calling.</p>
@@ -260,7 +263,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 <h3>Where the log lives</h3>
 <p>The board's own memory holds roughly 2,500 contacts. With a FAT32 <b>microSD card</b> in at start-up the logs move onto the card, in the RigDeck folder, with room for hundreds of thousands. Put the card in or take it out with the power off. Settings, Device shows the free space and offers <b>Format microSD card</b> for new cards (most 64 GB and larger cards come as exFAT, which RigDeck cannot read).</p>
 <h3>Downloads</h3>
-<p>Web page, Log tab: <b>Download current log</b> and <b>Download full archive</b>. With a RigDeck name set <span class="pill">BETA 1.0.1</span>, files are named <code>NAME-CALLSIGN-YYYYMMDD-HHMM-current.adi</code>.</p>
+<p>Web page, Log tab: <b>Download current log</b> and <b>Download full archive</b>. With a RigDeck name set <span class="pill">BETA</span>, files are named <code>NAME-CALLSIGN-YYYYMMDD-HHMM-current.adi</code>.</p>
 <h3>Editing contacts</h3>
 <ul>
   <li>Web page, Log tab: find a call, press <b>Edit</b>, change or add any ADIF field, <b>Save changes</b> or <b>Delete contact</b>.</li>
@@ -293,6 +296,32 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
   <li><b>PSK31</b> (web page): click a signal on the waterfall, read the text, type and send, and log with the form.</li>
 </ul>
 
+<h2 id="aprs">APRS <span class="pill">BETA</span></h2>
+<p>On the web page, press <b>APRS</b> next to FT8 and FT4. RigDeck sets the radio to <b>FM with DATA</b> on the APRS frequency (Settings, APRS; 144.390 MHz by default, 144.800 in Europe) and decodes 1200-baud packets from the radio's audio. The touch screen shows that APRS is run from the web page.</p>
+<ul>
+  <li><b>Stations heard:</b> callsign, type (car, house, digipeater ...), distance and direction from you, when last heard, comment and the digipeaters it came through. Plain, compressed and Mic-E positions are read. Tap a station to write it a message.</li>
+  <li><b>Messages:</b> type the call-SSID and the text (up to 67 characters) and press Send. A message goes out up to 3 times, 30 seconds apart, until the other station acknowledges it (✓ received). Messages to you are shown, and acknowledged while the radio is connected.</li>
+  <li><b>Beacons:</b> your position goes out while <b>TX is enabled</b>, every "Beacon interval" minutes (default 10; the TX watchdog applies as for FT8), and at once with <b>Send position now</b>. RigDeck waits for a clear channel before it transmits.</li>
+  <li><b>Your position:</b> a fixed latitude and longitude from Settings if given, else a GPS (module on the board, or the radio's GPS sentences), else the centre of your grid square.</li>
+  <li><b>Settings, APRS:</b> call-SSID (for example AC9HP-9; empty uses your callsign), frequency, beacon interval, symbol, comment, path (default WIDE1-1,WIDE2-1) and the audio level for FM deviation (start around 30 %; raise it if digipeaters do not repeat you, lower it if your packets are not decoded).</li>
+  <li>Packets heard and sent are listed under "Packets heard and sent".</li>
+</ul>
+<div class="note">RigDeck's APRS has been tested against its own modem in simulation so far. The first on-air reports will tell whether the audio level and the radio's FM data settings need tuning.</div>
+
+<h2 id="trainer">CW trainer <span class="pill">BETA</span></h2>
+<p>The <b>CW trainer</b> tab on the web page needs no radio: Morse plays in the browser. Speed, character spacing ("Spacing as" a slower speed spreads characters apart, Farnsworth style), tone and volume are at the top, and the browser remembers them and your progress.</p>
+<ul>
+  <li><b>Characters:</b> instant character recognition. One character plays; type it. RigDeck times each answer and plays slow or missed characters more often. Start with two characters in Koch (LCWO) or A to Z order; when each is right 4 times out of the last 5 and quick, the next one is added.</li>
+  <li><b>Groups:</b> random groups from the characters you know; copy them and press Check.</li>
+  <li><b>Words</b> (common English words, ham abbreviations and Q codes, or your own list) and <b>Callsigns</b> (made-up calls from many countries): type each one and press Enter; a miss plays it again.</li>
+  <li><b>QSO:</b> a made-up ragchew, POTA or contest exchange to copy, then Show to compare word by word.</li>
+  <li><b>Send:</b> practise sending with the Space bar or the big pad (straight key), or Z and X / two pads (iambic paddles). RigDeck decodes what you send and shows your speed.</li>
+  <li><b>Radio sidetone:</b> choose Sound "Radio sidetone" to hear the trainer through the radio. RigDeck switches the radio's <b>break-in off</b> and waits until the radio reports it off; then the radio's keyer makes only sidetone and does not transmit. It puts break-in back when you switch to the browser's sound. Icom and Yaesu radios; keep the radio in CW, and turn the power down the first time. With break-in off you can also practise on the radio's own key or paddle.</li>
+</ul>
+
+<h2 id="listen">Listening in the browser <span class="pill">BETA</span></h2>
+<p>The <b>Listen</b> button next to the band buttons plays the radio's receive audio in your browser, with a volume slider; press <b>Stop</b> to end. The sound comes about half a second late, in a narrow, phone-quality band (to about 4 kHz). It uses the board's Wi-Fi, so it works best on the hotspot or a good home network.</p>
+
 <h2 id="time">Keeping the time</h2>
 <p>RigDeck sets its clock from, best first: a GPS module with PPS, the radio's GPS, internet time, or the browser showing the web page. A restart keeps the time; switching the power off loses it.</p>
 <h3>GPS module on the board</h3>
@@ -318,7 +347,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
   <li><b>Install this file</b> takes a <code>rigdeck-x.y.z.bin</code> you downloaded.</li>
 </ul>
 <p>RigDeck stops transmitting, keeps its settings and logs and restarts in about a minute. If the new version fails to start, the board goes back to the previous one by itself.</p>
-<h3>Exporting and importing settings <span class="pill">BETA 1.0.1</span></h3>
+<h3>Exporting and importing settings <span class="pill">BETA</span></h3>
 <p>Web page, Settings, Device, <b>Settings file</b>:</p>
 <ul>
   <li><b>Export settings</b> saves every setting except passwords as a text file named after the RigDeck.</li>

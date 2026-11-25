@@ -1,5 +1,18 @@
 # Changes
 
+## 1.1.0 (Beta)
+- **APRS** (web page, mode APRS): 1200 baud AFSK modem on the radio's FM audio, the radio set to FM with DATA
+  on the APRS frequency (144.390 MHz by default). Stations heard with type, distance, direction, comment and
+  path (plain, compressed and Mic-E positions); messages with acks (sent up to 3 times); packets heard and
+  sent. Position beacons while TX is enabled, from a fixed position, a GPS (module or radio), or the grid.
+  Settings, APRS: call-SSID, frequency, interval, symbol, comment, path, position, audio level.
+- **CW trainer** (web page tab): character recognition with timing and adaptive practice (Koch or A-Z,
+  characters added automatically), random groups, words (common, ham, own list), callsigns, QSO copy,
+  sending practice (straight key or iambic paddles, decoded). Sound in the browser, or the radio's sidetone
+  with break-in switched off over CAT and confirmed (Icom, Yaesu).
+- **Listen**: the radio's receive audio in the browser (button next to the band buttons, with volume).
+- RigDeck name in gold Audiowide at the top right of the web page.
+
 ## 1.0.3 (Beta)
 - 60 m band button for FT8 (dial 5.357 MHz, USB-D), on the touch screen and the web page. No FT4 or FT-CW
   frequency on 60 m.

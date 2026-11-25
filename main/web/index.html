@@ -81,6 +81,12 @@ table.log th{color:var(--dim);font-weight:500}
 .prio li span{flex:1;min-width:0}.prio li.off span{color:var(--dim)}
 .prio button{padding:4px 10px}
 tr.dnw td{opacity:.4}
+.tblwrap{overflow-x:auto;max-height:340px;overflow-y:auto}
+table.aprs{border-collapse:collapse;font-size:13px;width:100%;min-width:560px}table.aprs th,table.aprs td{text-align:left;padding:3px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.aprs td.cm{white-space:normal;min-width:140px;color:var(--dim)}table.aprs th{color:var(--dim);font-weight:500;position:sticky;top:0;background:var(--pan)}table.aprs .n{text-align:right;font-variant-numeric:tabular-nums}
+table.aprs tbody tr{cursor:pointer}table.aprs tbody tr:hover{background:var(--pan2)}
+.aprsmsgs{max-height:180px;overflow-y:auto;font:13px var(--mono)}.aprsmsgs div{padding:2px 0}.aprsmsgs .out{color:var(--amb)}.aprsmsgs .in{color:var(--cq)}
+.aprsraw{max-height:200px;overflow:auto;font:12px var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;margin:4px 0 0}
 .cwtset label{display:inline-flex;align-items:center;gap:6px;margin-right:8px}
 .ctbig{font:600 22px var(--mono)}.ctbig.ok{color:var(--rx)}.ctbig.bad{color:var(--tx)}
 .ctstats{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-top:8px}
@@ -123,7 +129,7 @@ table.imp th{color:var(--dim);font-weight:500}
 <section id="tab-op">
   <div class="pan" style="margin-bottom:12px">
     <div class="row">
-      <span id="modes"><button data-mode="FT8">FT8</button><button data-mode="FT4">FT4</button><button data-mode="CW" title="FT8-style contacts sent in Morse code">FT-CW</button><button data-mode="PSK31">PSK31</button></span>
+      <span id="modes"><button data-mode="FT8">FT8</button><button data-mode="FT4">FT4</button><button data-mode="CW" title="FT8-style contacts sent in Morse code">FT-CW</button><button data-mode="PSK31">PSK31</button><button data-mode="APRS" title="1200 baud APRS on FM: stations, positions, messages">APRS</button></span>
       <span id="bands"></span>
       <input id="dial" size="10" inputmode="decimal" placeholder="MHz" aria-label="Dial frequency in MHz"><button id="setdial">Set</button><span class="listen"><button type="button" id="listen" aria-pressed="false" title="Play the radio's receive audio in this browser">&#128264; Listen</button><input type="range" id="lvol" min="0" max="100" value="70" aria-label="Listening volume" hidden></span>
     </div>
@@ -135,6 +141,16 @@ table.imp th{color:var(--dim);font-weight:500}
         <h3>Band activity <span id="decinfo" style="text-transform:none;letter-spacing:0"></span></h3>
         <div id="act"><table><tbody></tbody></table></div>
         <div class="hint" style="margin-top:6px">Tap a line to work that station. Blue = CQ, red = calling you, amber = your transmissions.</div>
+      </div>
+      <div class="pan hide" id="aprsPane">
+        <h3>APRS <span id="aprsinfo" style="text-transform:none;letter-spacing:0"></span></h3>
+        <div class="row"><button id="aprsBeacon">Send position now</button><button id="aprsClear">Clear lists</button><span id="aprsNext" class="hint"></span></div>
+        <div class="tblwrap"><table class="aprs"><thead><tr><th>Station</th><th>Type</th><th class="n">km</th><th class="n">Dir</th><th>Heard</th><th>Comment</th><th>Via</th></tr></thead><tbody id="aprsSt"></tbody></table></div>
+        <h3 style="margin-top:10px">Messages</h3>
+        <div id="aprsMsgs" class="aprsmsgs"></div>
+        <div class="row" style="margin-top:6px"><input id="aprsTo" size="10" placeholder="To (W9ABC-7)" style="text-transform:uppercase" autocomplete="off"><input id="aprsTxt" style="flex:1;min-width:160px" maxlength="67" placeholder="Message (67 characters)" autocomplete="off"><button id="aprsSend">Send</button></div>
+        <details style="margin-top:8px"><summary class="hint">Packets heard and sent</summary><pre id="aprsRaw" class="aprsraw"></pre></details>
+        <div class="hint" style="margin-top:6px">Beacons go out while TX is enabled, every "Beacon interval" minutes (Settings, APRS); messages are sent up to 3 times until acknowledged. Tap a station to address a message to it. The radio is set to FM with DATA on the APRS frequency.</div>
       </div>
       <div class="pan hide" id="pskPane">
         <h3>PSK31 receive <span id="pskinfo" style="text-transform:none;letter-spacing:0"></span></h3>
@@ -329,6 +345,16 @@ table.imp th{color:var(--dim);font-weight:500}
       <div style="grid-column:1/-1"><ol id="prioList" class="prio"></ol>
         <p class="hint" style="margin:4px 0 0">When several stations call you (Auto CQ) or call CQ (Auto hunt), the first rule that tells them apart decides; ties go to the next rule, then to the first one heard. The do-not-work list is applied first.</p></div>
       <label for="s_dxKm">DX means farther than, km</label><input id="s_dxKm" inputmode="numeric">
+      <h4 style="grid-column:1/-1;margin:10px 0 0">APRS</h4>
+      <label for="s_aprsCall">APRS call-SSID</label><input id="s_aprsCall" maxlength="9" placeholder="e.g. AC9HP-9 (empty = callsign)" style="text-transform:uppercase">
+      <label for="s_aprsFreq">APRS frequency, MHz</label><input id="s_aprsFreq" inputmode="decimal" placeholder="144.390">
+      <label for="s_aprsBeaconMin">Beacon interval, minutes (0 = none)</label><input id="s_aprsBeaconMin" inputmode="numeric">
+      <label for="s_aprsSym">Symbol</label><select id="s_aprsSym"><option value="/-">House</option><option value="/&gt;">Car</option><option value="/[">Person (walking)</option><option value="/k">Truck</option><option value="/v">Van</option><option value="/R">RV</option><option value="/b">Bicycle</option><option value="/s">Boat</option><option value="/;">Portable (tent)</option><option value="/y">House with Yagi</option></select>
+      <label for="s_aprsComment">Beacon comment</label><input id="s_aprsComment" maxlength="40">
+      <label for="s_aprsPath">Path</label><input id="s_aprsPath" maxlength="60" placeholder="WIDE1-1,WIDE2-1" style="text-transform:uppercase">
+      <label for="s_aprsLat">Fixed position: latitude</label><input id="s_aprsLat" inputmode="decimal" placeholder="e.g. 39.7686 (empty = GPS or grid)">
+      <label for="s_aprsLon">Fixed position: longitude</label><input id="s_aprsLon" inputmode="decimal" placeholder="e.g. -86.1581 (west is minus)">
+      <label for="s_aprsLevel">APRS audio level % (FM deviation)</label><input id="s_aprsLevel" inputmode="numeric">
       <label for="s_radioType">Radio</label><select id="s_radioType"><option value="0">Find automatically</option><option value="1">Icom (CI-V): IC-7100, IC-705, IC-7300, IC-9700, IC-7610, IC-905</option><option value="2">Yaesu: FTX-1, FTDX10, FT-991A, FT-710, FTDX101</option><option value="3">QRP Labs QMX / QMX+</option><option value="4">Kenwood / Elecraft: TS-2000, TS-480, TS-590, K2, K3, KX2, KX3</option><option value="5">No CAT: SignaLink or other sound card</option></select>
       <label for="s_pttMethod">PTT</label><select id="s_pttMethod"><option value="0">CAT command</option><option value="1">Serial port RTS (Digirig)</option><option value="2">Serial port DTR</option><option value="3">VOX (the sound card keys the radio)</option></select>
       <label for="s_catBaud">CAT rate tried first (4800, 9600, 19200, 38400 are tried too)</label><select id="s_catBaud"><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select>
@@ -406,6 +432,7 @@ const $=id=>document.getElementById(id), demo=location.protocol==="file:";
 const BANDS={FT8:{"160":1.84,"80":3.573,"60":5.357,"40":7.074,"30":10.136,"20":14.074,"17":18.1,"15":21.074,"12":24.915,"10":28.074,"6":50.313,"2":144.174},
  FT4:{"80":3.575,"40":7.0475,"30":10.14,"20":14.08,"17":18.104,"15":21.14,"12":24.919,"10":28.18,"6":50.318,"2":144.17},
  CW:{"160":1.835,"80":3.565,"40":7.065,"30":10.125,"20":14.065,"17":18.095,"15":21.065,"12":24.91,"10":28.065,"6":50.095,"2":144.065},
+ APRS:{"2":144.39},
  PSK31:{"80":3.58,"40":7.07,"30":10.142,"20":14.07,"17":18.1,"15":21.07,"12":24.92,"10":28.12}};
 let rigName="", S=null, since=0, pskSince=0, cfgLoaded=false, lastTx="", lastRtt=60, specSeq=-1, lastSlot=-1, busy=false;
 
@@ -483,8 +510,10 @@ function render(){
   document.querySelectorAll("[data-mode]").forEach(b=>b.className=b.dataset.mode===S.mode?"on":"");
   document.querySelectorAll("[data-op]").forEach(b=>b.className=+b.dataset.op===S.op?"on":"");
   document.querySelectorAll("[data-par]").forEach(b=>b.className=+b.dataset.par===tx.par?"on":"");
-  $("ftPane").classList.toggle("hide",psk);$("qsoPane").classList.toggle("hide",psk);
-  $("pskPane").classList.toggle("hide",!psk);$("opRow").classList.toggle("hide",psk);$("parRow").classList.toggle("hide",psk);$("txen").classList.toggle("hide",psk);
+  const ap=S.mode==="APRS";
+  $("ftPane").classList.toggle("hide",psk||ap);$("qsoPane").classList.toggle("hide",psk||ap);$("aprsPane").classList.toggle("hide",!ap);
+  $("pskPane").classList.toggle("hide",!psk);$("opRow").classList.toggle("hide",psk||ap);$("parRow").classList.toggle("hide",psk||ap);$("txen").classList.toggle("hide",psk);
+  if(ap&&S.aprs){BANDS.APRS={"2":S.aprs.freq/1e6};aprsRender(S.aprs);}
   if(document.activeElement!==$("txf")) $("txf").value=psk?S.psk.f:tx.freq;
   const bb=$("bands");
   if(bb.dataset.mode!==S.mode){bb.dataset.mode=S.mode;bb.innerHTML=Object.keys(BANDS[S.mode]).map(b=>`<button data-band="${b}">${b}m</button>`).join("");}
@@ -530,7 +559,7 @@ function render(){
   if(tx.wd) banner("TX watchdog stopped automatic transmission. Press Enable TX to resume.");
   if(S.cfg&&!cfgLoaded){
     cfgLoaded=true;
-    for(const k in S.cfg){const e=$("s_"+k);if(e) e.value=k==="civAddr"?"0x"+(+S.cfg[k]).toString(16).toUpperCase():S.cfg[k];}
+    for(const k in S.cfg){const e=$("s_"+k);if(e) e.value=k==="civAddr"?"0x"+(+S.cfg[k]).toString(16).toUpperCase():k==="aprsFreq"?(+S.cfg[k]/1e6).toFixed(3):S.cfg[k];}
     for(const [id,key] of [["dvBright","bright"],["dvContrast","contrast"]]) if(S.cfg[key]!==undefined){$(id).value=S.cfg[key];$(id+"V").textContent=S.cfg[key]+" %";}
     if(S.cfg.consoleLog!==undefined) $("dvConsole").checked=!!+S.cfg.consoleLog;
     rigName=S.cfg.rigName||"";
@@ -645,7 +674,7 @@ document.querySelector("nav").addEventListener("click",e=>{
 });
 document.body.addEventListener("click",e=>{
   const b=e.target.closest("button,tr"); if(!b) return; const d=b.dataset;
-  if(d.mode){cmd("mode",{m:d.mode});document.querySelector("#act tbody").innerHTML="";}
+  if(d.mode){if(demo)demoState.mode=d.mode;cmd("mode",{m:d.mode});document.querySelector("#act tbody").innerHTML="";}
   else if(d.band) cmd("band",{hz:Math.round(BANDS[S.mode][d.band]*1e6)});
   else if(d.op!==undefined) cmd("op",{v:d.op});
   else if(d.par!==undefined) cmd("parity",{v:d.par});
@@ -935,6 +964,22 @@ document.addEventListener("keydown",e=>{if($("tab-cwt").classList.contains("hide
   if(e.code==="Space"){e.preventDefault();ksStraight(true);}else if(e.key==="z"||e.key==="Z")ksPaddle("dit",true);else if(e.key==="x"||e.key==="X")ksPaddle("dah",true);});
 document.addEventListener("keyup",e=>{if($("tab-cwt").classList.contains("hide"))return;
   if(e.code==="Space"){e.preventDefault();ksStraight(false);}else if(e.key==="z"||e.key==="Z")ksPaddle("dit",false);else if(e.key==="x"||e.key==="X")ksPaddle("dah",false);});
+// APRS: stations heard, messages, packets.
+const APRS_SYM={"/-":"House","/>":"Car","/[":"Person","/k":"Truck","/u":"Truck","/_":"Weather","/#":"Digipeater","\\#":"Digipeater","/&":"Gateway","\\&":"Gateway","/r":"Repeater","/y":"House, Yagi","/b":"Bicycle","/v":"Van","/j":"Jeep","/<":"Motorcycle","/O":"Balloon","/'":"Aircraft","/^":"Aircraft","/s":"Boat","/R":"RV","/U":"Bus","/a":"Ambulance","/f":"Fire truck","/n":"Node","\\n":"Node","/l":"Laptop","/p":"Rover","/;":"Portable","/I":"TCP/IP","/E":"Eye","/W":"Weather NWS","/=":"Train"};
+function ago(t){const s=Math.max(0,Math.round((S.utc-t)/1000));return s<60?s+" s":s<3600?Math.round(s/60)+" min":Math.round(s/3600)+" h";}
+const DIRS=["N","NE","E","SE","S","SW","W","NW"];
+function aprsRender(a){
+  $("aprsinfo").textContent=`${a.me||"(set your callsign)"}${a.src?" · position from "+a.src:" · no position"}${a.dcd?" · channel busy":""}`;
+  $("aprsNext").textContent=a.next>=0?`next beacon in ${Math.floor(a.next/60)}:${String(a.next%60).padStart(2,"0")}`:"beacons off: Enable TX to send them"+(a.queued?` · ${a.queued} waiting`:"");
+  $("aprsSt").innerHTML=a.st.map(x=>`<tr data-c="${esc(x.c)}"><td><b>${esc(x.c)}</b>${x.n>1?` <span class="hint">×${x.n}</span>`:""}</td><td>${esc(APRS_SYM[x.sym]||x.sym.trim())}</td><td class="n">${x.km!==undefined?(x.km<10?x.km.toFixed(1):Math.round(x.km)):""}</td><td class="n">${x.brg!==undefined?DIRS[Math.round(x.brg/45)%8]+" "+x.brg+"°":""}</td><td>${ago(x.t)}</td><td class="cm">${esc(x.cm)}</td><td class="hint">${esc(x.p)}</td></tr>`).join("")||`<tr><td colspan="7" class="hint">Nothing heard yet on ${(a.freq/1e6).toFixed(3)} MHz.</td></tr>`;
+  $("aprsMsgs").innerHTML=a.msgs.map(m=>`<div class="${m.out?"out":"in"}">${hhmmss(m.t).slice(0,5)} ${m.out?"→ "+esc(m.to):"← "+esc(m.f)}: ${esc(m.x)}${m.out?(m.ack?" ✓ received":m.tries>=3?" (no answer)":` (sent ${m.tries}×)`):""}</div>`).join("")||`<div class="hint">No messages.</div>`;
+  const rp=$("aprsRaw"),atEnd=rp.scrollTop+rp.clientHeight>=rp.scrollHeight-20;rp.textContent=a.raw.map(x=>hhmmss(x[0]).slice(0,8)+" "+x[1]).join("\n");if(atEnd)rp.scrollTop=rp.scrollHeight;
+}
+$("aprsSt").addEventListener("click",e=>{const tr=e.target.closest("tr[data-c]");if(tr){$("aprsTo").value=tr.dataset.c;$("aprsTxt").focus();}});
+$("aprsBeacon").onclick=()=>cmd("aprsbeacon");
+$("aprsClear").onclick=()=>cmd("aprsclear");
+const aprsSend=async()=>{const j=await cmd("aprsmsg",{to:$("aprsTo").value.trim(),text:$("aprsTxt").value});if(j.ok)$("aprsTxt").value="";};
+$("aprsSend").onclick=aprsSend;$("aprsTxt").onkeydown=e=>{if(e.key==="Enter")aprsSend();};
 // Download names: RIGNAME-CALLSIGN-YYYYMMDD-HHMM-what.ext (the RigDeck name is left out when it is not set).
 function dlName(stamp,what,ext){
   const safe=t=>String(t||"").trim().replace(/[^A-Za-z0-9_.]+/g,"_").replace(/^_+|_+$/g,"");
@@ -1161,7 +1206,7 @@ async function otaNet(ch){
 $("otaStable").onclick=()=>otaNet("stable");$("otaBeta").onclick=()=>otaNet("beta");
 $("save").onclick=async()=>{
   const a={};
-  document.querySelectorAll("#form input[id^=\"s_\"],#form select[id^=\"s_\"]").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=e.value;});
+  document.querySelectorAll("#form input[id^=\"s_\"],#form select[id^=\"s_\"]").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=k==="aprsFreq"&&e.value?String(Math.round(parseFloat(e.value)*1e6)):e.value;});
   const j=await cmd("set",a);
   if(j.ok){$("saveinfo").textContent=j.restart?"Saved. Restart the device to apply the hotspot changes.":"Saved.";cfgLoaded=false;render.call=undefined;}
 };
@@ -1170,7 +1215,14 @@ function demoState(){
   const now=Date.now(), t=now%15000, slot=Math.floor(now/15000);
   const d=[]; if(demoState.s!==slot&&t>13600){demoState.s=slot;
     [["CQ K1ABC FN42",-7,1012],["W9XYZ N0CALL -12",3,1540],["CQ DX VK2DEF QF56",-18,2210],["G4AAA EA3BB R-09",-11,640]].forEach((x,i)=>d.push({id:++demoState.id,t:slot*15000,p:slot&1,snr:x[1],dt:.1*i,f:x[2],m:x[0]}));}
-  return {utc:now,clk:{ok:true,src:"demo",age:1},mode:"FT8",op:1,radio:{ser:true,aud:true,civ:true,model:"IC-7100",freq:14074000,band:"20m",rmode:1,data:1,ptt:false,s:95,po:0,swr:0,alc:0,wpm:22},
+  const dm=demoState.mode||"FT8";
+  const aprs=dm==="APRS"?{me:"W9XYZ-9",lat:41.5,lon:-87.5,src:"grid EN37",next:-1,dcd:false,queued:0,freq:144390000,
+    st:[{c:"KD9ABC-9",t:now-42000,n:3,sym:"/>",cm:"On the road 146.520",p:"WIDE1-1",lat:41.6,lon:-87.3,km:20.1,brg:56},
+        {c:"W9DIG-1",t:now-180000,n:12,sym:"/#",cm:"Digipeater",p:"",lat:41.88,lon:-87.63,km:43.6,brg:346},
+        {c:"N9XYZ",t:now-600000,n:1,sym:"/-",cm:"Home station",p:"W9DIG-1*,WIDE2-1",lat:41.2,lon:-86.9,km:59.8,brg:125}],
+    msgs:[{t:now-300000,f:"KD9ABC-9",to:"W9XYZ-9",x:"Are you on 146.52?",out:false,ack:false,tries:0},{t:now-280000,f:"W9XYZ-9",to:"KD9ABC-9",x:"Yes, QRV now",out:true,ack:true,tries:1}],
+    raw:[[now-42000,"KD9ABC-9>APDR16,WIDE1-1:=4136.00N/08718.00W>On the road 146.520"]]}:undefined;
+  return {utc:now,clk:{ok:true,src:"demo",age:1},mode:dm,aprs,op:1,radio:{ser:true,aud:true,civ:true,model:"IC-7100",freq:14074000,band:"20m",rmode:1,data:1,ptt:false,s:95,po:0,swr:0,alc:0,wpm:22},
     slot:{len:15000,t,par:slot&1},tx:{en:false,on:false,msg:6,par:0,text:"",last:"",freq:1500,lvl:50,tune:false,wd:false,wdLeft:-1,wdMin:6},
     qso:{dx:"",grid:"",rs:-99,rr:-99,try:0,m:["","","","","","CQ W9XYZ EN37",""]},lvl:-22,dec:d,decId:demoState.id,decMs:640,
     psk:{seq:0,f:1000,afc:1000,q:20,text:""},log:{n:0,all:0,behind:false,ok:0,fail:0,last:[]},msg:"",net:"Preview mode: open this page from the device to control the radio",cfg:{rigName:"Shack",call:"W9XYZ",grid:"EN37",dnw:"EA3BB",prioOn:"1",prio:"pota,sota,dx,ses,-weak,strong",dxKm:"2500",txLevel:"50",macro1:"CQ|CQ CQ DE {MYCALL} {MYCALL} K",macro2:"His call|{CALL}",macro3:"Report|{CALL} UR {RST} {RST} BK",macro4:"TU 73|TU 73 DE {MYCALL} E E",macro5:"My call|{MYCALL}",macro6:"AGN?|AGN?"}};

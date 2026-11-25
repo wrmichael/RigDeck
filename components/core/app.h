@@ -19,8 +19,9 @@
 #include "adif.h"
 #include "nmea.h"
 #include "cwx.h"
+#include "aprs.h"
 
-enum DigiMode { DM_FT8 = 0, DM_FT4 = 1, DM_PSK31 = 2, DM_CW = 3 };   // DM_CW = "FT-CW": FT8-style contacts in Morse (cwx.h)
+enum DigiMode { DM_FT8 = 0, DM_FT4 = 1, DM_PSK31 = 2, DM_CW = 3, DM_APRS = 4 };   // DM_CW = "FT-CW": FT8-style contacts in Morse (cwx.h)
 
 uint64_t parseDialFreq(const std::string& text);
 
@@ -192,7 +193,30 @@ private:
     std::atomic<int> decodeMs_{0};
 
     // transmit
-    enum { GEN_FTX, GEN_TUNE, GEN_PSK };
+    enum { GEN_FTX, GEN_TUNE, GEN_PSK, GEN_APRS };
+
+    // APRS: frames heard (audio thread -> control thread), stations, messages, what to send.
+    aprs::AfskDemod aprsDem_;
+    aprs::AfskMod aprsMod_;
+    std::mutex aprsInMtx_;
+    std::vector<std::vector<uint8_t>> aprsIn_;
+    struct AprsSta { std::string call, comment, path; double lat = 0, lon = 0; bool pos = false; char table = '/', sym = ' '; int64_t utc = 0; int heard = 0; };
+    std::map<std::string, AprsSta> aprsSta_;
+    struct AprsMsg { int64_t utc = 0; std::string from, to, text, id; bool out = false, acked = false; int tries = 0; int64_t nextMono = 0; };
+    std::deque<AprsMsg> aprsMsgs_;
+    std::deque<std::pair<int64_t, std::string>> aprsRaw_;
+    std::vector<std::string> aprsOut_;                 // info fields waiting to go out
+    int64_t aprsNextBeacon_ = 0, aprsClearSince_ = 0, aprsLastTx_ = 0;
+    int aprsMsgId_ = 0;
+    bool aprsTuneReq_ = false, aprsWasEnabled_ = false;
+    std::string aprsMyCall() const;
+    bool aprsMyPos(double& lat, double& lon, std::string& src) const;
+    void aprsRx(const float* s, size_t n);
+    void aprsTick(int64_t mono);
+    void aprsHandle(const aprs::Frame& f);
+    std::string aprsJson();
+    double gpsLat_ = 0, gpsLon_ = 0;
+    int64_t gpsPosMono_ = 0;
     enum { ST_IDLE, ST_TX };
     int txState_ = ST_IDLE, gen_ = GEN_FTX;
     std::atomic<bool> txOn_{false}, genStarted_{false}, genDone_{false}, haltReq_{false}, tuneReq_{false};

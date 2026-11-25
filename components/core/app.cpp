@@ -35,7 +35,7 @@ static std::string arg(const std::map<std::string, std::string>& a, const char* 
     auto it = a.find(k);
     return it == a.end() ? def : it->second;
 }
-static const char* modeName(int m) { return m == DM_FT4 ? "FT4" : (m == DM_PSK31 ? "PSK31" : (m == DM_CW ? "CW" : "FT8")); }
+static const char* modeName(int m) { return m == DM_FT4 ? "FT4" : (m == DM_PSK31 ? "PSK31" : (m == DM_CW ? "CW" : (m == DM_APRS ? "APRS" : "FT8"))); }
 static std::string rpt(int v) {
     if (v == Sequencer::UNSET) return ""; char b[8]; snprintf(b, sizeof b, "%+03d", v); return b; }
 
@@ -629,7 +629,8 @@ void App::rxAudio48k(const int16_t* s, size_t n) {
                 pskSeq_ += (uint32_t)out.size();
                 if (pskText_.size() > 4000) pskText_.erase(0, pskText_.size() - 3000);
             }
-        } else ftxRx(buf, n12);
+        } else if (mode_ == DM_APRS) aprsRx(buf, n12);
+        else ftxRx(buf, n12);
     }
 }
 
@@ -941,6 +942,10 @@ void App::txAudio48k(int16_t* out, size_t n) {
             tunePhase_ += dphi;
             if (tunePhase_ > 2 * kPi) tunePhase_ -= 2 * kPi;
         }
+    } else if (gen_ == GEN_APRS) {
+        const float a = cfg.aprsLevel * 320.0f;                       // its own level: FM deviation, not SSB drive
+        for (size_t i = 0; i < n; i++) out[i] = (int16_t)(a * aprsMod_.next());
+        if (aprsMod_.done() && !genDone_) { genDoneMono_ = clk::monoMs(); genDone_ = true; }
     } else {
         for (size_t i = 0; i < n; i++) out[i] = (int16_t)(amp * pskTx_.next());
         if (pskTx_.done() && !genDone_) { genDoneMono_ = clk::monoMs(); genDone_ = true; }
@@ -975,7 +980,8 @@ void App::tick() {
     wasConn_ = conn;
     if (bandReqHz_ && radio.connected()) {
         radio.setFreq((uint64_t)bandReqHz_);
-        radio.setUsbData();
+        if (mode_ == DM_APRS) { radio.setMode(5, 1); radio.setData(true); }   // FM with DATA: the USB audio goes to the modulator
+        else radio.setUsbData();
         radio.setRfPower(cfg.rfPower);
         if (radio.proto == RP_NONE && cfg.dialHz != bandReqHz_) {   // no CAT: remember the dial for the next start
             cfg.dialHz = bandReqHz_;
@@ -1020,6 +1026,7 @@ void App::tick() {
         return;
     }
 
+    if (mode_ == DM_APRS) { aprsTick(mono); return; }
     if (!clk::valid() || !radio.connected() || !seq.txEnabled) return;
     const int64_t L = slotLen();
     int64_t now = clk::utcMs(), slot = now / L, tIn = now - slot * L;
@@ -1070,6 +1077,152 @@ void App::tick() {
     txSlot_ = slot;
     maxTxMs_ = L - 300;
     startTx(GEN_FTX);
+}
+
+// ---- APRS ---------------------------------------------------------------------------------------
+std::string App::aprsMyCall() const { return cfg.aprsCall.empty() ? upperTrim(cfg.call) : cfg.aprsCall; }
+
+// Where we are: a fixed position from Settings, else a GPS fix from the last 10 minutes, else the grid's centre.
+bool App::aprsMyPos(double& lat, double& lon, std::string& src) const {
+    if (!cfg.aprsLat.empty() && !cfg.aprsLon.empty()) { lat = atof(cfg.aprsLat.c_str()); lon = atof(cfg.aprsLon.c_str()); src = "fixed position"; return true; }
+    if (gpsPosMono_ && clk::monoMs() - gpsPosMono_ < 600000) { lat = gpsLat_; lon = gpsLon_; src = "GPS"; return true; }
+    if (aprs::gridCentre(cfg.grid, lat, lon)) { src = "grid " + cfg.grid; return true; }
+    return false;
+}
+
+void App::aprsRx(const float* s, size_t n) {
+    std::vector<std::vector<uint8_t>> got;
+    aprsDem_.feed(s, n, got);
+    if (got.empty()) return;
+    std::lock_guard<std::mutex> lk(aprsInMtx_);
+    for (auto& g : got) if (aprsIn_.size() < 20) aprsIn_.push_back(std::move(g));
+}
+
+void App::aprsHandle(const aprs::Frame& f) {                      // mtx_ held
+    int64_t now = clk::utcMs();
+    aprsRaw_.push_back({now, aprs::tnc2(f).substr(0, 200)});
+    while (aprsRaw_.size() > 30) aprsRaw_.pop_front();
+    std::string me = aprsMyCall();
+    if (f.src == me) return;                                       // our own packet, digipeated back
+    auto& st = aprsSta_[f.src];
+    st.call = f.src;
+    st.utc = now;
+    st.heard++;
+    st.path.clear();
+    for (const auto& d : f.path) st.path += (st.path.empty() ? "" : ",") + d;
+    aprs::Position p;
+    if (aprs::parsePosition(f, p)) {
+        st.pos = true; st.lat = p.lat; st.lon = p.lon; st.table = p.table; st.sym = p.symbol;
+        st.comment = p.comment.substr(0, 60);
+    } else if (!f.info.empty() && f.info[0] == '>') st.comment = f.info.substr(1, 60);
+    aprs::Message m;
+    if (aprs::parseMessage(f.info, m) && m.to == me) {
+        if (m.isAck || m.isRej) {
+            for (auto& o : aprsMsgs_) if (o.out && o.to == f.src && o.id == m.id) { o.acked = !m.isRej; o.tries = 99; }
+            return;
+        }
+        bool dup = false;
+        for (const auto& o : aprsMsgs_) if (!o.out && o.from == f.src && o.id == m.id && !m.id.empty() && now - o.utc < 600000) dup = true;
+        if (!dup) {
+            AprsMsg in;
+            in.utc = now; in.from = f.src; in.to = me; in.text = m.text; in.id = m.id;
+            aprsMsgs_.push_back(in);
+            while (aprsMsgs_.size() > 40) aprsMsgs_.pop_front();
+            status("APRS message from " + f.src + ": " + m.text);
+        }
+        if (!m.id.empty()) aprsOut_.push_back(aprs::encodeAck(f.src, m.id));   // ack every copy, as the spec asks
+    }
+    if (aprsSta_.size() > 300) {                                   // forget the station heard longest ago
+        auto old = aprsSta_.begin();
+        for (auto it = aprsSta_.begin(); it != aprsSta_.end(); ++it) if (it->second.utc < old->second.utc) old = it;
+        aprsSta_.erase(old);
+    }
+}
+
+void App::aprsTick(int64_t mono) {                                 // mtx_ held, not transmitting
+    if (aprsTuneReq_ && radio.connected()) { bandReqHz_ = cfg.aprsFreq; aprsTuneReq_ = false; }
+    std::vector<std::vector<uint8_t>> in;
+    { std::lock_guard<std::mutex> lk(aprsInMtx_); in.swap(aprsIn_); }
+    for (const auto& b : in) { aprs::Frame f; if (aprs::decodeFrame(b.data(), b.size(), f)) aprsHandle(f); }
+    // Beacons only while TX is enabled (the watchdog applies as for FT8); the first one soon after enabling.
+    if (seq.txEnabled && !aprsWasEnabled_) aprsNextBeacon_ = mono + 5000;
+    aprsWasEnabled_ = seq.txEnabled;
+    if (seq.txEnabled && cfg.aprsBeaconMin > 0 && aprsNextBeacon_ && mono >= aprsNextBeacon_) {
+        double la, lo;
+        std::string src;
+        if (aprs::validCallSsid(aprsMyCall()) && aprsMyPos(la, lo, src))
+            aprsOut_.push_back(aprs::encodePosition(la, lo, cfg.aprsSym[0], cfg.aprsSym[1], cfg.aprsComment, true));
+        aprsNextBeacon_ = mono + (int64_t)cfg.aprsBeaconMin * 60000;
+    }
+    // Outgoing messages: up to 3 sends, 30 s apart, until acknowledged.
+    for (auto& m : aprsMsgs_)
+        if (m.out && !m.acked && m.tries < 3 && mono >= m.nextMono) {
+            aprsOut_.push_back(aprs::encodeMessage(m.to, m.text, m.id));
+            m.tries++;
+            m.nextMono = mono + 30000;
+        }
+    // Send when the channel has been clear for a moment (a random wait, so stations do not collide).
+    if (aprsDem_.busy()) { aprsClearSince_ = 0; return; }
+    if (!aprsClearSince_) aprsClearSince_ = mono + 300 + (mono % 7) * 100;
+    if (aprsOut_.empty() || mono < aprsClearSince_ || mono - aprsLastTx_ < 3000) return;
+    if (!radio.connected() || !usbAudio || !aprs::validCallSsid(aprsMyCall())) return;
+    std::vector<std::vector<uint8_t>> frames;
+    std::vector<std::string> path;
+    { std::string p = cfg.aprsPath, cur; for (size_t i = 0; i <= p.size(); i++) { if (i == p.size() || p[i] == ',') { if (!cur.empty()) path.push_back(cur); cur.clear(); } else cur += p[i]; } }
+    for (size_t i = 0; i < aprsOut_.size() && i < 3; i++) {
+        aprs::Frame f;
+        f.src = aprsMyCall(); f.dst = "APZRDK"; f.path = path; f.info = aprsOut_[i];
+        frames.push_back(aprs::encodeFrame(f));
+        aprsRaw_.push_back({clk::utcMs(), "TX " + aprs::tnc2(f).substr(0, 200)});
+    }
+    while (aprsRaw_.size() > 30) aprsRaw_.pop_front();
+    aprsOut_.erase(aprsOut_.begin(), aprsOut_.begin() + (long)frames.size());
+    aprsMod_.start(frames, 48000, 300);
+    maxTxMs_ = (int64_t)(aprsMod_.seconds() * 1000) + 2000;
+    aprsLastTx_ = mono;
+    aprsClearSince_ = 0;
+    startTx(GEN_APRS);
+}
+
+std::string App::aprsJson() {                                     // mtx_ held
+    std::string o = "{\"me\":" + jstr(aprsMyCall());
+    double la = 0, lo = 0;
+    std::string src;
+    bool havePos = aprsMyPos(la, lo, src);
+    char b[96];
+    if (havePos) { snprintf(b, sizeof b, ",\"lat\":%.5f,\"lon\":%.5f,\"src\":", la, lo); o += b; o += jstr(src); }
+    int64_t mono = clk::monoMs();
+    o += ",\"next\":" + jnum(seq.txEnabled && cfg.aprsBeaconMin > 0 && aprsNextBeacon_ ? std::max<int64_t>(0, (aprsNextBeacon_ - mono) / 1000) : -1);
+    o += std::string(",\"dcd\":") + jbool(aprsDem_.busy()) + ",\"queued\":" + jnum((int64_t)aprsOut_.size()) + ",\"freq\":" + jnum(cfg.aprsFreq);
+    std::vector<const AprsSta*> v;
+    for (const auto& kv : aprsSta_) v.push_back(&kv.second);
+    std::sort(v.begin(), v.end(), [](const AprsSta* x, const AprsSta* y) { return x->utc > y->utc; });
+    if (v.size() > 60) v.resize(60);
+    o += ",\"st\":[";
+    for (size_t i = 0; i < v.size(); i++) {
+        const AprsSta& s = *v[i];
+        if (i) o += ",";
+        o += "{\"c\":" + jstr(s.call) + ",\"t\":" + jnum(s.utc) + ",\"n\":" + jnum(s.heard) + ",\"sym\":" + jstr(std::string(1, s.table) + s.sym) + ",\"cm\":" + jstr(s.comment) + ",\"p\":" + jstr(s.path);
+        if (s.pos) {
+            snprintf(b, sizeof b, ",\"lat\":%.4f,\"lon\":%.4f", s.lat, s.lon);
+            o += b;
+            if (havePos) { snprintf(b, sizeof b, ",\"km\":%.1f,\"brg\":%d", aprs::distanceKm(la, lo, s.lat, s.lon), aprs::bearingDeg(la, lo, s.lat, s.lon)); o += b; }
+        }
+        o += "}";
+    }
+    o += "],\"msgs\":[";
+    for (size_t i = 0; i < aprsMsgs_.size(); i++) {
+        const auto& m = aprsMsgs_[i];
+        if (i) o += ",";
+        o += "{\"t\":" + jnum(m.utc) + ",\"f\":" + jstr(m.from) + ",\"to\":" + jstr(m.to) + ",\"x\":" + jstr(m.text) + ",\"out\":" + jbool(m.out) +
+             std::string(",\"ack\":") + jbool(m.acked) + ",\"tries\":" + jnum(m.tries > 3 ? 3 : m.tries) + "}";
+    }
+    o += "],\"raw\":[";
+    for (size_t i = 0; i < aprsRaw_.size(); i++) {
+        if (i) o += ",";
+        o += "[" + jnum(aprsRaw_[i].first) + "," + jstr(aprsRaw_[i].second) + "]";
+    }
+    return o + "]}";
 }
 
 // ---- logging ------------------------------------------------------------------------------------
@@ -1309,7 +1462,8 @@ void App::netLoop() {
 
 // ---- web API ------------------------------------------------------------------------------------
 void App::setMode(int m) {
-    if (m < 0 || m > DM_CW || m == mode_) return;
+    if (m < 0 || m > DM_APRS || m == mode_) return;
+    if (m == DM_APRS) { aprsTuneReq_ = true; aprsNextBeacon_ = 0; }
     if (txState_ == ST_TX) haltReq_ = true;
     seq.txEnabled = false;
     seq.clearQso();
@@ -1345,7 +1499,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
     if (c == "trim") { clk::trim(atoi(arg(a, "ms").c_str())); return ok(); }
     if (c == "mode") {
         std::string m = arg(a, "m");
-        setMode(m == "FT4" ? DM_FT4 : (m == "PSK31" ? DM_PSK31 : (m == "CW" ? DM_CW : DM_FT8)));
+        setMode(m == "FT4" ? DM_FT4 : (m == "PSK31" ? DM_PSK31 : (m == "CW" ? DM_CW : (m == "APRS" ? DM_APRS : DM_FT8))));
         return ok();
     }
     if (c == "band" || c == "freq") {
@@ -1589,6 +1743,31 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         return ok();
     }
     if (c == "cwstop") { radio.stopCw(); status("CW stopped"); return ok(); }
+    // ---- APRS ----
+    if (c == "aprsbeacon" || c == "aprsmsg") {
+        if (mode_ != DM_APRS) return err("Switch to APRS first");
+        if (!aprs::validCallSsid(aprsMyCall())) return err("Set your callsign in Settings first");
+        if (c == "aprsbeacon") {
+            double la, lo;
+            std::string src;
+            if (!aprsMyPos(la, lo, src)) return err("No position: set a grid, a fixed position, or a GPS");
+            aprsOut_.push_back(aprs::encodePosition(la, lo, cfg.aprsSym[0], cfg.aprsSym[1], cfg.aprsComment, true));
+            status("APRS: position beacon queued (" + src + ")");
+            return ok();
+        }
+        std::string to = upperTrim(arg(a, "to")), text = arg(a, "text");
+        if (!aprs::validCallSsid(to)) return err("Address the message to a callsign, e.g. W9ABC-7");
+        if (text.empty() || text.size() > 67) return err("Message text: 1 to 67 characters");
+        for (unsigned char ch : text) if (ch < 32 || ch > 126 || ch == '|' || ch == '~' || ch == '{') return err("Plain letters, digits and punctuation only");
+        AprsMsg m;
+        m.utc = clk::utcMs(); m.from = aprsMyCall(); m.to = to; m.text = text; m.out = true;
+        m.id = std::to_string(++aprsMsgId_ % 1000);
+        m.tries = 0; m.nextMono = 0;
+        aprsMsgs_.push_back(m);
+        while (aprsMsgs_.size() > 40) aprsMsgs_.pop_front();
+        return ok();
+    }
+    if (c == "aprsclear") { aprsSta_.clear(); aprsRaw_.clear(); aprsMsgs_.clear(); return ok(); }
     // ---- CW trainer through the radio's sidetone: break-in off, so the keyer does not transmit ----
     if (c == "cwtrain") {
         bool on = arg(a, "on") == "1";
@@ -1843,7 +2022,7 @@ void App::uiState(UiState& u) {
     u.txEn = seq.txEnabled; u.txOn = txState_ == ST_TX; u.tune = tuneReq_; u.wd = watchdogTripped_;
     u.waitNext = seq.waitNext;
     u.txMsg = seq.txMsg; u.txPar = seq.txParity; u.txFreq = cfg.txFreq; u.tries = seq.retries;
-    u.txText = u.txOn ? (gen_ == GEN_TUNE ? "TUNE" : (gen_ == GEN_PSK ? "PSK31" : txText_)) : "";
+    u.txText = u.txOn ? (gen_ == GEN_TUNE ? "TUNE" : (gen_ == GEN_PSK ? "PSK31" : (gen_ == GEN_APRS ? "APRS" : txText_))) : "";
     u.nextText = seq.compose(seq.txMsg);
     u.dx = seq.dxCall; u.grid = seq.dxGrid; u.rptSent = seq.rptSent; u.rptRcvd = seq.rptRcvd;
     int pk = rxPeak_.load();
@@ -1893,6 +2072,7 @@ void App::gpsRx(const uint8_t* data, size_t n) {
     int64_t mono = clk::monoMs();
     if (clk::valid()) nmea_.setDateHint(clk::utcMs());
     if (!nmea_.feed(data, n, mono)) return;
+    if (nmea_.hasPos()) { gpsLat_ = nmea_.lat(); gpsLon_ = nmea_.lon(); gpsPosMono_ = mono; }
     if (!cfg.gpsClock || txOn_) return;
     if (cfg.gpsModule && mono - gpsLastMono.load() < 5000 && !strncmp(clk::source(), "gps-", 4)) return;   // the module's PPS is better
     gpsTime(nmea_.utcMs() + cfg.gpsDelayMs + (mono - nmea_.sentenceStartMono()), mono, "gps");
@@ -1905,6 +2085,7 @@ void App::gpsModuleRx(const uint8_t* data, size_t n) {
     int64_t mono = clk::monoMs();
     if (clk::valid()) nmeaMod_.setDateHint(clk::utcMs());
     if (!nmeaMod_.feed(data, n, mono)) return;
+    if (nmeaMod_.hasPos()) { gpsLat_ = nmeaMod_.lat(); gpsLon_ = nmeaMod_.lon(); gpsPosMono_ = mono; }
     if (!cfg.gpsModule || txOn_) return;
     uint32_t pc = ppsCount.load();
     int64_t sentence = nmeaMod_.sentenceStartMono();
@@ -2005,6 +2186,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     o += "\"utc\":" + jnum(now);
     o += std::string(",\"clk\":{\"ok\":") + jbool(clk::valid()) + ",\"src\":" + jstr(clk::source()) + ",\"age\":" + jnum(clk::ageMs() / 1000) + "}";
     o += std::string(",\"mode\":\"") + modeName(mode_) + "\",\"op\":" + jnum(cfg.opMode);
+    if (mode_ == DM_APRS) o += ",\"aprs\":" + aprsJson();
     o += std::string(",\"radio\":{\"ser\":") + jbool(usbSerial) + ",\"aud\":" + jbool(usbAudio) + ",\"civ\":" + jbool(radio.connected());
     o += ",\"model\":" + jstr(radio.connected() ? radio.modelName() : "") + ",\"freq\":" + jnum((long long)f) + ",\"band\":" + jstr(bandName(f)) + ",\"rmode\":" + jnum(radio.mode.load()) + ",\"data\":" + jnum(radio.dataMode.load());
     o += std::string(",\"ptt\":") + jbool(radio.pttState) + ",\"s\":" + jnum(radio.smeter.load()) + ",\"po\":" + jnum(radio.po.load());
@@ -2013,7 +2195,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
          ",\"cwp\":" + jnum(radio.canPracticeCw() ? 1 : 0) + "}";
     o += ",\"slot\":{\"len\":" + jnum(L) + ",\"t\":" + jnum(now % L) + ",\"par\":" + jnum((now / L) & 1) + "}";
     o += std::string(",\"tx\":{\"en\":") + jbool(seq.txEnabled) + ",\"wait\":" + jbool(seq.waitNext) + ",\"on\":" + jbool(txState_ == ST_TX) + ",\"msg\":" + jnum(seq.txMsg) + ",\"par\":" + jnum(seq.txParity);
-    o += ",\"text\":" + jstr(txState_ == ST_TX ? (gen_ == GEN_TUNE ? "TUNE" : (gen_ == GEN_PSK ? "PSK31" : txText_)) : "") + ",\"last\":" + jstr(lastTx_);
+    o += ",\"text\":" + jstr(txState_ == ST_TX ? (gen_ == GEN_TUNE ? "TUNE" : (gen_ == GEN_PSK ? "PSK31" : (gen_ == GEN_APRS ? "APRS" : txText_))) : "") + ",\"last\":" + jstr(lastTx_);
     o += ",\"freq\":" + jnum(cfg.txFreq) + ",\"lvl\":" + jnum(cfg.txLevel) + ",\"txLvl\":" + jnum((int)lroundf(txLevelNow())) + std::string(",\"tune\":") + jbool(tuneReq_) + std::string(",\"wd\":") + jbool(watchdogTripped_) +
          ",\"wdLeft\":" + jnum(wdLeftSec()) + ",\"wdMin\":" + jnum(cfg.watchdogMin) + "}";
     o += ",\"qso\":{\"dx\":" + jstr(seq.dxCall) + ",\"grid\":" + jstr(seq.dxGrid) + ",\"rs\":" + jnum(seq.rptSent) + ",\"rr\":" + jnum(seq.rptRcvd) + ",\"try\":" + jnum(seq.retries) + ",\"m\":[";

@@ -1,3 +1,4 @@
+#include <cmath>
 #include "nmea.h"
 #include <cstring>
 #include <cstdlib>
@@ -33,6 +34,17 @@ bool NmeaTime::feed(const uint8_t* data, size_t n, int64_t arrival) {
 static int two(const char* p) { return (p[0] - '0') * 10 + (p[1] - '0'); }
 static bool digits(const char* p, int n) { for (int i = 0; i < n; i++) if (p[i] < '0' || p[i] > '9') return false; return true; }
 
+// "3946.123","N","08609.512","W" -> degrees
+void NmeaTime::takePos(const char* la, const char* ns, const char* lo, const char* ew) {
+    if (strlen(la) < 4 || strlen(lo) < 5 || !ns[0] || !ew[0]) return;
+    double a = atof(la), o = atof(lo);
+    double lat = (int)(a / 100) + fmod(a, 100.0) / 60.0, lon = (int)(o / 100) + fmod(o, 100.0) / 60.0;
+    if (ns[0] == 'S') lat = -lat;
+    if (ew[0] == 'W') lon = -lon;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+    lat_ = lat; lon_ = lon; posOk_ = true;
+}
+
 bool NmeaTime::parse() {
     // buf_ holds e.g. "GPRMC,163900.00,A,3946.1,N,08609.5,W,0.0,0.0,101126,,,A*6B"
     char* star = strchr(buf_, '*');
@@ -52,6 +64,7 @@ bool NmeaTime::parse() {
         if (nf < 10 || f[2][0] != 'A') return false;   // 'V' = receiver has no fix: time may be wrong
         if (strlen(f[1]) < 6 || !digits(f[1], 6) || strlen(f[9]) != 6 || !digits(f[9], 6)) return false;
         day = two(f[9]); mon = two(f[9] + 2); year = 2000 + two(f[9] + 4);
+        takePos(f[3], f[4], f[5], f[6]);
     } else if (!strncmp(type, "ZDA", 3)) {
         if (nf < 5 || strlen(f[1]) < 6 || !digits(f[1], 6)) return false;
         day = atoi(f[2]); mon = atoi(f[3]); year = atoi(f[4]);
@@ -67,6 +80,7 @@ bool NmeaTime::parse() {
         for (int64_t c : {best - 86400000LL, best + 86400000LL})
             if (llabs(c - hint_) < llabs(best - hint_)) best = c;
         if (llabs(best - hint_) > 6 * 3600000LL) return false;
+        if (nf >= 6) takePos(f[2], f[3], f[4], f[5]);
         utc_ = best;
         return true;
     } else return false;

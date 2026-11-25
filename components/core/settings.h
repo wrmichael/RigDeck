@@ -62,6 +62,15 @@ struct Settings {
     int prioOn = 0;                      // 1 = choose between stations by the priority list below
     std::string prio = "pota,sota,dx,ses,-weak,strong";   // order of the rules; '-' = rule off
     int dxKm = 2500;                     // the "DX" rule: farther than this, from the grid in its message
+    // APRS (mode APRS on the web page): 1200 baud packets on FM
+    std::string aprsCall;                // call-SSID on the air, e.g. AC9HP-9 (empty = the station callsign)
+    long long aprsFreq = 144390000;      // North America; 144.800 in Europe
+    int aprsBeaconMin = 10;              // position beacon interval while TX is enabled (0 = no beacons)
+    std::string aprsSym = "/-";          // symbol table and code: /- house, /> car, /[ person, /k truck
+    std::string aprsComment = "RigDeck";
+    std::string aprsPath = "WIDE1-1,WIDE2-1";
+    std::string aprsLat, aprsLon;        // fixed position, decimal degrees (empty = GPS, else the grid square's centre)
+    int aprsLevel = 30;                  // TX audio level % for APRS (FM deviation)
     int deadman = 0;                     // 1 = no internet: finish the QSO in progress, then stop Auto CQ / hunt
     std::string txLevels;
     int levelFor(const std::string& radio) const;          // -1 = none remembered

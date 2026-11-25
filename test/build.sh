@@ -10,7 +10,7 @@ if [ ! -f test/out/libft8.a ]; then
   ar rcs test/out/libft8.a test/out/*.o
 fi
 CORE="$(ls components/core/*.cpp)"
-for t in ${TESTS:-t_codec t_units t_qso t_psk t_cw t_cwpath t_cat}; do
+for t in ${TESTS:-t_codec t_units t_qso t_psk t_cw t_cwpath t_cat t_aprs}; do
   [ -f test/$t.cpp ] || continue
   g++ -std=c++17 -O2 -Wall -Wextra -Icomponents/ft8_lib -Icomponents/core test/$t.cpp $CORE test/out/libft8.a -lm -lpthread -o test/out/$t
   ./test/out/$t
