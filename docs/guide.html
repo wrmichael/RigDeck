@@ -7,6 +7,7 @@
 <meta name="description" content="How to set up and operate RigDeck: install, connect your radio, make FT8 contacts, log, and keep it on the air.">
 <link rel="icon" type="image/png" href="img/icon.png">
 <style>
+@font-face{font-family:"Audiowide";src:url("fonts/Audiowide-Regular.ttf") format("truetype");font-display:swap}
 /* Layout: a fixed contents column beside one reading column; on phones the contents fold above. */
 :root{--bg:#0d1317;--pan:#151e25;--pan2:#1c2831;--line:#2a3944;--amb:#f6b93b;--ok:#3fcf8e;--bad:#ff6b6b;--cq:#7fd0ff;--txt:#e6edf1;--dim:#9fb0bb;
 --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color-scheme:dark}
@@ -23,7 +24,7 @@ nav.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--txt);text
 nav.toc a:hover{background:var(--pan)}
 nav.toc a.here{border-left-color:var(--amb);background:var(--pan);color:var(--amb)}
 main{min-width:0;max-width:760px}
-header.top h1{font-size:40px;line-height:1.1;margin:0;color:var(--amb);text-wrap:balance}
+header.top h1{font:400 40px/1.1 "Audiowide",system-ui,sans-serif;margin:0;color:var(--amb);text-wrap:balance}
 header.top p{color:var(--dim);font-size:19px;margin:8px 0 0}
 .meta{display:flex;flex-wrap:wrap;gap:8px 16px;margin:16px 0 0;font-size:15px;color:var(--dim)}
 h2{font-size:27px;line-height:1.2;margin:56px 0 12px;padding-top:8px;border-top:1px solid var(--line);text-wrap:balance}
