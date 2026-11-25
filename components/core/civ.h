@@ -29,6 +29,10 @@ std::vector<uint8_t> civBuild(uint8_t to, uint8_t from, uint8_t cmd, const std::
 void civFreqToBcd(uint64_t hz, uint8_t out[5]);
 uint64_t civBcdToFreq(const uint8_t* b, size_t n);
 int civBcdToInt(const uint8_t* b, size_t n);
+// Icom "my position" (command 23 00, IC-705 / IC-9700 / IC-905 with GPS): the 27 data bytes after the sub-command.
+// Latitude DD MM mm m0 0H (H 1 = north), longitude 0D DD MM mm m0 0H (H 1 = east), all BCD; then altitude,
+// course, speed and UTC date/time. Returns false when the radio has no fix (all 0xFF) or the bytes are not valid.
+bool civParseGpsPos(const uint8_t* p, size_t n, double& lat, double& lon);
 const char* civModelName(uint8_t civAddr);            // radio model from its factory CI-V address          // big-endian BCD as used by level/meter values
 
 class CivParser {
@@ -102,6 +106,15 @@ public:
     std::atomic<bool> pttWanted{false};
     std::atomic<int64_t> lastRxMono{-100000};
     std::atomic<int> ng{0};                            // count of FA (rejected) replies
+    // Position from the radio's own GPS (Icom command 23 00), asked every 30 s. Stops asking after three
+    // requests without an answer (radios without GPS or without the command).
+    bool gpsPos(double& lat, double& lon, int64_t& mono) {
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (!gpsMono_) return false;
+        lat = gpsLat_; lon = gpsLon_; mono = gpsMono_;
+        return true;
+    }
+    std::atomic<int> gpsState{0};                      // 0 not known yet, 1 answers (fix or not), -1 no GPS command
 
 private:
     void send(uint8_t cmd, const std::vector<uint8_t>& data, bool front = false);
@@ -134,4 +147,7 @@ private:
     std::deque<std::vector<uint8_t>> q_;
     int64_t lastSend_ = 0, lastPoll_ = 0;
     int pollStep_ = 0, extStep_ = 0;
+    int64_t gpsAskMono_ = 0, gpsMono_ = 0;
+    int gpsUnanswered_ = 0;
+    double gpsLat_ = 0, gpsLon_ = 0;
 };

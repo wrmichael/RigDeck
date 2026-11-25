@@ -963,6 +963,15 @@ void App::tick() {
         if (fw != radioFw_) { radioFw_ = fw; if (!fw.empty()) logLine(std::string("radio firmware: ") + radio.modelName() + " " + fw); }
     }
 
+    {                                                              // the radio's own GPS (Icom command 23 00)
+        double la, lo;
+        int64_t m;
+        if (radio.gpsPos(la, lo, m) && m != radioGpsMono_) {
+            if (!radioGpsMono_) logLine("radio GPS: position received; APRS beacons use it");
+            radioGpsMono_ = m;
+            gpsLat_ = la; gpsLon_ = lo; gpsPosMono_ = m; gpsSrc_ = "the radio's GPS";
+        }
+    }
     if (pttOffRepeat_ && mono >= pttOffRepeat_ && txState_ == ST_IDLE) { pttOffRepeat_ = 0; radio.ptt(false); }
     if (radio.proto == RP_NONE && radio.mode >= 0 && (radio.mode != cfg.dialMode || radio.dataMode != cfg.dialData)) {
         cfg.dialMode = radio.mode;                      // no CAT: the mode set on the radio screen is remembered too
@@ -1091,7 +1100,7 @@ std::string App::aprsMyCall() const { return cfg.aprsCall.empty() ? upperTrim(cf
 // Where we are: a fixed position from Settings, else a GPS fix from the last 10 minutes, else the grid's centre.
 bool App::aprsMyPos(double& lat, double& lon, std::string& src) const {
     if (!cfg.aprsLat.empty() && !cfg.aprsLon.empty()) { lat = atof(cfg.aprsLat.c_str()); lon = atof(cfg.aprsLon.c_str()); src = "fixed position"; return true; }
-    if (gpsPosMono_ && clk::monoMs() - gpsPosMono_ < 600000) { lat = gpsLat_; lon = gpsLon_; src = "GPS"; return true; }
+    if (gpsPosMono_ && clk::monoMs() - gpsPosMono_ < 600000) { lat = gpsLat_; lon = gpsLon_; src = gpsSrc_; return true; }
     if (aprs::gridCentre(cfg.grid, lat, lon)) { src = "grid " + cfg.grid; return true; }
     return false;
 }
@@ -2154,7 +2163,7 @@ void App::gpsRx(const uint8_t* data, size_t n) {
     int64_t mono = clk::monoMs();
     if (clk::valid()) nmea_.setDateHint(clk::utcMs());
     if (!nmea_.feed(data, n, mono)) return;
-    if (nmea_.hasPos()) { gpsLat_ = nmea_.lat(); gpsLon_ = nmea_.lon(); gpsPosMono_ = mono; }
+    if (nmea_.hasPos()) { gpsLat_ = nmea_.lat(); gpsLon_ = nmea_.lon(); gpsPosMono_ = mono; gpsSrc_ = "GPS"; }
     if (!cfg.gpsClock || txOn_) return;
     if (cfg.gpsModule && mono - gpsLastMono.load() < 5000 && !strncmp(clk::source(), "gps-", 4)) return;   // the module's PPS is better
     gpsTime(nmea_.utcMs() + cfg.gpsDelayMs + (mono - nmea_.sentenceStartMono()), mono, "gps");
@@ -2167,7 +2176,7 @@ void App::gpsModuleRx(const uint8_t* data, size_t n) {
     int64_t mono = clk::monoMs();
     if (clk::valid()) nmeaMod_.setDateHint(clk::utcMs());
     if (!nmeaMod_.feed(data, n, mono)) return;
-    if (nmeaMod_.hasPos()) { gpsLat_ = nmeaMod_.lat(); gpsLon_ = nmeaMod_.lon(); gpsPosMono_ = mono; }
+    if (nmeaMod_.hasPos()) { gpsLat_ = nmeaMod_.lat(); gpsLon_ = nmeaMod_.lon(); gpsPosMono_ = mono; gpsSrc_ = "GPS module"; }
     if (!cfg.gpsModule || txOn_) return;
     uint32_t pc = ppsCount.load();
     int64_t sentence = nmeaMod_.sentenceStartMono();

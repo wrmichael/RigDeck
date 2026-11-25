@@ -173,6 +173,31 @@ void Radio::vfo(uint8_t sub) {
 
 bool Radio::connected() const { return proto.load() == RP_NONE || clk::monoMs() - lastRxMono.load() < 3000; }
 
+static bool isBcd(uint8_t b) { return (b >> 4) <= 9 && (b & 0x0F) <= 9; }
+static int bcd2(uint8_t b) { return (b >> 4) * 10 + (b & 0x0F); }
+
+bool civParseGpsPos(const uint8_t* p, size_t n, double& lat, double& lon) {
+    if (n < 11) return false;
+    bool allFF = true;
+    for (size_t i = 0; i < 11; i++) if (p[i] != 0xFF) allFF = false;
+    if (allFF) return false;                               // no fix (or the GPS is off)
+    for (int i = 0; i < 3; i++) if (!isBcd(p[i])) return false;
+    if ((p[3] & 0x0F) || (p[3] >> 4) > 9 || (p[4] & 0xF0) || (p[4] & 0x0F) > 1) return false;
+    for (int i = 5; i < 10; i++) if (!isBcd(p[i])) return false;
+    if ((p[5] & 0xF0) || (p[9] & 0x0F) || (p[10] & 0xF0) || (p[10] & 0x0F) > 1) return false;
+    int latDeg = bcd2(p[0]);
+    double latMin = bcd2(p[1]) + bcd2(p[2]) / 100.0 + (p[3] >> 4) / 1000.0;
+    int lonDeg = (p[5] & 0x0F) * 100 + bcd2(p[6]);
+    double lonMin = bcd2(p[7]) + bcd2(p[8]) / 100.0 + (p[9] >> 4) / 1000.0;
+    if (latDeg > 90 || latMin >= 60 || lonDeg > 180 || lonMin >= 60) return false;
+    lat = latDeg + latMin / 60.0;
+    lon = lonDeg + lonMin / 60.0;
+    if (!(p[4] & 0x0F)) lat = -lat;
+    if (!(p[10] & 0x0F)) lon = -lon;
+    if (lat == 0 && lon == 0) return false;               // 0/0: not a real position
+    return true;
+}
+
 void Radio::poll() {
     if (proto == RP_NONE) return;
     int64_t now = clk::monoMs();
@@ -192,6 +217,12 @@ void Radio::poll() {
             std::vector<uint8_t> d;
             if (p[1] != 0xFF) d.push_back(p[1]);
             q_.push_back(civBuild(addr, CTRL, p[0], d));
+            if (!pttWanted && gpsState >= 0 && now - gpsAskMono_ >= 30000) {   // the radio's GPS position
+                gpsAskMono_ = now;
+                bool answering = now - lastRxMono.load() < 2000;  // only count asks while the radio answers others
+                if (gpsState == 0 && answering && ++gpsUnanswered_ > 3) gpsState = -1;
+                else q_.push_back(civBuild(addr, CTRL, 0x23, {0x00}));
+            }
             if (extPoll && !pttWanted && (pollStep_ & 1)) {       // every other poll, one front-panel setting
                 static const uint8_t ext[][2] = {{0x14, 0x01}, {0x14, 0x02}, {0x14, 0x03}, {0x14, 0x0A}, {0x14, 0x0B}, {0x14, 0x06},
                                                  {0x16, 0x02}, {0x16, 0x12}, {0x16, 0x22}, {0x16, 0x40}, {0x16, 0x41}, {0x16, 0x44},
@@ -251,6 +282,16 @@ void Radio::handle(const CivFrame& f) {
             else if (d[0] == 0x13) { alc = v; alcSeq++; }
         }
         break;
+    case 0x23:
+        if (d.size() >= 1 && d[0] == 0x00) {
+            gpsState = 1;
+            double la, lo;
+            if (civParseGpsPos(d.data() + 1, d.size() - 1, la, lo)) {
+                std::lock_guard<std::mutex> lk(mtx_);
+                gpsLat_ = la; gpsLon_ = lo; gpsMono_ = clk::monoMs();
+            }
+        }
+        break;
     case 0xFA: ng++; break;
     default: break;
     }
@@ -263,6 +304,7 @@ void Radio::setProto(int p) {
     q_.clear();
     line_.clear();
     parser_ = CivParser();
+    gpsState = 0; gpsUnanswered_ = 0; gpsAskMono_ = 0; gpsMono_ = 0;
     pcHead_ = 0; yMode_ = 0; textId_ = 0; ecModel_ = -1; omAsked_ = false; vnAsked_ = false; fw_.clear(); pollStep_ = 0; extStep_ = 0;
     freq = 0; mode = -1; dataMode = -1; filter = -1; att = -1; keySpeed = -1;
     smeter = 0; po = 0; swr = 0; alc = 0; pttState = false;

@@ -1,3 +1,4 @@
+#include <cmath>
 // Yaesu FTX-1 and QRP Labs QMX control, CW macros, and manual log entries, against simulated radios.
 #include <cstdio>
 #include <cstring>
@@ -133,6 +134,41 @@ static std::string trimRight(std::string s) { while (!s.empty() && s.back() == '
 int main() {
     clk::init(mono);
     simMs = 1000000;
+
+    {   // ---------------- Icom "my position" (23 00): IC-705 answer with a fix at 37 52.313 N, 112 32.560 E
+        const uint8_t pos[27] = {0x37, 0x52, 0x31, 0x30, 0x01, 0x01, 0x12, 0x32, 0x56, 0x00, 0x01, 0x00, 0x78, 0x70, 0x00,
+                                 0x01, 0x50, 0x00, 0x00, 0x09, 0x20, 0x26, 0x11, 0x25, 0x18, 0x30, 0x00};
+        double la = 0, lo = 0;
+        CHECK(civParseGpsPos(pos, sizeof pos, la, lo));
+        CHECK(fabs(la - (37 + 52.313 / 60)) < 1e-6 && fabs(lo - (112 + 32.560 / 60)) < 1e-6);
+        uint8_t sw[27];
+        memcpy(sw, pos, 27);
+        sw[4] = 0x00; sw[10] = 0x00;                                   // south, west
+        CHECK(civParseGpsPos(sw, 27, la, lo) && la < -37.8 && lo < -112.5);
+        uint8_t ff[27];
+        memset(ff, 0xFF, 27);
+        CHECK(!civParseGpsPos(ff, 27, la, lo));                        // no fix
+        uint8_t bad[27];
+        memcpy(bad, pos, 27);
+        bad[1] = 0x7A;
+        CHECK(!civParseGpsPos(bad, 27, la, lo));                       // not BCD
+        Radio r;
+        std::vector<std::vector<uint8_t>> sent;
+        r.write = [&sent](const uint8_t* d, size_t n) { sent.emplace_back(d, d + n); return true; };
+        r.setProto(RP_CIV);
+        r.addr = 0xA4;
+        std::vector<uint8_t> echo = civBuild(Radio::CTRL, 0xA4, 0x03, {0x00, 0x40, 0x07, 0x14, 0x00});  // the radio answers polls
+        r.onRx(echo.data(), echo.size());
+        for (int i = 0; i < 40; i++) { simMs += 50; r.poll(); }
+        bool asked = false;
+        for (auto& f : sent) if (f.size() >= 7 && f[4] == 0x23 && f[5] == 0x00) asked = true;
+        CHECK(asked);
+        std::vector<uint8_t> ans = civBuild(Radio::CTRL, 0xA4, 0x23, std::vector<uint8_t>{0x00});
+        ans.insert(ans.end() - 1, pos, pos + 27);
+        r.onRx(ans.data(), ans.size());
+        int64_t m = 0;
+        CHECK(r.gpsPos(la, lo, m) && fabs(la - 37.8718833) < 1e-5 && r.gpsState == 1);
+    }
 
     {   // ---------------- Yaesu FTX-1
         Radio r; FakeText f; f.r = &r; f.yaesu = true;

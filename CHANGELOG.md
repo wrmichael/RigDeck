@@ -1,5 +1,10 @@
 # Changes
 
+## 1.1.6-beta
+- APRS position from the radio's own GPS: Icoms with GPS (IC-705, IC-9700, IC-905) are asked for their position
+  over CI-V (command 23 00) every 30 seconds; beacons use it instead of the grid square's centre. The APRS
+  screen and log say "position from the radio's GPS". Radios that do not answer are not asked again.
+
 ## 1.1.5-beta
 - The RigDeck name (Settings) shows in gold on the touch screen, after the radio model at the top and in the APRS
   screen's title, so you can tell the units apart.

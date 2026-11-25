@@ -239,7 +239,8 @@ private:
     void aprsHandle(const aprs::Frame& f);
     std::string aprsJson();
     double gpsLat_ = 0, gpsLon_ = 0;
-    int64_t gpsPosMono_ = 0;
+    int64_t gpsPosMono_ = 0, radioGpsMono_ = 0;
+    const char* volatile gpsSrc_ = "GPS";          // where the last position came from (a string constant: set from the USB threads)
     enum { ST_IDLE, ST_TX };
     int txState_ = ST_IDLE, gen_ = GEN_FTX;
     std::atomic<bool> txOn_{false}, genStarted_{false}, genDone_{false}, haltReq_{false}, tuneReq_{false};
