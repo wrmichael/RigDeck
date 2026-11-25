@@ -1,6 +1,7 @@
 // Detailed APRS map on the microSD card (RigDeck/map.rdm, built by tools/make_map.py --detail and published on
 // the GitHub site). The web page downloads it from GitHub and sends it here in pieces; it is checked whole,
 // then kept in PSRAM for the touch screen. Without it the built-in outlines are used.
+#include "sdkconfig.h"                              // CONFIG_IC7100_DISPLAY: hand the map to the touch screen
 #include "mapfile.h"
 #include "platform.h"
 #include <atomic>
