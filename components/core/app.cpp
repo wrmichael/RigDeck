@@ -1108,6 +1108,8 @@ void App::aprsHandle(const aprs::Frame& f) {                      // mtx_ held
     int64_t now = clk::utcMs();
     aprsRaw_.push_back({now, aprs::tnc2(f).substr(0, 200)});
     logLine("APRS heard: " + aprs::tnc2(f).substr(0, 160));
+    aprsFileLog("RX", aprs::tnc2(f));
+    aprsSeq_++;
     while (aprsRaw_.size() > 30) aprsRaw_.pop_front();
     std::string me = aprsMyCall();
     if (f.src == me) return;                                       // our own packet, digipeated back
@@ -1190,11 +1192,13 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
         frames.push_back(aprs::encodeFrame(f));
         aprsRaw_.push_back({clk::utcMs(), "TX " + aprs::tnc2(f).substr(0, 200)});
         logLine("APRS sent: " + aprs::tnc2(f).substr(0, 160));
+        aprsFileLog("TX", aprs::tnc2(f));
         for (auto& m : aprsMsgs_)                                          // a message copy left: the next try in 30 s
             if (m.out && !m.acked && m.nextMono < 0 && aprs::encodeMessage(m.to, m.text, m.id) == aprsOut_[i]) m.nextMono = mono + 30000;
     }
     while (aprsRaw_.size() > 30) aprsRaw_.pop_front();
     aprsOut_.erase(aprsOut_.begin(), aprsOut_.begin() + (long)frames.size());
+    aprsSeq_++;
     aprsMod_.start(frames, 48000, 300);
     maxTxMs_ = (int64_t)(aprsMod_.seconds() * 1000) + 2000;
     aprsLastTx_ = mono;
@@ -1206,6 +1210,50 @@ void App::aprsQueueBeacon(const std::string& info) {              // mtx_ held
     for (auto& o : aprsOut_)
         if (!o.empty() && (o[0] == '=' || o[0] == '!' || o[0] == '@' || o[0] == '/')) { o = info; return; }
     aprsOut_.push_back(info);
+}
+
+// Every APRS packet heard and sent, one line each, in a daily file next to the logs (microSD card or the board).
+void App::aprsFileLog(const char* dir, const std::string& tnc2) {        // mtx_ held
+    int64_t u = clk::utcMs();
+    if (!clk::valid()) return;
+    time_t t = (time_t)(u / 1000);
+    struct tm tm;
+    gmtime_r(&t, &tm);
+    char name[40], head[32];
+    snprintf(name, sizeof name, "/aprs_%04d%02d%02d.txt", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday);
+    snprintf(head, sizeof head, "%02d:%02d:%02dZ %s ", tm.tm_hour, tm.tm_min, tm.tm_sec, dir);
+    FILE* f = fopen((logDir_ + name).c_str(), "a");
+    if (!f) return;
+    fputs(head, f);
+    fwrite(tnc2.data(), 1, std::min<size_t>(tnc2.size(), 300), f);
+    fputc('\n', f);
+    fclose(f);
+}
+
+App::AprsView App::aprsView(bool withLists) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    AprsView v;
+    v.me = aprsMyCall();
+    v.havePos = aprsMyPos(v.lat, v.lon, v.src);
+    v.dcd = aprsDem_.busy();
+    v.queued = (int)aprsOut_.size();
+    v.txEn = seq.txEnabled;
+    v.freq = cfg.aprsFreq;
+    v.seq = aprsSeq_;
+    int64_t mono = clk::monoMs();
+    v.nextS = seq.txEnabled && cfg.aprsBeaconMin > 0 && aprsNextBeacon_ ? (int)std::max<int64_t>(0, (aprsNextBeacon_ - mono) / 1000) : -1;
+    if (!withLists) return v;
+    for (const auto& kv : aprsSta_) {
+        const AprsSta& s = kv.second;
+        AprsStaView x;
+        x.call = s.call; x.comment = s.comment; x.path = s.path; x.lat = s.lat; x.lon = s.lon; x.pos = s.pos;
+        x.table = s.table; x.sym = s.sym; x.utc = s.utc; x.heard = s.heard;
+        if (s.pos && v.havePos) { x.km = aprs::distanceKm(v.lat, v.lon, s.lat, s.lon); x.brg = aprs::bearingDeg(v.lat, v.lon, s.lat, s.lon); }
+        v.st.push_back(x);
+    }
+    std::sort(v.st.begin(), v.st.end(), [](const AprsStaView& a, const AprsStaView& b) { return a.utc > b.utc; });
+    for (const auto& m : aprsMsgs_) v.msgs.push_back({m.utc, m.from, m.to, m.text, m.out, m.acked, m.tries > 3 ? 3 : m.tries});
+    return v;
 }
 
 std::string App::aprsJson() {                                     // mtx_ held
@@ -1791,6 +1839,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         m.tries = 0; m.nextMono = 0;                                       // the first copy goes at once
         aprsMsgs_.push_back(m);
         while (aprsMsgs_.size() > 40) aprsMsgs_.pop_front();
+        aprsSeq_++;
         return ok();
     }
     if (c == "aprsclear") { aprsSta_.clear(); aprsRaw_.clear(); aprsMsgs_.clear(); return ok(); }

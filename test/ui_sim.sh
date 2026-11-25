@@ -22,5 +22,5 @@ if [ ! -f test/out/lv/liblvgl.a ]; then
   ar rcs test/out/lv/liblvgl.a test/out/lv/*.o
 fi
 g++ -std=c++17 -O2 -w -DLV_CONF_INCLUDE_SIMPLE -Itest/out/lv -I"$LVGL" -Icomponents/core -Icomponents/ft8_lib \
-    test/ui_sim.cpp main/ui.cpp main/logo_font.c components/core/*.cpp test/out/libft8.a test/out/lv/liblvgl.a -lm -lpthread -o test/out/ui_sim
+    test/ui_sim.cpp main/ui.cpp main/logo_font.c main/map_data.c components/core/*.cpp test/out/libft8.a test/out/lv/liblvgl.a -lm -lpthread -o test/out/ui_sim
 ./test/out/ui_sim

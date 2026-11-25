@@ -298,16 +298,24 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 </ul>
 
 <h2 id="aprs">APRS <span class="pill">BETA</span></h2>
-<p>On the web page, press <b>APRS</b> next to FT8 and FT4. RigDeck sets the radio to <b>FM with DATA</b> on the APRS frequency (Settings, APRS; 144.390 MHz by default, 144.800 in Europe) and decodes 1200-baud packets from the radio's audio. The touch screen shows that APRS is run from the web page.</p>
+<p>On the touch screen or the web page, press <b>APRS</b> next to FT8 and FT4. RigDeck sets the radio to <b>FM with DATA</b> on the APRS frequency (Settings, APRS; 144.390 MHz by default, 144.800 in Europe) and decodes 1200-baud packets from the radio's audio. On the touch screen, APRS opens its own screen (below); <b>Back</b> returns to the main screen, and tapping the APRS note there opens it again.</p>
 <ul>
   <li><b>Stations heard:</b> callsign, type (car, house, digipeater ...), distance and direction from you, when last heard, comment and the digipeaters it came through. Plain, compressed and Mic-E positions are read. Tap a station to write it a message.</li>
   <li><b>Messages:</b> type the call-SSID and the text (up to 67 characters) and press Send. A message goes out up to 3 times, 30 seconds apart, until the other station acknowledges it (✓ received). Messages to you are shown, and acknowledged while the radio is connected.</li>
   <li><b>Beacons:</b> your position goes out while <b>TX is enabled</b>, every "Beacon interval" minutes (default 10; the TX watchdog applies as for FT8), and at once with <b>Send position now</b>. RigDeck waits for a clear channel before it transmits.</li>
   <li><b>Your position:</b> a fixed latitude and longitude from Settings if given, else a GPS (module on the board, or the radio's GPS sentences), else the centre of your grid square.</li>
   <li><b>Settings, APRS:</b> call-SSID (for example AC9HP-9; empty uses your callsign), frequency, beacon interval, symbol, comment, path (default WIDE1-1,WIDE2-1) and the audio level for FM deviation (start around 30 %; raise it if digipeaters do not repeat you, lower it if your packets are not decoded).</li>
-  <li>Packets heard and sent are listed under "Packets heard and sent".</li>
+  <li>Packets heard and sent are listed under "Packets heard and sent" on the web page, and written to the microSD card day by day as RigDeck/aprs_YYYYMMDD.txt (one line per packet, UTC time, RX or TX).</li>
 </ul>
-<div class="note">RigDeck's APRS has been tested against its own modem in simulation so far. The first on-air reports will tell whether the audio level and the radio's FM data settings need tuning.</div>
+<h3>APRS on the touch screen</h3>
+<p><img src="img/screen-aprs.png" alt="APRS map on the touch screen" style="max-width:100%"></p>
+<ul>
+  <li><b>Map:</b> stations heard with a position, around your own position (gold cross), on outlines of countries, US states, Canadian provinces and the Great Lakes (Natural Earth, built into RigDeck: no internet or card needed). <b>+</b> and <b>−</b> set the range from 25 to 1600 km; the rings mark quarters of it. Stations heard in the last 30 minutes are bright green. Tap a station for its details on the right.</li>
+  <li><b>Stations:</b> the same stations as a list with distance, direction, when heard and comment; tap one to select it.</li>
+  <li><b>Messages:</b> messages to and from you. Tap To and Message to type, then Send. <b>Message</b> in the details panel fills in the selected station.</li>
+  <li>The top bar has Enable TX, HALT TX and <b>Beacon now</b>, and shows whether the channel is busy, how many packets are waiting to go out and when the next beacon is due.</li>
+</ul>
+<div class="note">In the first on-air tests (IC-705, 2026-11-25) RigDeck decoded the local traffic and its beacons were repeated by digipeaters. Other radios may need the audio level or their FM data settings adjusted.</div>
 
 <h2 id="trainer">CW trainer <span class="pill">BETA</span></h2>
 <p>The <b>CW trainer</b> tab on the web page needs no radio: Morse plays in the browser. Speed, character spacing ("Spacing as" a slower speed spreads characters apart, Farnsworth style), tone and volume are at the top, and the browser remembers them and your progress.</p>

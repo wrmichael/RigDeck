@@ -17,6 +17,11 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include "mapdata.h"
+#include "clock.h"
+
+extern "C" const uint8_t g_mapData[];
+extern "C" const size_t g_mapDataLen;
 
 namespace {
 
@@ -49,8 +54,8 @@ const BandDef kBands[] = {{"160", 1840000, 0, 1835000}, {"80", 3573000, 3575000,
 uint32_t bandFreq(int i, int mode) { return mode == DM_FT4 ? kBands[i].ft4 : (mode == DM_CW ? kBands[i].cw : kBands[i].ft8); }
 const int kNumBands = sizeof kBands / sizeof kBands[0];
 const char* kBandMap[kNumBands + 1];
-const char* kModeMap[] = {"FT8", "FT4", "CW", ""};        // CW = FT-CW: FT8-style contacts in Morse
-int modeIndex(int mode) { return mode == DM_CW ? 2 : (mode == DM_FT8 || mode == DM_FT4 ? mode : -1); }
+const char* kModeMap[] = {"FT8", "FT4", "CW", "APRS", ""};   // CW = FT-CW: FT8-style contacts in Morse
+int modeIndex(int mode) { return mode == DM_CW ? 2 : mode == DM_APRS ? 3 : (mode == DM_FT8 || mode == DM_FT4 ? mode : -1); }
 const char* kOpMap[] = {"Manual", "Auto CQ", "Auto hunt", ""};   // hunt = answer CQs automatically
 
 // widgets
@@ -59,6 +64,9 @@ lv_obj_t *lFreq, *lSub, *barS, *lS, *barLvl, *lLvl, *lDot[4], *lClock, *lCall, *
 lv_obj_t *table, *bTxEn, *lTxEn, *bTune, *lTune, *mxOp, *mxMode, *mxBand, *lQso, *lMeters, *bPar, *lPar, *lLogBtn, *lPsk;
 lv_obj_t *scrMain, *scrLog, *scrLogger, *logTable, *lLogCounts, *lLogInfo;        // second screen: logbook
 void onOpenRadio(lv_event_t*);
+void onOpenAprs(lv_event_t*);
+void buildAprsScreen();
+void aRefresh();
 void buildRadioScreen();
 void refreshRadioScreen(const App::UiState& s);
 void onOpenLogger(lv_event_t*);
@@ -219,7 +227,8 @@ void onOp(lv_event_t* e) {
 }
 void onMode(lv_event_t* e) {
     uint32_t id = lv_buttonmatrix_get_selected_button((lv_obj_t*)lv_event_get_target(e));
-    if (id < 3 && cmd("mode", {{"m", kModeMap[id]}})) { rows.clear(); lv_table_set_row_count(table, 0); }
+    if (id < 4 && cmd("mode", {{"m", kModeMap[id]}})) { rows.clear(); lv_table_set_row_count(table, 0); }
+    if (id == 3) onOpenAprs(nullptr);
     shownMode = -1;
     shownBand = -2;
 }
@@ -1518,6 +1527,382 @@ void rebuildTable() {
 }
 
 int shownBright = -1;
+
+// ---- APRS screen: map of heard stations (outlines from Natural Earth, built in), station list, messages ----
+lv_obj_t *scrAprs, *aCanvas, *aTabs, *aStaTable, *aMsgBox, *aMsgList, *aTo, *aText, *aKb, *aDetail, *aStatus, *aTitle, *aTxLbl, *aTxBtn, *aZoomLbl;
+lv_obj_t* aPane[3];
+lv_obj_t* aCallLbl[40];
+uint16_t* aBuf = nullptr;
+const int A_MAP_X = 0, A_MAP_Y = 112, A_MAP_W = 660, A_MAP_H = H - 112;
+const int kZoomKm[] = {25, 50, 100, 200, 400, 800, 1600};
+int aZoom = 3, aTab = 0;
+uint32_t aShownSeq = 0xffffffff;
+int aShownZoom = -1;
+uint32_t aLastDraw = 0;
+std::string aSel;                                   // selected station
+struct AprsDot { std::string call; int x, y; };
+std::vector<AprsDot> aDots;
+App::AprsView aView;
+const char* kAprsTabs[] = {"Map", "Stations", "Messages", ""};
+
+void aSetPx(int x, int y, uint16_t c) { if (x >= 0 && y >= 0 && x < A_MAP_W && y < A_MAP_H) aBuf[y * A_MAP_W + x] = c; }
+void aLine(int x0, int y0, int x1, int y1, uint16_t c) {           // Bresenham, clipped point by point
+    if ((x0 < -2000 && x1 < -2000) || (x0 > 3000 && x1 > 3000) || (y0 < -2000 && y1 < -2000) || (y0 > 3000 && y1 > 3000)) return;
+    int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1, dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1, err = dx + dy;
+    for (int guard = 0; guard < 6000; guard++) {
+        aSetPx(x0, y0, c);
+        if (x0 == x1 && y0 == y1) break;
+        int e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+}
+uint16_t c565(uint32_t rgb) { return (uint16_t)(((rgb >> 19) & 0x1f) << 11 | ((rgb >> 10) & 0x3f) << 5 | ((rgb >> 3) & 0x1f)); }
+
+std::string ageText(int64_t utc) {
+    int64_t s = (clk::utcMs() - utc) / 1000;
+    char b[24];
+    if (s < 60) snprintf(b, sizeof b, "%ds", (int)std::max<int64_t>(0, s));
+    else if (s < 3600) snprintf(b, sizeof b, "%dm", (int)(s / 60));
+    else snprintf(b, sizeof b, "%dh%02dm", (int)(s / 3600), (int)(s / 60 % 60));
+    return b;
+}
+
+void aDrawMap() {
+    if (!aBuf) return;
+    const App::AprsView& v = aView;
+    double clat = v.havePos ? v.lat : 39.8, clon = v.havePos ? v.lon : -98.6;     // no position yet: middle of the US
+    if (!aSel.empty())
+        for (const auto& s : v.st) if (s.call == aSel && s.pos && !v.havePos) { clat = s.lat; clon = s.lon; }
+    double km = kZoomKm[aZoom];
+    double pxPerKm = (A_MAP_H / 2.0) / km, kx = 111.32 * cos(clat * M_PI / 180) * pxPerKm, ky = 110.57 * pxPerKm;
+    int cx = A_MAP_W / 2, cy = A_MAP_H / 2;
+    uint16_t bg = c565(0x0a1218), cCountry = c565(0x6b7f8c), cState = c565(0x3b4c58), cLake = c565(0x3a6f94), cGrid = c565(0x16222b);
+    for (int i = 0; i < A_MAP_W * A_MAP_H; i++) aBuf[i] = bg;
+    double dLat = (A_MAP_H / 2.0) / ky, dLon = (A_MAP_W / 2.0) / kx;
+    // range rings every quarter of the zoom
+    for (int r = 1; r <= 4; r++) {
+        double rp = km * r / 4 * pxPerKm;
+        for (int a = 0; a < 360; a += 2) {
+            double t0 = a * M_PI / 180, t1 = (a + 2) * M_PI / 180;
+            aLine(cx + (int)(rp * sin(t0)), cy - (int)(rp * cos(t0)), cx + (int)(rp * sin(t1)), cy - (int)(rp * cos(t1)), cGrid);
+        }
+    }
+    auto toXY = [&](double la, double lo, int& x, int& y) {
+        double d = lo - clon;
+        if (d > 180) d -= 360;
+        if (d < -180) d += 360;
+        x = cx + (int)lround(d * kx);
+        y = cy - (int)lround((la - clat) * ky);
+    };
+    int la0 = (int)((clat - dLat) * 100) - 1, la1 = (int)((clat + dLat) * 100) + 1;
+    int lo0 = (int)((clon - dLon) * 100) - 1, lo1 = (int)((clon + dLon) * 100) + 1;
+    for (int pass = 0; pass < 3; pass++)                                     // states, then lakes, then countries on top
+        mapdata::forEach(g_mapData, g_mapDataLen, la0, lo0, la1, lo1, [&](int cls, const int16_t* la, const int16_t* lo, int n) {
+            int want = pass == 0 ? mapdata::MC_STATE : pass == 1 ? mapdata::MC_LAKE : mapdata::MC_COUNTRY;
+            if (cls != want) return;
+            uint16_t c = cls == mapdata::MC_STATE ? cState : cls == mapdata::MC_LAKE ? cLake : cCountry;
+            int px, py;
+            toXY(la[0] / 100.0, lo[0] / 100.0, px, py);
+            for (int i = 1; i < n; i++) {
+                int x, y;
+                toXY(la[i] / 100.0, lo[i] / 100.0, x, y);
+                aLine(px, py, x, y, c);
+                px = x; py = y;
+            }
+        });
+    // stations
+    aDots.clear();
+    int nl = 0;
+    for (const auto& s : v.st) {
+        if (!s.pos) continue;
+        int x, y;
+        toXY(s.lat, s.lon, x, y);
+        if (x < 3 || y < 3 || x >= A_MAP_W - 3 || y >= A_MAP_H - 3) continue;
+        bool sel = s.call == aSel;
+        bool fresh = clk::utcMs() - s.utc < 30 * 60000;
+        uint16_t c = sel ? c565(AMB) : fresh ? c565(0x3fcf8e) : c565(0x5d8a72);
+        for (int dy = -3; dy <= 3; dy++) for (int dx = -3; dx <= 3; dx++) if (dx * dx + dy * dy <= 10) aSetPx(x + dx, y + dy, c);
+        aDots.push_back({s.call, x, y});
+        if (nl < 40) {
+            lv_obj_t* l = aCallLbl[nl++];
+            lv_label_set_text(l, s.call.c_str());
+            lv_obj_set_style_text_color(l, C(sel ? AMB : TXT), 0);
+            lv_obj_set_pos(l, A_MAP_X + x + 6, A_MAP_Y + y - 9);
+            lv_obj_remove_flag(l, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    for (int i = nl; i < 40; i++) lv_obj_add_flag(aCallLbl[i], LV_OBJ_FLAG_HIDDEN);
+    if (v.havePos) {                                                          // own position: a gold cross
+        uint16_t g = c565(AMB);
+        aLine(cx - 8, cy, cx + 8, cy, g); aLine(cx, cy - 8, cx, cy + 8, g);
+        aLine(cx - 8, cy + 1, cx + 8, cy + 1, g); aLine(cx + 1, cy - 8, cx + 1, cy + 8, g);
+    }
+    lv_obj_invalidate(aCanvas);
+    char b[48];
+    snprintf(b, sizeof b, "%d km", kZoomKm[aZoom]);
+    setText(aZoomLbl, b);
+}
+
+void aShowDetail() {
+    std::string t;
+    for (const auto& s : aView.st)
+        if (s.call == aSel) {
+            char b[160];
+            t = s.call + "\n";
+            if (s.pos) {
+                snprintf(b, sizeof b, "%.4f %c  %.4f %c\n", fabs(s.lat), s.lat >= 0 ? 'N' : 'S', fabs(s.lon), s.lon >= 0 ? 'E' : 'W');
+                t += b;
+                if (s.km >= 0) { snprintf(b, sizeof b, "%.1f km, %d\xc2\xb0\n", s.km, s.brg); t += b; }
+            } else t += "no position\n";
+            t += "heard " + ageText(s.utc) + " ago, " + std::to_string(s.heard) + "x\n";
+            if (!s.comment.empty()) t += s.comment.substr(0, 120) + "\n";
+            if (!s.path.empty()) t += "via " + s.path.substr(0, 80);
+        }
+    if (t.empty()) t = aView.st.empty() ? "No stations heard yet." : "Tap a station on the map or in the list.";
+    setText(aDetail, t);
+}
+
+void aFillLists() {
+    const App::AprsView& v = aView;
+    int n = (int)std::min<size_t>(v.st.size(), 100);
+    lv_table_set_row_count(aStaTable, (uint32_t)n + 1);
+    lv_table_set_cell_value(aStaTable, 0, 0, "Call");
+    lv_table_set_cell_value(aStaTable, 0, 1, "km");
+    lv_table_set_cell_value(aStaTable, 0, 2, "Dir");
+    lv_table_set_cell_value(aStaTable, 0, 3, "Heard");
+    lv_table_set_cell_value(aStaTable, 0, 4, "Comment");
+    for (int i = 0; i < n; i++) {
+        const auto& s = v.st[i];
+        char k[16] = "", d[8] = "";
+        if (s.km >= 0) { snprintf(k, sizeof k, "%.0f", s.km); snprintf(d, sizeof d, "%d", s.brg); }
+        lv_table_set_cell_value(aStaTable, i + 1, 0, s.call.c_str());
+        lv_table_set_cell_value(aStaTable, i + 1, 1, k);
+        lv_table_set_cell_value(aStaTable, i + 1, 2, d);
+        lv_table_set_cell_value(aStaTable, i + 1, 3, ageText(s.utc).c_str());
+        lv_table_set_cell_value(aStaTable, i + 1, 4, s.comment.substr(0, 40).c_str());
+    }
+    std::string m;
+    for (auto it = v.msgs.rbegin(); it != v.msgs.rend(); ++it) {
+        time_t t = (time_t)(it->utc / 1000);
+        struct tm tm;
+        gmtime_r(&t, &tm);
+        char b[24];
+        snprintf(b, sizeof b, "%02d:%02dZ ", tm.tm_hour, tm.tm_min);
+        m += b;
+        if (it->out) m += "to " + it->to + ": " + it->text + (it->acked ? "  [ack]" : "  [sent " + std::to_string(it->tries) + "/3]");
+        else m += it->from + ": " + it->text;
+        m += "\n";
+    }
+    setText(aMsgList, m.empty() ? "No messages yet." : m);
+}
+
+void aRefresh() {
+    if (lv_screen_active() != scrAprs) return;
+    App::AprsView st = g_app->aprsView(false);
+    char b[200];
+    snprintf(b, sizeof b, "APRS  %s  %u.%03u MHz", st.me.empty() ? "(set your callsign)" : st.me.c_str(), (unsigned)(st.freq / 1000000),
+             (unsigned)(st.freq / 1000 % 1000));
+    setText(aTitle, b);
+    std::string t = st.dcd ? "Channel busy" : "Channel clear";
+    if (st.queued) t += ", " + std::to_string(st.queued) + " to send";
+    if (!st.havePos) t += ".  No position: set a grid or GPS";
+    else if (st.nextS >= 0) { snprintf(b, sizeof b, ".  Next beacon %d:%02d", st.nextS / 60, st.nextS % 60); t += b; }
+    else t += ".  Position: " + st.src;
+    setText(aStatus, t);
+    setText(aTxLbl, st.txEn ? "TX enabled" : "Enable TX");
+    lv_obj_set_style_bg_color(aTxBtn, C(st.txEn ? 0x1f6b45 : PAN2), 0);
+    bool redraw = st.seq != aShownSeq || aZoom != aShownZoom || lv_tick_elaps(aLastDraw) > 15000;
+    if (!redraw) return;
+    aView = g_app->aprsView(true);
+    aShownSeq = aView.seq;
+    aShownZoom = aZoom;
+    aLastDraw = lv_tick_get();
+    if (aTab == 0) aDrawMap();
+    aFillLists();
+    aShowDetail();
+}
+
+void aSelectTab(int t) {
+    aTab = t;
+    matrixCheck(aTabs, 3, t);
+    for (int i = 0; i < 3; i++) {
+        if (i == t) lv_obj_remove_flag(aPane[i], LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(aPane[i], LV_OBJ_FLAG_HIDDEN);
+    }
+    for (int i = 0; i < 40; i++) if (t != 0) lv_obj_add_flag(aCallLbl[i], LV_OBJ_FLAG_HIDDEN);
+    if (t != 2) lv_obj_add_flag(aKb, LV_OBJ_FLAG_HIDDEN);
+    aShownSeq = 0xffffffff;
+}
+void onAprsTab(lv_event_t* e) {
+    uint32_t id = lv_buttonmatrix_get_selected_button((lv_obj_t*)lv_event_get_target(e));
+    if (id < 3) aSelectTab((int)id);
+}
+void onOpenAprs(lv_event_t*) {
+    aShownSeq = 0xffffffff;
+    lv_screen_load(scrAprs);
+    aSelectTab(aTab);
+    aRefresh();
+}
+void onCloseAprs(lv_event_t*) { lv_obj_add_flag(aKb, LV_OBJ_FLAG_HIDDEN); lv_screen_load(scrMain); }
+void onAprsZoom(lv_event_t* e) {
+    int d = (int)(intptr_t)lv_event_get_user_data(e);
+    aZoom = std::max(0, std::min((int)(sizeof kZoomKm / sizeof kZoomKm[0]) - 1, aZoom + d));
+    aRefresh();
+}
+void onAprsMapTap(lv_event_t* e) {
+    lv_point_t p;
+    lv_indev_get_point(lv_indev_active(), &p);
+    int x = p.x - A_MAP_X, y = p.y - A_MAP_Y, best = 30 * 30;
+    std::string pick;
+    for (const auto& d : aDots) { int dd = (d.x - x) * (d.x - x) + (d.y - y) * (d.y - y); if (dd < best) { best = dd; pick = d.call; } }
+    aSel = pick;
+    aShownSeq = 0xffffffff;
+    aRefresh();
+    (void)e;
+}
+void onAprsStaTap(lv_event_t* e) {
+    uint32_t r, c;
+    lv_table_get_selected_cell((lv_obj_t*)lv_event_get_target(e), &r, &c);
+    if (r == LV_TABLE_CELL_NONE || r == 0) return;
+    const char* call = lv_table_get_cell_value(aStaTable, r, 0);
+    if (call && *call) { aSel = call; lv_textarea_set_text(aTo, call); aShowDetail(); }
+}
+void onAprsBeacon(lv_event_t*) { if (cmd("aprsbeacon")) note("APRS: position beacon queued"); }
+void onAprsField(lv_event_t* e) {
+    lv_obj_t* ta = (lv_obj_t*)lv_event_get_target(e);
+    lv_keyboard_set_textarea(aKb, ta);
+    lv_keyboard_set_mode(aKb, ta == aTo ? LV_KEYBOARD_MODE_TEXT_UPPER : LV_KEYBOARD_MODE_TEXT_LOWER);
+    lv_obj_remove_flag(aKb, LV_OBJ_FLAG_HIDDEN);
+}
+void onAprsSend(lv_event_t*) {
+    std::string to = lv_textarea_get_text(aTo), text = lv_textarea_get_text(aText);
+    for (auto& ch : to) ch = (char)toupper((unsigned char)ch);
+    if (cmd("aprsmsg", {{"to", to}, {"text", text}})) {
+        lv_textarea_set_text(aText, "");
+        lv_obj_add_flag(aKb, LV_OBJ_FLAG_HIDDEN);
+        note("APRS: message to " + to + " queued");
+        aShownSeq = 0xffffffff;
+    }
+}
+void onAprsKb(lv_event_t* e) {
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_READY || code == LV_EVENT_CANCEL) lv_obj_add_flag(aKb, LV_OBJ_FLAG_HIDDEN);
+}
+void onAprsMsgTo(lv_event_t*) {                                   // "Message" in the detail panel
+    if (aSel.empty()) return;
+    lv_textarea_set_text(aTo, aSel.c_str());
+    aSelectTab(2);
+}
+
+void buildAprsScreen() {
+    const lv_font_t *f16 = &lv_font_montserrat_16, *f20 = &lv_font_montserrat_20;
+    scrAprs = lv_obj_create(nullptr);
+    lv_obj_set_style_bg_color(scrAprs, C(BG), 0);
+    lv_obj_set_style_bg_opa(scrAprs, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(scrAprs, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* head = box(scrAprs, 0, 0, W, 64, PAN);
+    button(head, 10, 8, 104, 48, LV_SYMBOL_LEFT " Back", onCloseAprs);
+    aTitle = label(head, 126, 6, f20, AMB, "");
+    aStatus = label(head, 126, 36, f16, DIM, "");
+    aTxBtn = button(head, 616, 8, 150, 48, "Enable TX", onTxEn, &aTxLbl);
+    button(head, 774, 8, 110, 48, "HALT TX", onHalt, nullptr, 0x7a2020);
+    lv_obj_t* lb;
+    button(head, 892, 8, 122, 48, "Beacon now", onAprsBeacon, &lb);
+    lv_obj_set_style_text_font(lb, f16, 0);
+    aTabs = matrix(scrAprs, 10, 68, 400, 40, kAprsTabs, onAprsTab);
+    lv_buttonmatrix_set_button_ctrl_all(aTabs, LV_BUTTONMATRIX_CTRL_CHECKABLE);
+    lv_buttonmatrix_set_one_checked(aTabs, true);
+
+    // map pane
+    aPane[0] = box(scrAprs, A_MAP_X, A_MAP_Y, A_MAP_W, A_MAP_H, BG);
+    aBuf = (uint16_t*)malloc((size_t)A_MAP_W * A_MAP_H * sizeof(uint16_t));
+    aCanvas = lv_canvas_create(aPane[0]);
+    if (aBuf) {
+        for (int i = 0; i < A_MAP_W * A_MAP_H; i++) aBuf[i] = 0;
+        lv_canvas_set_buffer(aCanvas, aBuf, A_MAP_W, A_MAP_H, LV_COLOR_FORMAT_RGB565);
+    }
+    lv_obj_set_pos(aCanvas, 0, 0);
+    lv_obj_add_flag(aCanvas, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(aCanvas, onAprsMapTap, LV_EVENT_CLICKED, nullptr);
+    for (int i = 0; i < 40; i++) {
+        aCallLbl[i] = label(scrAprs, 0, 0, f16, TXT, "");
+        lv_obj_add_flag(aCallLbl[i], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(aCallLbl[i], LV_OBJ_FLAG_CLICKABLE);
+    }
+    lv_obj_t* b = button(aPane[0], A_MAP_W - 62, 8, 52, 48, LV_SYMBOL_PLUS, onAprsZoom);
+    lv_obj_remove_event_cb(b, onAprsZoom);
+    lv_obj_add_event_cb(b, onAprsZoom, LV_EVENT_CLICKED, (void*)(intptr_t)-1);
+    b = button(aPane[0], A_MAP_W - 62, 62, 52, 48, LV_SYMBOL_MINUS, onAprsZoom);
+    lv_obj_remove_event_cb(b, onAprsZoom);
+    lv_obj_add_event_cb(b, onAprsZoom, LV_EVENT_CLICKED, (void*)(intptr_t)1);
+    aZoomLbl = label(aPane[0], A_MAP_W - 92, 116, f16, DIM, "");
+    label(aPane[0], 8, A_MAP_H - 24, f16, DIM, "Rings: quarters of the range. Outlines: Natural Earth.");
+
+    // stations pane
+    aPane[1] = box(scrAprs, 0, A_MAP_Y, A_MAP_W, A_MAP_H, BG);
+    aStaTable = lv_table_create(aPane[1]);
+    lv_obj_set_pos(aStaTable, 0, 0);
+    lv_obj_set_size(aStaTable, A_MAP_W, A_MAP_H);
+    lv_table_set_column_count(aStaTable, 5);
+    static const int cw[5] = {130, 62, 56, 82, A_MAP_W - 130 - 62 - 56 - 82 - 12};
+    for (int c = 0; c < 5; c++) lv_table_set_column_width(aStaTable, c, cw[c]);
+    lv_obj_set_style_bg_color(aStaTable, C(0x0b1014), 0);
+    lv_obj_set_style_border_width(aStaTable, 0, 0);
+    lv_obj_set_style_text_font(aStaTable, f16, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(aStaTable, C(TXT), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(aStaTable, C(0x0b1014), LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(aStaTable, LV_OPA_COVER, LV_PART_ITEMS);
+    lv_obj_set_style_border_width(aStaTable, 0, LV_PART_ITEMS);
+    lv_obj_set_style_pad_ver(aStaTable, 5, LV_PART_ITEMS);
+    lv_obj_set_style_pad_hor(aStaTable, 6, LV_PART_ITEMS);
+    lv_obj_add_event_cb(aStaTable, onAprsStaTap, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    // messages pane
+    aPane[2] = box(scrAprs, 0, A_MAP_Y, A_MAP_W, A_MAP_H, BG);
+    auto field = [&](int x, int w, const char* hint, int max) {
+        lv_obj_t* ta = lv_textarea_create(aPane[2]);
+        lv_obj_set_pos(ta, x, 6);
+        lv_obj_set_size(ta, w, 52);
+        lv_textarea_set_one_line(ta, true);
+        lv_textarea_set_max_length(ta, (uint32_t)max);
+        lv_textarea_set_placeholder_text(ta, hint);
+        lv_obj_set_style_text_font(ta, f20, 0);
+        lv_obj_set_style_bg_color(ta, C(0x0b1014), 0);
+        lv_obj_set_style_text_color(ta, C(TXT), 0);
+        lv_obj_set_style_border_color(ta, C(LINE), 0);
+        lv_obj_set_style_border_width(ta, 2, 0);
+        lv_obj_add_event_cb(ta, onAprsField, LV_EVENT_CLICKED, nullptr);
+        return ta;
+    };
+    aTo = field(10, 160, "To (call-SSID)", 9);
+    aText = field(178, 362, "Message (67 characters)", 67);
+    button(aPane[2], 548, 6, 102, 52, "Send", onAprsSend, nullptr, 0x1f6b45);
+    aMsgBox = lv_obj_create(aPane[2]);
+    lv_obj_remove_style_all(aMsgBox);
+    lv_obj_set_pos(aMsgBox, 10, 68);
+    lv_obj_set_size(aMsgBox, A_MAP_W - 20, A_MAP_H - 76);
+    lv_obj_set_scroll_dir(aMsgBox, LV_DIR_VER);
+    aMsgList = label(aMsgBox, 0, 0, f20, TXT, "");
+    lv_obj_set_width(aMsgList, A_MAP_W - 30);
+    lv_label_set_long_mode(aMsgList, LV_LABEL_LONG_MODE_WRAP);
+
+    // details
+    lv_obj_t* side = box(scrAprs, A_MAP_W + 8, 68, W - A_MAP_W - 16, H - 76, PAN);
+    lv_obj_set_style_radius(side, 8, 0);
+    aDetail = label(side, 12, 10, f20, TXT, "");
+    lv_obj_set_width(aDetail, W - A_MAP_W - 40);
+    lv_label_set_long_mode(aDetail, LV_LABEL_LONG_MODE_WRAP);
+    button(side, 12, H - 76 - 60, 160, 48, "Message", onAprsMsgTo);
+
+    aKb = lv_keyboard_create(scrAprs);
+    lv_obj_set_size(aKb, W, 260);
+    lv_obj_align(aKb, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_add_event_cb(aKb, onAprsKb, LV_EVENT_ALL, nullptr);
+    lv_obj_add_flag(aKb, LV_OBJ_FLAG_HIDDEN);
+    aSelectTab(0);
+}
+
 void refresh(lv_timer_t*) {
     if (g_app->cfg.bright != shownBright) {             // also when changed from the web page
         shownBright = g_app->cfg.bright;
@@ -1616,6 +2001,7 @@ void refresh(lv_timer_t*) {
     snprintf(b, sizeof b, "Log: %d " LV_SYMBOL_RIGHT, s.logN);
     setText(lLogBtn, b);
     refreshRadioScreen(s);
+    aRefresh();
     refreshLogger(s);
     refreshSettings(s);
     if (lv_screen_active() == scrLog) {
@@ -1663,7 +2049,7 @@ void refresh(lv_timer_t*) {
     static int pskShownFor = -1;
     if (psk && pskShownFor != s.mode) {
         pskShownFor = s.mode;
-        setText(lPsk, s.mode == DM_APRS ? "APRS is operated from the web page.\nSelect FT8 or FT4 below to use this screen."
+        setText(lPsk, s.mode == DM_APRS ? "APRS: tap here, or APRS below, for the APRS screen\n(map, stations, messages)."
                                         : "PSK31 is operated from the web page.\nSelect FT8 or FT4 below to use this screen.");
     }
     if (psk == lv_obj_has_flag(lPsk, LV_OBJ_FLAG_HIDDEN)) {
@@ -1983,6 +2369,8 @@ extern "C" void ui_create(void) {
     lv_obj_add_event_cb(table, onTableDraw, LV_EVENT_DRAW_TASK_ADDED, nullptr);
     lv_obj_add_flag(table, LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS);
     lPsk = label(scr, 40, MAIN_Y + 60, f20, DIM, "PSK31 is operated from the web page.\nSelect FT8 or FT4 below to use this screen.");
+    lv_obj_add_flag(lPsk, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(lPsk, [](lv_event_t* e) { if (g_app && g_app->mode() == DM_APRS) onOpenAprs(e); }, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_flag(lPsk, LV_OBJ_FLAG_HIDDEN);
 
     // control panel
@@ -2012,15 +2400,16 @@ extern "C" void ui_create(void) {
 
     // bottom bar: mode and band
     lv_obj_t* bot = box(scr, 0, H - BOT_H, W, BOT_H, PAN);
-    mxMode = matrix(bot, 10, 8, 236, BOT_H - 16, kModeMap, onMode);
+    mxMode = matrix(bot, 10, 8, 296, BOT_H - 16, kModeMap, onMode);
     for (int i = 0; i < kNumBands; i++) kBandMap[i] = kBands[i].name;
     kBandMap[kNumBands] = "";
-    mxBand = matrix(bot, 258, 8, W - 258 - 10, BOT_H - 16, kBandMap, onBand);
+    mxBand = matrix(bot, 316, 8, W - 316 - 10, BOT_H - 16, kBandMap, onBand);
 
     buildLogScreen();
     buildLogEditScreen();
     buildRadioScreen();
     buildLoggerScreen();
+    buildAprsScreen();
     buildSettingsScreen();
     lv_timer_create(refresh, 200, nullptr);
     lv_timer_create(refreshWaterfall, 125, nullptr);

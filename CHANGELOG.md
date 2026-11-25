@@ -1,6 +1,12 @@
 # Changes
 
 ## 1.1.4-beta
+- **APRS on the touch screen:** APRS is now on the mode row. It opens an APRS screen with a map of the stations
+  heard (country, state/province and Great Lakes outlines from Natural Earth, built in; range 25-1600 km), a
+  station list, messages with an on-screen keyboard, station details, Enable TX / HALT TX / Beacon now.
+- APRS packets heard and sent are written to the microSD card, one file a day: RigDeck/aprs_YYYYMMDD.txt.
+- APRS: pressing Beacon now again replaces the waiting position report instead of queueing another; a message's
+  30-second retry wait starts when it has actually gone out.
 - QMX / QMX+: RigDeck asks the radio for its firmware version (CAT VN;), shows it next to the model on the web
   page and writes it to the console log ("radio firmware: QMX 1_04_003").
 - Settings, Device (touch screen and web page) lists the RigDeck version, the Wi-Fi chip firmware, the radio and

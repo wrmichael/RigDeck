@@ -12,6 +12,7 @@ port with one cable and it:
 
 - works **FT8 / FT4** contacts on its own (Auto CQ, Auto hunt) or by hand, with a live waterfall;
 - runs **FT-CW**, FT8-style automatic contacts sent as high-speed Morse, and **PSK31**;
+- runs **APRS** on 2 m FM: stations heard on a built-in map, messages and position beacons;
 - logs **SSB / CW** contacts by hand, with CW macros sent through the radio's keyer;
 - acts as a **control head**: band, frequency, mode, filters, levels and DSP from the touch screen;
 - keeps an **ADIF log** on the board (current log + archive, downloadable), and can send each contact to
@@ -67,7 +68,7 @@ On this board the firmware also drives the 7 inch display, so no phone is needed
 - Enable TX / HALT TX, Manual / Auto CQ / Auto hunt (answer CQs), CQ, Tune, Clear, TX slot.
 - **Log: N** button: opens the logbook screen with the current log's contacts, the current and
   archive counts and **Clear current log** (asks first).
-- Bottom row: FT8/FT4 and band buttons.
+- Bottom row: FT8/FT4/CW/APRS and band buttons. APRS opens its own screen: map, station list, messages.
 
 PSK31 and the log downloads are on the web page only; Settings are on both.
 Touching the screen counts as "operator present" for the TX watchdog, the same as a click on the web page.

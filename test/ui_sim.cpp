@@ -5,6 +5,8 @@
 // It also taps the screen through a scripted pointer to check that the controls reach the app.
 //   sh test/ui_sim.sh   (needs an LVGL 9.5 checkout; see the script)
 #include "app.h"
+#include "aprs.h"
+#include <algorithm>
 #include "clock.h"
 #include "../main/ui.h"
 #include "lvgl.h"
@@ -121,6 +123,8 @@ static void savePpm(const char* path) {
     printf("wrote %s\n", path);
 }
 
+#define A_TAP_MAP_X 100
+#define A_TAP_MAP_Y 500
 #ifndef CONFIRM_X
 #define CONFIRM_X 640
 #define CONFIRM_Y 350
@@ -129,6 +133,8 @@ static App app;
 static FakeRadio radio;
 static BandSim band;
 static bool answerMe = false;
+static std::vector<int16_t> aprsPcm;                 // APRS packets mixed into the received audio
+static size_t aprsPos = 0;
 
 static void step() {                                  // 20 ms of simulated time
     simMs += 20;
@@ -141,7 +147,8 @@ static void step() {                                  // 20 ms of simulated time
     if (app.txActive()) app.txAudio48k(buf, 960);
     else {
         for (int i = 0; i < 960; i++) buf[i] = (int16_t)nd(rng);
-        band.fill(buf, 960, utc);
+        if (aprsPcm.empty()) band.fill(buf, 960, utc);   // FM channel for APRS: no FT8 signals
+        for (int i = 0; i < 960 && aprsPos < aprsPcm.size(); i++) buf[i] = (int16_t)std::max(-32000, std::min(32000, buf[i] + aprsPcm[aprsPos++]));
         app.rxAudio48k(buf, 960);
     }
     app.decodeOnce();
@@ -200,10 +207,10 @@ int main() {
     CHECK(state().find("\"decId\":0,") == std::string::npos);       // something was decoded
 
     // Bottom bar: tap the 40 m band button -> radio retunes.
-    tap(478, 568);
+    tap(520, 568);
     run(1);
     CHECK(radio.freq == 7074000);
-    tap(604, 568);                                    // back to 20 m
+    tap(636, 568);                                    // back to 20 m
     run(1);
     CHECK(radio.freq == 14074000);
 
@@ -335,7 +342,7 @@ int main() {
     CHECK(radio.freq == 14200000);
     tap(70, 36);                                      // Back
     run(0.5);
-    tap(604, 568);                                    // 20 m on the operating screen: back to USB-D on the FT8 frequency
+    tap(636, 568);                                    // 20 m on the operating screen: back to USB-D on the FT8 frequency
     run(1.5);
     CHECK(radio.freq == 14074000 && radio.mode == 1 && radio.dataMode == 1);
     tap(10 + 78 * 2 + 39, 568);                       // CW mode button
@@ -470,6 +477,51 @@ int main() {
     savePpm("test/out/ui/24_settings_station.ppm");
     tap(60, 32);
     run(0.3);
+    // APRS on the touch screen: mode button opens the APRS screen; heard stations appear on the map and in the list.
+    tap(10 + 74 * 3 + 37, 568);                       // APRS mode button
+    run(1);
+    CHECK(state().find("\"mode\":\"APRS\"") != std::string::npos);
+    {
+        using namespace aprs;
+        struct P { const char* call; double lat, lon; char sym; const char* cmt; };
+        const P ps[] = {{"W9ICE-10", 39.95, -86.95, '#', "W2 digi"}, {"W9RCA-10", 40.19, -85.39, '#', "Muncie digi"},
+                        {"KD9LOR-1", 39.61, -86.10, '>', "mobile"}, {"N9XYZ-9", 39.17, -86.53, '>', "Bloomington"},
+                        {"KC9ABC", 40.42, -86.91, '-', "home"}, {"W9TE-11", 39.47, -87.41, '_', "WX Terre Haute"}};
+        std::vector<std::vector<uint8_t>> frames;
+        for (const P& q : ps) {
+            Frame f; f.src = q.call; f.dst = "APRS"; f.path = {"WIDE1-1"};
+            f.info = encodePosition(q.lat, q.lon, q.sym == '#' ? 'S' : '/', q.sym, q.cmt, false);
+            frames.push_back(encodeFrame(f));
+        }
+        Frame m; m.src = "KD9LOR-1"; m.dst = "APRS"; m.path = {"WIDE1-1"}; m.info = encodeMessage("AC9HP", "Testing the new map", "4");
+        frames.push_back(encodeFrame(m));
+        for (auto& fr : frames) {
+            AfskMod mod;
+            mod.start({fr}, 48000, 300);
+            while (!mod.done()) aprsPcm.push_back((int16_t)(9000 * mod.next()));
+            for (int i = 0; i < 9600; i++) aprsPcm.push_back(0);
+        }
+    }
+    run(8);
+    CHECK(app.aprsView(true).st.size() >= 5);
+    tap(269, 568);                                    // APRS again: opens the screen if it is not already shown
+    run(1);
+    savePpm("test/out/ui/30_aprs_map.ppm");
+    tap(A_TAP_MAP_X, A_TAP_MAP_Y);                    // nothing selected yet: tap on empty map is fine
+    tap(10 + 400 / 6 * 3, 88);                        // Stations tab
+    run(1);
+    savePpm("test/out/ui/31_aprs_stations.ppm");
+    tap(10 + 400 / 6 * 5, 88);                        // Messages tab
+    run(1);
+    savePpm("test/out/ui/32_aprs_messages.ppm");
+    CHECK(app.aprsView(true).msgs.size() >= 1);
+    tap(10 + 400 / 6, 88);                            // Map tab
+    tap(660 - 36, 112 + 86);                          // zoom out
+    run(1);
+    savePpm("test/out/ui/33_aprs_zoom.ppm");
+    tap(60, 32);                                      // Back
+    run(0.5);
+
     printf(fails ? "ui_sim: %d of %d FAILED\n" : "ui_sim: all %d checks passed\n", fails ? fails : checks, checks);
     return fails ? 1 : 0;
 }

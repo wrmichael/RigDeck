@@ -125,6 +125,15 @@ public:
     std::string otaUpd_;
     void (*logFn)(const char* line) = nullptr;      // platform log (serial monitor on the ESP32)
     void logLine(const std::string& s);
+    // APRS for the touch screen: stations (newest first), messages, own position and channel state.
+    struct AprsStaView { std::string call, comment, path; double lat = 0, lon = 0, km = -1; bool pos = false; char table = '/', sym = ' '; int64_t utc = 0; int heard = 0, brg = 0; };
+    struct AprsMsgView { int64_t utc = 0; std::string from, to, text; bool out = false, acked = false; int tries = 0; };
+    struct AprsView {
+        std::string me, src; bool havePos = false; double lat = 0, lon = 0;
+        bool dcd = false, txEn = false; int queued = 0, nextS = -1; uint32_t freq = 0, seq = 0;
+        std::vector<AprsStaView> st; std::vector<AprsMsgView> msgs;
+    };
+    AprsView aprsView(bool withLists);
     // A device on the USB port that does not start: shown on the screen and the web page until a radio connects.
     void usbProblem(const std::string& s) { std::lock_guard<std::mutex> lk(usbProbMtx_); usbProb_ = s; }
     std::string usbProblemText() { std::lock_guard<std::mutex> lk(usbProbMtx_); if (usbSerial) usbProb_.clear(); return usbProb_; }
@@ -218,6 +227,8 @@ private:
     std::vector<std::string> aprsOut_;                 // info fields waiting to go out
     int64_t aprsNextBeacon_ = 0, aprsClearSince_ = 0, aprsLastTx_ = 0;
     int aprsMsgId_ = 0;
+    uint32_t aprsSeq_ = 0;                          // changes when stations or messages change (touch screen redraws)
+    void aprsFileLog(const char* dir, const std::string& tnc2);   // RigDeck/aprs_YYYYMMDD.txt
     bool aprsTuneReq_ = false, aprsWasEnabled_ = false;
     std::string aprsMyCall() const;
     bool aprsMyPos(double& lat, double& lon, std::string& src) const;
