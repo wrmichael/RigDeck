@@ -2,7 +2,9 @@
 #
 # Run it from the ESP-IDF PowerShell (start.bat) in the RigDeck folder:
 #     .\release.ps1
-# Change version.txt first for a new version number.
+# Change version.txt first for a new version number. Beta builds end in "-beta" (e.g. 1.1.1-beta): they copy the
+# console log to the microSD card unless the user turned that off. Stable builds use the plain number (1.1.1),
+# where the console log is off unless the user turned it on.
 #
 # It writes:
 #   build\rigdeck-<version>.bin      complete image for address 0x0 (attach this to a GitHub release)

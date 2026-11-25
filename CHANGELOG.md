@@ -1,5 +1,11 @@
 # Changes
 
+## 1.1.1-beta
+- The console log now notes APRS packets heard and sent, beacons, messages and acks, mode changes, the CW
+  trainer's radio sidetone (break-in asked off, confirmed, set back) and when a page starts listening.
+- Copying the console log to the microSD card is now on by default in Beta versions (their version ends in
+  "-beta") and off by default in Stable versions. A choice made in Settings, Device is kept either way.
+
 ## 1.1.0 (Beta)
 - **CH340 / CH341 USB-serial** (VID 1A86): CAT for the FX-4CR (set it to TS-590S, 115200) and CH340 CAT or
   CI-V cables; 115200 is now among the CAT rates tried. Untested on hardware.

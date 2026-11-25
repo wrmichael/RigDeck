@@ -409,7 +409,7 @@ table.imp th{color:var(--dim);font-weight:500}
     <div class="row" style="margin-top:8px"><button id="eraseall" class="danger">Erase all contact logs (every station)</button> <button id="sdformat" class="danger">Format microSD card</button></div>
     <p class="hint">With a microSD card (FAT32) in at start-up the logs live on the card, in the RigDeck folder, one set of files per station callsign (e.g. AC9HP_log.adi, AC9HP_archive.adi). Contacts logged in the board's memory move onto the card at that start. On the card, deleted contacts are kept for good in AC9HP_deleted.adi and a cleared current log is kept as AC9HP_deleted_<i>date</i>_<i>time</i>.adi. Insert or remove the card with the power off.</p>
     <h4 style="margin:14px 0 4px">Console logs (for troubleshooting)</h4>
-    <label><input type="checkbox" id="dvConsole"> Copy the console log to the microSD card (RigDeck/logs/console_<i>date</i>_<i>time</i>.txt, a new file each start and each day, kept 7 days)</label>
+    <label><input type="checkbox" id="dvConsole"> Copy the console log to the microSD card (RigDeck/logs/console_<i>date</i>_<i>time</i>.txt, a new file each start and each day, kept 7 days). Unless you change it, this is on in Beta versions and off in Stable ones.</label>
     <div id="dvLogs" class="hint"></div>
     <h4 style="margin:14px 0 4px">Settings file</h4>
     <div class="row"><button type="button" id="setExp">Export settings</button><label class="btnlike"><input type="file" id="setImp" accept=".txt,text/plain" style="display:none"><span role="button" tabindex="0" id="setImpB">Import settings…</span></label></div>
@@ -561,7 +561,7 @@ function render(){
     cfgLoaded=true;
     for(const k in S.cfg){const e=$("s_"+k);if(e) e.value=k==="civAddr"?"0x"+(+S.cfg[k]).toString(16).toUpperCase():k==="aprsFreq"?(+S.cfg[k]/1e6).toFixed(3):S.cfg[k];}
     for(const [id,key] of [["dvBright","bright"],["dvContrast","contrast"]]) if(S.cfg[key]!==undefined){$(id).value=S.cfg[key];$(id+"V").textContent=S.cfg[key]+" %";}
-    if(S.cfg.consoleLog!==undefined) $("dvConsole").checked=!!+S.cfg.consoleLog;
+    if(S.conlog!==undefined) $("dvConsole").checked=!!S.conlog; else if(S.cfg.consoleLog!==undefined) $("dvConsole").checked=+S.cfg.consoleLog>0;
     rigName=S.cfg.rigName||"";
     dnwSet(S.cfg.dnw);renderPrio();
     $("rigname").textContent=rigName;$("rigname").hidden=!rigName;$("rigname").title=rigName;

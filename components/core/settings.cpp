@@ -112,7 +112,7 @@ bool Settings::set(const std::string& k, const std::string& v) {
     if (k == "gpsPpsPin") return toInt(v, -1, 54, gpsPpsPin);
     if (k == "bright") return toInt(v, 5, 100, bright);
     if (k == "contrast") return toInt(v, 50, 150, contrast);
-    if (k == "consoleLog") return toInt(v, 0, 1, consoleLog);
+    if (k == "consoleLog") return toInt(v, -1, 1, consoleLog);
     if (k == "confirmQso") return toInt(v, 0, 1, confirmQso);
     if (k == "deadman") return toInt(v, 0, 1, deadman);
     if (k == "dnw") {                                   // calls, or prefixes ending in *, at most 100 and 600 characters

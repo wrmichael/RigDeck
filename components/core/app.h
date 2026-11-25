@@ -118,9 +118,13 @@ public:
     std::atomic<bool> usbSerial{false}, usbAudio{false};
     std::atomic<bool> rebootReq{false};
     std::atomic<bool> ntpSynced{false};
-    std::string fwVersion = "dev";
+    std::string fwVersion = "dev";                  // set by the platform (version.txt on the ESP32)
+    // Beta builds carry "-beta" in their version (version.txt); Stable builds a plain number.
+    bool betaBuild() const { return fwVersion.find("beta") != std::string::npos || fwVersion == "dev"; }
+    bool consoleLogOn() const { return cfg.consoleLog < 0 ? betaBuild() : cfg.consoleLog != 0; }
     std::string otaUpd_;
-    void (*logFn)(const char* line) = nullptr;      // platform log (serial monitor on the ESP32)                  // set by the platform (version.txt on the ESP32)
+    void (*logFn)(const char* line) = nullptr;      // platform log (serial monitor on the ESP32)
+    void logLine(const std::string& s);
     bool (*haveRam)(size_t bytes) = nullptr;         // platform check before the big decoder allocations
     std::atomic<bool> memFail{false};
     // Storage: the platform reports size and use of the internal store (sd=false) or the card.

@@ -572,6 +572,7 @@ void App::syncSeq() {
 }
 
 void App::status(const std::string& s) { status_ = s; }
+void App::logLine(const std::string& s) { if (logFn) logFn(s.c_str()); }
 
 void App::setNetInfo(const std::string& s) {
     std::lock_guard<std::mutex> lk(mtx_);
@@ -658,6 +659,7 @@ void App::audioKeep(const float* s, size_t n) {
 }
 
 uint32_t App::audioRead(uint32_t from, std::vector<uint8_t>& out, size_t maxBytes) {
+    if (audUntil_.load() < clk::monoMs() && logFn) logFn("Listen: a web page started listening");
     audUntil_ = clk::monoMs() + 3000;
     std::lock_guard<std::mutex> lk(audMtx_);
     out.clear();
@@ -1101,6 +1103,7 @@ void App::aprsRx(const float* s, size_t n) {
 void App::aprsHandle(const aprs::Frame& f) {                      // mtx_ held
     int64_t now = clk::utcMs();
     aprsRaw_.push_back({now, aprs::tnc2(f).substr(0, 200)});
+    logLine("APRS heard: " + aprs::tnc2(f).substr(0, 160));
     while (aprsRaw_.size() > 30) aprsRaw_.pop_front();
     std::string me = aprsMyCall();
     if (f.src == me) return;                                       // our own packet, digipeated back
@@ -1119,6 +1122,7 @@ void App::aprsHandle(const aprs::Frame& f) {                      // mtx_ held
     if (aprs::parseMessage(f.info, m) && m.to == me) {
         if (m.isAck || m.isRej) {
             for (auto& o : aprsMsgs_) if (o.out && o.to == f.src && o.id == m.id) { o.acked = !m.isRej; o.tries = 99; }
+            logLine("APRS " + std::string(m.isRej ? "reject" : "ack") + " from " + f.src + " for message " + m.id);
             return;
         }
         bool dup = false;
@@ -1129,6 +1133,7 @@ void App::aprsHandle(const aprs::Frame& f) {                      // mtx_ held
             aprsMsgs_.push_back(in);
             while (aprsMsgs_.size() > 40) aprsMsgs_.pop_front();
             status("APRS message from " + f.src + ": " + m.text);
+            logLine("APRS message from " + f.src + ": " + m.text.substr(0, 80) + (m.id.empty() ? "" : " (id " + m.id + ")"));
         }
         if (!m.id.empty()) aprsOut_.push_back(aprs::encodeAck(f.src, m.id));   // ack every copy, as the spec asks
     }
@@ -1150,8 +1155,10 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
     if (seq.txEnabled && cfg.aprsBeaconMin > 0 && aprsNextBeacon_ && mono >= aprsNextBeacon_) {
         double la, lo;
         std::string src;
-        if (aprs::validCallSsid(aprsMyCall()) && aprsMyPos(la, lo, src))
+        if (aprs::validCallSsid(aprsMyCall()) && aprsMyPos(la, lo, src)) {
             aprsOut_.push_back(aprs::encodePosition(la, lo, cfg.aprsSym[0], cfg.aprsSym[1], cfg.aprsComment, true));
+            logLine("APRS beacon queued, position from " + src);
+        } else logLine(aprs::validCallSsid(aprsMyCall()) ? "APRS beacon skipped: no position (Settings, APRS)" : "APRS beacon skipped: callsign-SSID not valid");
         aprsNextBeacon_ = mono + (int64_t)cfg.aprsBeaconMin * 60000;
     }
     // Outgoing messages: up to 3 sends, 30 s apart, until acknowledged.
@@ -1159,6 +1166,7 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
         if (m.out && !m.acked && m.tries < 3 && mono >= m.nextMono) {
             aprsOut_.push_back(aprs::encodeMessage(m.to, m.text, m.id));
             m.tries++;
+            logLine("APRS message to " + m.to + " queued, try " + std::to_string(m.tries) + " of 3");
             m.nextMono = mono + 30000;
         }
     // Send when the channel has been clear for a moment (a random wait, so stations do not collide).
@@ -1174,6 +1182,7 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
         f.src = aprsMyCall(); f.dst = "APZRDK"; f.path = path; f.info = aprsOut_[i];
         frames.push_back(aprs::encodeFrame(f));
         aprsRaw_.push_back({clk::utcMs(), "TX " + aprs::tnc2(f).substr(0, 200)});
+        logLine("APRS sent: " + aprs::tnc2(f).substr(0, 160));
     }
     while (aprsRaw_.size() > 30) aprsRaw_.pop_front();
     aprsOut_.erase(aprsOut_.begin(), aprsOut_.begin() + (long)frames.size());
@@ -1464,6 +1473,7 @@ void App::netLoop() {
 void App::setMode(int m) {
     if (m < 0 || m > DM_APRS || m == mode_) return;
     if (m == DM_APRS) { aprsTuneReq_ = true; aprsNextBeacon_ = 0; }
+    logLine(std::string("mode ") + modeName(mode_) + " -> " + modeName(m) + (m == DM_APRS ? ", radio to FM-D " + std::to_string(cfg.aprsFreq) + " Hz" : ""));
     if (txState_ == ST_TX) haltReq_ = true;
     seq.txEnabled = false;
     seq.clearQso();
@@ -1773,6 +1783,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         bool on = arg(a, "on") == "1";
         if (!on) {
             if (trainBk_ > 0 && radio.connected()) radio.setBreakIn(trainBk_);   // put back what the radio had
+            logLine("CW trainer: radio released" + std::string(trainBk_ > 0 ? ", break-in set back to " + std::to_string(trainBk_) : ""));
             trainBk_ = -1;
             status("CW trainer: radio released");
             return ok();
@@ -1785,18 +1796,23 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         seq.txEnabled = false;
         if (trainBk_ < 0) trainBk_ = radio.breakIn();
         radio.setBreakIn(0);
+        logLine("CW trainer: radio sidetone on " + std::string(radio.modelName()) + ", break-in was " + std::to_string(trainBk_) + ", asked for off");
         status("CW trainer: break-in off, the keyer only makes sidetone");
         return ok();
     }
     if (c == "cwtrainsend") {
         if (!radio.connected()) return err("Radio not connected");
         if (txState_ == ST_TX || seq.txEnabled) return err("Transmit is enabled: the trainer does not use the radio while it is");
-        if (radio.breakIn() != 0) return err("The radio has not confirmed break-in off yet");
+        if (radio.breakIn() != 0) {
+            logLine("CW trainer: not sent, the radio reports break-in " + std::to_string(radio.breakIn()));
+            return err("The radio has not confirmed break-in off yet");
+        }
         int rm = radio.mode.load();
         if (rm != 3 && rm != 7) return err("Put the radio in CW mode first");
         std::string text = arg(a, "text");
         if (upperTrim(text).empty()) return err("nothing to send");
         radio.sendCwPractice(text);
+        logLine("CW trainer: keyer sends \"" + upperTrim(text).substr(0, 60) + "\" with break-in off");
         return ok();
     }
     if (c == "cwspeed") {
@@ -2225,7 +2241,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
         first = false;
     }
     o += "]}";
-    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) +
+    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) + ",\"conlog\":" + jbool(consoleLogOn()) +
          ",\"sta\":{\"state\":" + jstr(sta_.state) + ",\"ssid\":" + jstr(sta_.ssid) + ",\"ip\":" + jstr(sta_.ip) +
          ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}" +
          ",\"inet\":" + jnum(cfg.deadman ? inet_.load() : -2) +

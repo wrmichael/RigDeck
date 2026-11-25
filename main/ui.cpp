@@ -1297,7 +1297,7 @@ void onOpenSettings(lv_event_t*) {
     lv_slider_set_value(sBright, g_app->cfg.bright, LV_ANIM_OFF);
     setText(sBrightL, std::to_string(g_app->cfg.bright) + " %");
     lv_slider_set_value(sContrast, g_app->cfg.contrast, LV_ANIM_OFF);
-    if (g_app->cfg.consoleLog) lv_obj_add_state(sConsole, LV_STATE_CHECKED); else lv_obj_remove_state(sConsole, LV_STATE_CHECKED);
+    if (g_app->consoleLogOn()) lv_obj_add_state(sConsole, LV_STATE_CHECKED); else lv_obj_remove_state(sConsole, LV_STATE_CHECKED);
     setText(sContrastL, std::to_string(g_app->cfg.contrast) + " %");
     settingsKbHide();
     lv_screen_load(scrSettings);

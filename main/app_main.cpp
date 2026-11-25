@@ -122,7 +122,7 @@ static void controlTask(void*) {
         s_app.tick();
         lowPointTrace(monoMs());
 #if CONFIG_IDF_TARGET_ESP32P4
-        sdlog_enable(s_app.cfg.consoleLog != 0);
+        sdlog_enable(s_app.consoleLogOn());
 #endif
         int64_t now = monoMs();
         if (now - lastMem >= 60000) {                  // memory once a minute: a leak shows as a falling "internal" figure

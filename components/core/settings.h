@@ -76,7 +76,8 @@ struct Settings {
     int levelFor(const std::string& radio) const;          // -1 = none remembered
     void rememberLevel(const std::string& radio, int lvl);                // manual TX level per radio, "IC-7100:8;No CAT:45" (kept by RigDeck)
     std::string deadmanHost = "1.1.1.1:53";   // what is checked for "internet" (host or IP, optional :port, TCP)                  // POTA mode: Auto CQ / hunt wait for "Next QSO" after each QSO
-    int consoleLog = 1;                  // 1 = copy the console log to the microSD card (RigDeck/logs)
+    int consoleLog = -1;                 // copy the console log to the microSD card (RigDeck/logs): 1 on, 0 off,
+                                         // -1 = the build's default (on in Beta builds, off in Stable ones)
 
     bool set(const std::string& key, const std::string& value);   // false = unknown key / bad value
     std::string serialize(bool includeSecrets) const;             // key=value lines
