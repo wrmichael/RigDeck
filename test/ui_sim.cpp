@@ -184,7 +184,7 @@ int main() {
     app.usbSerial = true;
     app.usbAudio = true;
     app.setNetInfo("AP \"RigDeck\" 192.168.4.1");
-    app.command("set", {{"call", "AC9HP"}, {"grid", "EM69"}});
+    app.command("set", {{"call", "AC9HP"}, {"grid", "EM69"}, {"rigName", "Shack"}});
     clk::setUtcMs(T0 + 1000, "browser");
 
     lv_init();
@@ -532,6 +532,17 @@ int main() {
         savePpm("test/out/ui/34_aprs_detail.ppm");
         ui_set_map(nullptr, 0);                       // removed again: built-in outlines
         run(0.5);
+    }
+    {                                                 // "Get detailed map" on the screen: the board's own download
+        static int fetches = 0;
+        ui_map_fetch_fn = [] { fetches++; return true; };
+        ui_map_status_fn = [] { return std::string(fetches ? "Map: downloading 42 %" : ""); };
+        tap(921, 556);
+        run(0.5);
+        CHECK(fetches == 1);
+        savePpm("test/out/ui/35_aprs_getmap.ppm");
+        ui_map_fetch_fn = nullptr;
+        ui_map_status_fn = nullptr;
     }
     tap(60, 32);                                      // Back
     run(0.5);

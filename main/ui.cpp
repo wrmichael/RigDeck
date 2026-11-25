@@ -61,7 +61,7 @@ const char* kOpMap[] = {"Manual", "Auto CQ", "Auto hunt", ""};   // hunt = answe
 
 // widgets
 lv_obj_t *bCq, *lCq;
-lv_obj_t *lFreq, *lSub, *barS, *lS, *barLvl, *lLvl, *lDot[4], *lClock, *lCall, *barSlot, *canvas, *marker, *lTx, *lStatus;
+lv_obj_t *lRig, *lFreq, *lSub, *barS, *lS, *barLvl, *lLvl, *lDot[4], *lClock, *lCall, *barSlot, *canvas, *marker, *lTx, *lStatus;
 lv_obj_t *table, *bTxEn, *lTxEn, *bTune, *lTune, *mxOp, *mxMode, *mxBand, *lQso, *lMeters, *bPar, *lPar, *lLogBtn, *lPsk;
 lv_obj_t *scrMain, *scrLog, *scrLogger, *logTable, *lLogCounts, *lLogInfo;        // second screen: logbook
 void onOpenRadio(lv_event_t*);
@@ -1530,7 +1530,7 @@ void rebuildTable() {
 int shownBright = -1;
 
 // ---- APRS screen: map of heard stations (outlines from Natural Earth, built in), station list, messages ----
-lv_obj_t *aMapNote = nullptr, *scrAprs, *aCanvas, *aTabs, *aStaTable, *aMsgBox, *aMsgList, *aTo, *aText, *aKb, *aDetail, *aStatus, *aTitle, *aTxLbl, *aTxBtn, *aZoomLbl;
+lv_obj_t *aMapNote = nullptr, *aMapBtnLbl = nullptr, *scrAprs, *aCanvas, *aTabs, *aStaTable, *aMsgBox, *aMsgList, *aTo, *aText, *aKb, *aDetail, *aStatus, *aTitle, *aTxLbl, *aTxBtn, *aZoomLbl;
 lv_obj_t* aPane[3];
 lv_obj_t* aCallLbl[40];
 uint16_t* aBuf = nullptr;
@@ -1724,10 +1724,16 @@ void aRefresh() {
         }
     }
     if (lv_screen_active() != scrAprs) return;
+    {
+        std::string ms = ui_map_status_fn ? ui_map_status_fn() : std::string();
+        setText(aMapNote, !ms.empty() ? ms : aMapExt ? "Rings: quarters of the range. Detailed map: Natural Earth 1:10m."
+                                                    : "Rings: quarters of the range. Outlines: Natural Earth.");
+        setText(aMapBtnLbl, aMapExt ? "Update map" : "Get detailed map");
+    }
     App::AprsView st = g_app->aprsView(false);
     char b[200];
-    snprintf(b, sizeof b, "APRS  %s  %u.%03u MHz", st.me.empty() ? "(set your callsign)" : st.me.c_str(), (unsigned)(st.freq / 1000000),
-             (unsigned)(st.freq / 1000 % 1000));
+    snprintf(b, sizeof b, "APRS  %s  %u.%03u MHz%s%s", st.me.empty() ? "(set your callsign)" : st.me.c_str(), (unsigned)(st.freq / 1000000),
+             (unsigned)(st.freq / 1000 % 1000), g_app->cfg.rigName.empty() ? "" : "   ", g_app->cfg.rigName.c_str());
     setText(aTitle, b);
     std::string t = st.dcd ? "Channel busy" : "Channel clear";
     if (st.queued) t += ", " + std::to_string(st.queued) + " to send";
@@ -1813,6 +1819,11 @@ void onAprsSend(lv_event_t*) {
 void onAprsKb(lv_event_t* e) {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_READY || code == LV_EVENT_CANCEL) lv_obj_add_flag(aKb, LV_OBJ_FLAG_HIDDEN);
+}
+void onAprsGetMap(lv_event_t*) {                 // the board downloads the detailed map from the RigDeck site
+    if (!ui_map_fetch_fn) { note("Get the detailed map on the web page: Settings, APRS"); return; }
+    ui_map_fetch_fn();
+    aRefresh();
 }
 void onAprsMsgTo(lv_event_t*) {                                   // "Message" in the detail panel
     if (aSel.empty()) return;
@@ -1918,7 +1929,10 @@ void buildAprsScreen() {
     aDetail = label(side, 12, 10, f20, TXT, "");
     lv_obj_set_width(aDetail, W - A_MAP_W - 40);
     lv_label_set_long_mode(aDetail, LV_LABEL_LONG_MODE_WRAP);
-    button(side, 12, H - 76 - 60, 160, 48, "Message", onAprsMsgTo);
+    button(side, 12, H - 76 - 60, 150, 48, "Message", onAprsMsgTo);
+    lv_obj_t* mb = button(side, 170, H - 76 - 60, W - A_MAP_W - 16 - 182, 48, "Get detailed map", onAprsGetMap, &aMapBtnLbl);
+    lv_obj_set_style_text_font(aMapBtnLbl, f16, 0);
+    (void)mb;
 
     aKb = lv_keyboard_create(scrAprs);
     lv_obj_set_size(aKb, W, 260);
@@ -1957,8 +1971,21 @@ void refresh(lv_timer_t*) {
     } else setText(lFreq, "--.---.---");
     static const char* modeNames[] = {"FT8", "FT4", "PSK31", "FT-CW", "APRS"};
     snprintf(b, sizeof b, "%s  %s  %s\n%s", s.band.empty() ? "--" : s.band.c_str(), s.rmode == 1 ? (s.data == 1 ? "USB-D" : "USB") : "",
-             modeNames[s.mode < 0 || s.mode > 4 ? 0 : s.mode], s.model == "No CAT" ? "No CAT: tap the frequency" : s.model.c_str());
+             modeNames[s.mode < 0 || s.mode > 4 ? 0 : s.mode], s.model == "No CAT" ? (s.rigName.empty() ? "No CAT: tap the frequency" : "No CAT") : s.model.c_str());
     setText(lSub, b);
+    {                                                   // the RigDeck name in gold after the model: which unit this is
+        static std::string shownRig = "\x01", shownModel;
+        std::string model = s.model == "No CAT" ? (s.rigName.empty() ? "No CAT: tap the frequency" : "No CAT") : s.model;
+        if (s.rigName != shownRig || model != shownModel) {
+            shownRig = s.rigName; shownModel = model;
+            lv_point_t sz;
+            lv_text_get_size(&sz, model.c_str(), &lv_font_montserrat_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+            int x = 262 + sz.x + (model.empty() ? 0 : 12);
+            lv_obj_set_x(lRig, x);
+            lv_obj_set_width(lRig, std::max(0, 432 - x));
+            setText(lRig, s.rigName);
+        }
+    }
     bool tx = s.txOn || s.ptt;
     if (tx) {
         int po = std::min(100, s.po * 100 / 213);
@@ -2120,6 +2147,9 @@ void buildLut() {                                    // black, blue, cyan, yello
 }
 
 }  // namespace
+
+bool (*ui_map_fetch_fn)() = nullptr;
+std::string (*ui_map_status_fn)() = nullptr;
 
 void ui_set_map(uint8_t* data, size_t len) {
     std::lock_guard<std::mutex> lk(aMapMtx);
@@ -2343,6 +2373,8 @@ extern "C" void ui_create(void) {
     lv_obj_align(lClock, LV_ALIGN_TOP_RIGHT, -14, 3);
     lCall = label(head, 0, 0, f16, DIM);
     lv_obj_align(lCall, LV_ALIGN_BOTTOM_RIGHT, -14, -4);
+    lRig = label(head, 262, 32, f16, AMB, "");          // RigDeck name (Settings), in gold after the radio model
+    lv_label_set_long_mode(lRig, LV_LABEL_LONG_MODE_CLIP);
     lv_obj_t* lGear;
     button(head, 848, 8, 46, 46, LV_SYMBOL_SETTINGS, onOpenSettings, &lGear);
     lv_obj_center(lGear);

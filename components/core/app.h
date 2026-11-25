@@ -74,6 +74,7 @@ public:
     // --- on-device display --------------------------------------------------------------------
     // Reading state does not count as "an operator is present"; command() does (TX watchdog).
     struct UiState {
+        std::string rigName;                         // "RigDeck name" (Settings), shown on the screen
         int64_t utc = 0;
         bool clkOk = false, ser = false, aud = false, civ = false, ptt = false;
         bool txEn = false, txOn = false, tune = false, wd = false;

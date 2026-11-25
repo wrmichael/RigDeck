@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <functional>
+#include <cctype>
 #include <sys/stat.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -16,6 +18,11 @@
 #include "esp_heap_caps.h"
 #include "esp_rom_crc.h"
 #include "esp_timer.h"
+#include "esp_http_client.h"
+#if CONFIG_MBEDTLS_CERTIFICATE_BUNDLE
+#include "esp_crt_bundle.h"
+#endif
+#include <mutex>
 #include "adif.h"
 #include "mapdata.h"
 #include "sdcard.h"
@@ -80,8 +87,139 @@ static void loadTask(void*) {
     vTaskDelete(nullptr);
 }
 
+// ---- the board fetches the map itself (touch screen button), when it is on a home network with internet ----
+static const char* kSite = "https://wrmichael.github.io/RigDeck/map/";
+static std::mutex s_fMtx;
+static std::string s_fMsg;                           // shown on the touch screen
+static int64_t s_fMsgUs = 0;
+static std::atomic<bool> s_fetching{false};
+
+static void fmsg(const std::string& m) {
+    std::lock_guard<std::mutex> lk(s_fMtx);
+    if (m != s_fMsg) ESP_LOGI(TAG, "%s", m.c_str());
+    s_fMsg = m;
+    s_fMsgUs = esp_timer_get_time();
+}
+
+// GET url; each piece of the body goes to sink (false = stop). Returns "" or why it failed.
+static std::string httpGet(const std::string& url, const std::function<bool(const char*, int, int64_t)>& sink) {
+    esp_http_client_config_t c = {};
+    c.url = url.c_str();
+    c.timeout_ms = 15000;
+    c.buffer_size = 4096;
+#if CONFIG_MBEDTLS_CERTIFICATE_BUNDLE
+    c.crt_bundle_attach = esp_crt_bundle_attach;
+#else
+    return "this build has no certificate bundle for HTTPS";
+#endif
+    esp_http_client_handle_t h = esp_http_client_init(&c);
+    if (!h) return "could not start the download";
+    std::string err;
+    if (esp_http_client_open(h, 0) != ESP_OK) err = "could not reach the RigDeck site (no internet?)";
+    else {
+        int64_t len = esp_http_client_fetch_headers(h);
+        int st = esp_http_client_get_status_code(h);
+        if (st != 200) err = "the RigDeck site answered " + std::to_string(st);
+        else {
+            char* buf = (char*)malloc(4096);
+            if (!buf) err = "not enough memory";
+            while (buf) {
+                int n = esp_http_client_read(h, buf, 4096);
+                if (n < 0) { err = "the download was interrupted"; break; }
+                if (n == 0) { if (!esp_http_client_is_complete_data_received(h)) err = "the download was cut off"; break; }
+                if (!sink(buf, n, len)) { err = "stopped"; break; }
+            }
+            free(buf);
+        }
+    }
+    esp_http_client_close(h);
+    esp_http_client_cleanup(h);
+    return err;
+}
+
+static void fetchRun() {
+    std::string js;
+    std::string e = httpGet(std::string(kSite) + "map.json", [&](const char* p, int n, int64_t) {
+        js.append(p, n);
+        return js.size() < 4096;
+    });
+    std::string file;
+    size_t want = 0;
+    if (e.empty()) {
+        size_t a = js.find("\"file\"");
+        size_t q1 = a == std::string::npos ? a : js.find('"', js.find(':', a) + 1);
+        size_t q2 = q1 == std::string::npos ? q1 : js.find('"', q1 + 1);
+        if (q2 != std::string::npos) file = js.substr(q1 + 1, q2 - q1 - 1);
+        size_t b = js.find("\"size\"");
+        if (b != std::string::npos) want = (size_t)strtoul(js.c_str() + js.find(':', b) + 1, nullptr, 10);
+        bool ok = !file.empty() && want >= 16 && want <= kMax;
+        for (char ch : file) if (!isalnum((unsigned char)ch) && ch != '-' && ch != '_' && ch != '.') ok = false;
+        if (!ok) e = "the RigDeck site has no map description";
+    }
+    if (!e.empty()) { fmsg("Map: " + e); return; }
+    while (s_busy.exchange(true)) vTaskDelay(pdMS_TO_TICKS(200));    // not during a page upload
+    FILE* f = fopen(kTmp, "wb");
+    if (!f) { s_busy = false; fmsg("Map: could not write to the microSD card"); return; }
+    size_t got = 0;
+    int lastPct = -1;
+    e = httpGet(std::string(kSite) + file, [&](const char* p, int n, int64_t) {
+        if (got + n > want || !fileWrite(f, p, (size_t)n)) return false;
+        got += (size_t)n;
+        int pct = (int)(got * 100 / want);
+        if (pct != lastPct) { lastPct = pct; fmsg("Map: downloading " + std::to_string(pct) + " %"); }
+        return true;
+    });
+    fclose(f);
+    if (e.empty() && got != want) e = "the download is incomplete (" + std::to_string(got) + " of " + std::to_string(want) + " bytes)";
+    if (!e.empty()) { remove(kTmp); s_busy = false; fmsg("Map: " + e + "; nothing was changed"); return; }
+    size_t len = 0;
+    std::string desc, why;
+    uint8_t* buf = loadFile(kTmp, len, desc, why);
+    if (!buf) { remove(kTmp); s_busy = false; fmsg("Map: the file arrived " + why + "; nothing was changed"); return; }
+    remove(kPath);
+    bool renamed = rename(kTmp, kPath) == 0;
+    s_busy = false;
+    use(buf, len, desc);
+    s_status = renamed ? "Detailed map installed: " + desc : "Map loaded, but it could not be saved on the card";
+    if (s_app && s_app->logFn) s_app->logFn(("APRS map: detailed map installed by the board (" + desc + ")").c_str());
+    fmsg(renamed ? "Map: detailed map installed" : "Map: loaded, but it could not be saved on the card");
+}
+
+static void fetchTask(void*) {
+    fetchRun();
+    s_fetching = false;
+    vTaskDelete(nullptr);                             // does not return: nothing after it runs
+}
+
+static bool fetchStart() {
+    struct stat st;
+    if (stat(SDCARD_LOG_DIR, &st) != 0) { fmsg("Map: a microSD card is needed for the detailed map"); return false; }
+    if (!s_app || s_app->staStatus().state != "connected") {
+        fmsg("Map: RigDeck needs a home network with internet for this (Settings, Wi-Fi)");
+        return false;
+    }
+    if (s_fetching.exchange(true)) return false;
+    fmsg("Map: contacting the RigDeck site ...");
+    if (xTaskCreate(fetchTask, "mapfetch", 10240, nullptr, 3, nullptr) != pdPASS) {
+        s_fetching = false;
+        fmsg("Map: not enough memory to start the download");
+        return false;
+    }
+    return true;
+}
+
+static std::string fetchStatus() {
+    std::lock_guard<std::mutex> lk(s_fMtx);
+    if (!s_fetching && esp_timer_get_time() - s_fMsgUs > 30000000LL) return "";   // a result stays for 30 s
+    return s_fMsg;
+}
+
 void mapfile_start(App& app, bool haveCard) {
     s_app = &app;
+#if CONFIG_IC7100_DISPLAY
+    ui_map_fetch_fn = fetchStart;
+    ui_map_status_fn = fetchStatus;
+#endif
     if (haveCard) xTaskCreate(loadTask, "mapload", 4096, nullptr, 2, nullptr);
 }
 

@@ -2112,7 +2112,7 @@ void App::uiState(UiState& u) {
     u.decId = nextId_; u.decodeMs = decodeMs_;
     u.logN = logCount_; u.logAll = archiveCount_; u.netOk = netOk_; u.netFail = netFail_; u.unsent = unsent_;
     { std::string up = usbProblemText(); u.status = memFail ? "Not enough RAM for the decoder" : !up.empty() ? up : status_; }
-    u.net = netInfo_; u.call = cfg.call; u.myGrid = cfg.grid;
+    u.net = netInfo_; u.call = cfg.call; u.myGrid = cfg.grid; u.rigName = cfg.rigName;
     u.logSd = logOnSd_; u.sdIn = logOnSd_; u.station = station_; u.sdInfo = sdInfo;
     u.intTotal = intTotal_; u.intUsed = intUsed_; u.sdTotal = sdTotal_; u.sdUsed = sdUsed_; u.left = left_;
     u.bright = cfg.bright; u.contrast = cfg.contrast;

@@ -1,5 +1,14 @@
 # Changes
 
+## 1.1.5-beta
+- The RigDeck name (Settings) shows in gold on the touch screen, after the radio model at the top and in the APRS
+  screen's title, so you can tell the units apart.
+- APRS screen: **Get detailed map** / **Update map** button. RigDeck downloads the detailed map from the RigDeck
+  site itself when it is on a home network with internet, and shows the progress under the map. The web page's
+  button still works for a hotspot-only unit (the browser downloads it).
+- Console log: why the board started (power on, software restart, crash ...) and each step of handing a new map
+  to the touch screen.
+
 ## 1.1.4-beta
 - **APRS on the touch screen:** APRS is now on the mode row. It opens an APRS screen with a map of the stations
   heard (country, state/province and Great Lakes outlines from Natural Earth, built in; range 25-1600 km), a
