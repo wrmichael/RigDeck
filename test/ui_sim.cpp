@@ -200,10 +200,10 @@ int main() {
     CHECK(state().find("\"decId\":0,") == std::string::npos);       // something was decoded
 
     // Bottom bar: tap the 40 m band button -> radio retunes.
-    tap(429, 568);
+    tap(478, 568);
     run(1);
     CHECK(radio.freq == 7074000);
-    tap(567, 568);                                    // back to 20 m
+    tap(604, 568);                                    // back to 20 m
     run(1);
     CHECK(radio.freq == 14074000);
 
@@ -335,7 +335,7 @@ int main() {
     CHECK(radio.freq == 14200000);
     tap(70, 36);                                      // Back
     run(0.5);
-    tap(567, 568);                                    // 20 m on the operating screen: back to USB-D on the FT8 frequency
+    tap(604, 568);                                    // 20 m on the operating screen: back to USB-D on the FT8 frequency
     run(1.5);
     CHECK(radio.freq == 14074000 && radio.mode == 1 && radio.dataMode == 1);
     tap(10 + 78 * 2 + 39, 568);                       // CW mode button

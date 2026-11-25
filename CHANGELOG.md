@@ -1,5 +1,9 @@
 # Changes
 
+## 1.0.3 (Beta)
+- 60 m band button for FT8 (dial 5.357 MHz, USB-D), on the touch screen and the web page. No FT4 or FT-CW
+  frequency on 60 m.
+
 ## 1.0.2 (Beta)
 - Fixed: Save settings on the web page failed in 1.0.1 (the new priority list's tick boxes were sent as
   settings). Larger settings commands are accepted.
