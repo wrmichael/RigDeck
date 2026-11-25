@@ -1035,7 +1035,7 @@ async function loadConsoleLogs(){
     const j=await (await fetch("/api/consolelogs",{cache:"no-store"})).json();
     const el=$("dvLogs");
     if(!j.files.length){el.textContent=j.on?"Console logs: none yet":"Console logs: none (needs a microSD card at start-up)";return;}
-    el.innerHTML="Console logs (newest first): "+j.files.map(f=>`<a href="/consolelog?f=${encodeURIComponent(f.name)}" download="${esc(dlName((f.name.match(/(\d{8})_(\d{4})/)||[]).slice(1).join("-"),"console","txt"))}">${f.name.slice(8,-4).replace("_"," ")}</a> (${f.size>=1e6?(f.size/1e6).toFixed(1)+" MB":Math.max(1,Math.round(f.size/1e3))+" kB"})`).join(", ")+
+    el.innerHTML="Console logs (newest first): "+j.files.map(f=>{const dn=dlName((f.name.match(/(\d{8})_(\d{4})/)||[]).slice(1).join("-"),"console","txt");return `<a href="/consolelog?f=${encodeURIComponent(f.name)}&amp;as=${encodeURIComponent(dn)}" download="${esc(dn)}">${f.name.slice(8,-4).replace("_"," ")}</a> (${f.size>=1e6?(f.size/1e6).toFixed(1)+" MB":Math.max(1,Math.round(f.size/1e3))+" kB"})`;}).join(", ")+
       ` <button type="button" id="dvLogsR">Refresh</button>`;
     $("dvLogsR").onclick=loadConsoleLogs;
   }catch(e){ $("dvLogs").textContent=""; }

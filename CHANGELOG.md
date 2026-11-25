@@ -1,5 +1,11 @@
 # Changes
 
+## 1.1.2-beta
+- Console log downloads are named RIGNAME-CALLSIGN-YYYYMMDD-HHMM-console.txt (the files on the card keep their
+  names); before, the board's own file name won over the page's.
+- A USB device that fails to start at power-up (seen with a QMX+) gets the USB port switched off and on, up to
+  3 times, instead of staying dead until it is power cycled.
+
 ## 1.1.1-beta
 - The console log now notes APRS packets heard and sent, beacons, messages and acks, mode changes, the CW
   trainer's radio sidetone (break-in asked off, confirmed, set back) and when a page starts listening.

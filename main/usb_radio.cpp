@@ -22,6 +22,7 @@
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
+#include <atomic>
 #include "usb/usb_host.h"
 #include "usb/cdc_acm_host.h"
 #include "usb/uac_host.h"
@@ -325,6 +326,24 @@ static void serialTask(void*) {
         gpsNextUs = 0;
         gpsFixAt = 0;
         if (usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) != ESP_OK) continue;
+        // A device that failed to start (seen once with a QMX+ at power-up: a short device descriptor) stays dead
+        // until it is unplugged. Switch the USB port off and on so it starts again; at most 3 times per start-up.
+        {
+            extern std::atomic<int> g_usbEnumErrors;
+            static int seen = 0, cycles = 0;
+            static int64_t errAt = 0;
+            int e = g_usbEnumErrors.load();
+            if (e != seen) { seen = e; errAt = esp_timer_get_time(); }
+            if (errAt && esp_timer_get_time() - errAt > 3000000 && !s_app->usbSerial && !s_app->usbAudio && cycles < 3) {
+                cycles++;
+                errAt = 0;
+                ESP_LOGW(TAG, "a USB device did not start properly: switching the USB port off and on (%d of 3)", cycles);
+                usb_host_lib_set_root_port_power(false);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                usb_host_lib_set_root_port_power(true);
+                continue;
+            }
+        }
         Radio& radio = s_app->radio;
         for (int i = 0; i < n && !s_app->usbSerial; i++) {
             for (const auto& pt : kPortTypes) {

@@ -9,6 +9,7 @@
 #include "adif.h"
 #include <cstdio>
 #include <cstring>
+#include <cctype>
 #include <cstdarg>
 #include <ctime>
 #include <string>
@@ -35,6 +36,8 @@ static std::atomic<bool> s_off{false};          // no card: stop keeping text
 static std::atomic<bool> s_enabled{true};       // the Settings switch
 static std::atomic<bool> s_pause{false}, s_closed{true};   // card being formatted: file closed
 
+std::atomic<int> g_usbEnumErrors{0};            // "E (...) ENUM: ..." lines: a device on the USB port failed to start
+
 static int teeVprintf(const char* fmt, va_list ap) {
     va_list ap2;
     va_copy(ap2, ap);
@@ -42,6 +45,7 @@ static int teeVprintf(const char* fmt, va_list ap) {
     char line[256];
     int n = vsnprintf(line, sizeof line, fmt, ap2);
     va_end(ap2);
+    if (n > 8 && line[0] == 'E' && strstr(line, "ENUM:")) g_usbEnumErrors++;
     if (n > 0 && s_ring && !s_off && s_enabled) {
         if (n > (int)sizeof line - 1) n = sizeof line - 1;
         portENTER_CRITICAL_SAFE(&s_mux);
@@ -200,7 +204,7 @@ static esp_err_t hList(httpd_req_t* req) {
 }
 
 static esp_err_t hFile(httpd_req_t* req) {
-    char q[96] = "", f[72] = "";
+    char q[200] = "", f[72] = "", as[96] = "";
     if (httpd_req_get_url_query_str(req, q, sizeof q) != ESP_OK || httpd_query_key_value(q, "f", f, sizeof f) != ESP_OK || !goodName(f)) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "bad file name");
         return ESP_FAIL;
@@ -208,7 +212,15 @@ static esp_err_t hFile(httpd_req_t* req) {
     FILE* fp = fopen((s_dir + "/" + f).c_str(), "r");
     if (!fp) { httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "no such log"); return ESP_FAIL; }
     httpd_resp_set_type(req, "text/plain");
-    std::string disp = std::string("attachment; filename=\"") + f + "\"";
+    // The file keeps its name on the card; the page asks for the download name (RIGNAME-CALL-date-time-console.txt)
+    // with ?as=, because a name in this header wins over the page's own download name.
+    std::string name = f;
+    if (httpd_query_key_value(q, "as", as, sizeof as) == ESP_OK && as[0]) {
+        std::string a;
+        for (const char* p = as; *p; p++) a += (isalnum((unsigned char)*p) || *p == '-' || *p == '_' || *p == '.') ? *p : '_';
+        if (a.size() > 4 && a.compare(a.size() - 4, 4, ".txt") == 0) name = a;
+    }
+    std::string disp = std::string("attachment; filename=\"") + name + "\"";
     httpd_resp_set_hdr(req, "Content-Disposition", disp.c_str());
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     alignas(64) char buf[1024];                 // internal RAM: the card's DMA reads into it (see adif.h)
