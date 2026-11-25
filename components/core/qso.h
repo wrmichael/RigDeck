@@ -17,6 +17,19 @@ struct ParsedMsg {
 bool parseMsg(const std::string& text, ParsedMsg& p);
 bool isGrid4(const std::string& s);
 
+// Do-not-work list: "W1ABC" also matches W1ABC/P, VE3/W1ABC; "XX9*" matches every call starting with XX9.
+bool callListed(const std::vector<std::string>& list, const std::string& call);
+std::vector<std::string> parseCallList(const std::string& text);   // commas, spaces or new lines between calls
+// Distance in km between the centres of two 4- or 6-character grid squares (-1 if either is not a grid).
+int gridKm(const std::string& a, const std::string& b);
+
+// Answer priority: which station to take when several CQ (Auto hunt) or answer our CQ.
+enum PrioRule { PR_POTA, PR_SOTA, PR_DX, PR_SES, PR_WEAK, PR_STRONG, PR_COUNT };
+extern const char* const kPrioNames[PR_COUNT];                  // "pota", "sota", ... as stored in settings
+struct PrioItem { int rule; bool on; };
+std::vector<PrioItem> parsePrio(const std::string& text);         // "pota,-sota,dx,..." ('-' = off); missing rules added, off
+std::string prioText(const std::vector<PrioItem>& list);
+
 struct QsoLog {
     std::string call, grid;
     int rptSent = 0, rptRcvd = 0;
@@ -44,6 +57,12 @@ public:
     // Parks (CQ POTA, CQ WWFF) count once per UTC day, band and mode: true = already worked today.
     std::function<bool(const std::string&)> workedToday;
     std::function<int64_t()> now;
+    // Stations never worked automatically, and the answer priority list (off: the strongest signal first).
+    std::vector<std::string> doNotWork;
+    bool prioOn = false;
+    std::vector<PrioItem> prio;
+    int dxKm = 2500;                                               // "DX" rule: farther than this (from its grid)
+    bool blocked(const std::string& call) const { return callListed(doNotWork, call); }
 
     // state (read by the UI)
     bool txEnabled = false;
@@ -75,6 +94,8 @@ public:
     void setOpMode(int m);
 
 private:
+    struct Cand { const Decode* d; ParsedMsg p; };
+    bool better(const Cand& a, const Cand& b) const;              // a before b by the priority list
     void setTx(int n);
     void logQso();
     void finish();

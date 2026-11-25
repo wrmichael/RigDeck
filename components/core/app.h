@@ -138,6 +138,7 @@ public:
     int mode() const { return mode_.load(); }
 
 private:
+    std::string seqDnw_, seqPrio_ = "\x01";                     // what the sequencer's lists were built from
     int64_t slotLen() const { return mode_.load() == DM_FT4 ? 7500 : 15000; }
     void ftxRx(const float* s, size_t n);
     void syncSeq();

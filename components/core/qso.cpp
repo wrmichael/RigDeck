@@ -1,3 +1,5 @@
+#include <cmath>
+#include <cctype>
 #include "qso.h"
 #include <cstdio>
 #include <cstdlib>
@@ -232,42 +234,163 @@ bool Sequencer::nextTx(int parity, std::string& text) {
     return !text.empty();
 }
 
+bool Sequencer::better(const Cand& a, const Cand& b) const {
+    if (prioOn) {
+        auto has = [&](int rule, const Cand& c) {
+            const std::string& tag = c.p.cqTag;
+            switch (rule) {
+            case PR_POTA: return tag == "POTA" || tag == "WWFF";
+            case PR_SOTA: return tag == "SOTA";
+            case PR_DX: { int km = gridKm(myGrid, c.p.grid); return km >= 0 && km > dxKm; }
+            case PR_SES: {                                         // 1x1 special event call: letter, digit, letter (W9A)
+                const std::string& f = c.p.from;
+                return f.size() == 3 && isalpha((unsigned char)f[0]) && isdigit((unsigned char)f[1]) && isalpha((unsigned char)f[2]);
+            }
+            }
+            return false;
+        };
+        for (const auto& it : prio) {
+            if (!it.on) continue;
+            if (it.rule == PR_WEAK || it.rule == PR_STRONG) {
+                if (a.d->snr != b.d->snr) return it.rule == PR_WEAK ? a.d->snr < b.d->snr : a.d->snr > b.d->snr;
+                continue;
+            }
+            bool ha = has(it.rule, a), hb = has(it.rule, b);
+            if (ha != hb) return ha;
+        }
+        return false;                                              // a tie: the first heard stays
+    }
+    return a.d->snr > b.d->snr;                                    // the strongest, as before
+}
+
 void Sequencer::onDecodes(const std::vector<Decode>& list, int parity) {
     if (myCall.empty()) return;
     const Decode* forMe = nullptr;       // from the station we are working
     ParsedMsg forMeP;
-    const Decode* caller = nullptr;      // someone else calling us
-    ParsedMsg callerP;
-    const Decode* cq = nullptr;
-    ParsedMsg cqP;
+    std::vector<Cand> callers, cqs;      // others calling us; CQs we could answer
     int64_t t = now ? now() : 0;
     for (const auto& d : list) {
         ParsedMsg p;
         if (!parseMsg(d.text, p) || p.from.empty() || p.from == myCall) continue;
         if (p.kind == K_CQ) {
+            if (blocked(p.from)) continue;
             if (!p.cqTag.empty()) {
-                // Directed CQ: left to the operator (CQ DX may not want us), except parks: a POTA or
-                // WWFF activator can be worked again each UTC day on each band and mode.
-                bool park = p.cqTag == "POTA" || p.cqTag == "WWFF";
+                // Directed CQ: left to the operator (CQ DX may not want us), except parks and summits: a POTA,
+                // WWFF or SOTA activator can be worked again each UTC day on each band and mode.
+                bool park = p.cqTag == "POTA" || p.cqTag == "WWFF" || p.cqTag == "SOTA";
                 if (!park || !workedToday || workedToday(p.from)) continue;
             } else if (workedBefore && workedBefore(p.from)) continue;
             auto ig = ignore_.find(p.from);
             if (ig != ignore_.end() && ig->second > t) continue;
-            if (!cq || d.snr > cq->snr) { cq = &d; cqP = p; }
+            cqs.push_back({&d, p});
         } else if (p.to == myCall && p.kind != K_OTHER) {
             if (!dxCall.empty() && p.from == dxCall) { forMe = &d; forMeP = p; }
-            else if (!caller || d.snr > caller->snr) { caller = &d; callerP = p; }
+            else if (!blocked(p.from)) callers.push_back({&d, p});
         }
     }
+    auto pick = [&](std::vector<Cand>& v) -> const Cand* {
+        const Cand* best = nullptr;
+        for (const auto& c : v) if (!best || better(c, *best)) best = &c;
+        return best;
+    };
     if (forMe) { respondTo(forMeP, forMe->snr, parity); return; }
     if (waitNext || (autoStop && dxCall.empty())) {                // POTA mode / no internet: nothing new on its own,
-        if (caller && callerP.from == lastWorked && callerP.kind != K_73) respondTo(callerP, caller->snr, parity);   // except the last station repeating
+        for (const auto& c : callers)                              // except the last station repeating
+            if (c.p.from == lastWorked && c.p.kind != K_73) { respondTo(c.p, c.d->snr, parity); break; }
         return;
     }
     bool freeToAnswer = dxCall.empty() || txMsg == 6 || txMsg == 0;
-    if (caller && freeToAnswer && txEnabled) {
-        // A 73 from someone we are not working needs no reply.
-        if (callerP.kind != K_73) { respondTo(callerP, caller->snr, parity); return; }
+    if (freeToAnswer && txEnabled) {
+        std::vector<Cand> live;                                    // a 73 from someone we are not working needs no reply
+        for (const auto& c : callers) if (c.p.kind != K_73) live.push_back(c);
+        if (const Cand* c = pick(live)) { respondTo(c->p, c->d->snr, parity); return; }
     }
-    if (opMode == 2 && txEnabled && dxCall.empty() && cq) callStation(cqP.from, cqP.grid, cq->snr, parity);
+    if (opMode == 2 && txEnabled && dxCall.empty())
+        if (const Cand* c = pick(cqs)) callStation(c->p.from, c->p.grid, c->d->snr, parity);
+}
+
+// --- do-not-work list, grid distance, answer priority ---
+
+static std::string upperCall(std::string s) {
+    for (auto& ch : s) ch = (char)toupper((unsigned char)ch);
+    return s;
+}
+
+std::vector<std::string> parseCallList(const std::string& text) {
+    std::vector<std::string> out;
+    std::string cur;
+    for (size_t i = 0; i <= text.size(); i++) {
+        char ch = i < text.size() ? text[i] : ',';
+        if (ch == ',' || ch == ' ' || ch == '\n' || ch == '\r' || ch == ';' || ch == '\t') {
+            if (!cur.empty()) out.push_back(upperCall(cur));
+            cur.clear();
+        } else cur += ch;
+    }
+    return out;
+}
+
+bool callListed(const std::vector<std::string>& list, const std::string& call) {
+    if (list.empty() || call.empty()) return false;
+    std::string c = upperCall(call);
+    std::vector<std::string> parts;                                // VE3/W1ABC/P -> VE3, W1ABC, P
+    size_t a = 0;
+    while (a <= c.size()) { size_t b = c.find('/', a); if (b == std::string::npos) b = c.size(); parts.push_back(c.substr(a, b - a)); a = b + 1; }
+    for (const auto& e : list) {
+        if (e.empty()) continue;
+        if (e.back() == '*') {
+            std::string pre = e.substr(0, e.size() - 1);
+            if (pre.empty()) continue;
+            if (c.compare(0, pre.size(), pre) == 0) return true;
+            for (const auto& p : parts) if (p.compare(0, pre.size(), pre) == 0 && p.size() > 2) return true;
+        } else {
+            if (c == e) return true;
+            for (const auto& p : parts) if (p == e) return true;
+        }
+    }
+    return false;
+}
+
+static bool gridLL(const std::string& g0, double& lat, double& lon) {
+    std::string g = upperCall(g0);
+    if (g.size() < 4 || g[0] < 'A' || g[0] > 'R' || g[1] < 'A' || g[1] > 'R' || !isdigit((unsigned char)g[2]) || !isdigit((unsigned char)g[3])) return false;
+    lon = (g[0] - 'A') * 20 - 180 + (g[2] - '0') * 2 + 1.0;
+    lat = (g[1] - 'A') * 10 - 90 + (g[3] - '0') + 0.5;
+    if (g.size() >= 6 && g[4] >= 'A' && g[4] <= 'X' && g[5] >= 'A' && g[5] <= 'X') {
+        lon += -1.0 + (g[4] - 'A') * (2.0 / 24) + 1.0 / 24;
+        lat += -0.5 + (g[5] - 'A') * (1.0 / 24) + 0.5 / 24;
+    }
+    return true;
+}
+
+int gridKm(const std::string& a, const std::string& b) {
+    double la1, lo1, la2, lo2;
+    if (!gridLL(a, la1, lo1) || !gridLL(b, la2, lo2)) return -1;
+    const double r = 3.14159265358979 / 180;
+    double d = sin(la1 * r) * sin(la2 * r) + cos(la1 * r) * cos(la2 * r) * cos((lo2 - lo1) * r);
+    if (d > 1) d = 1;
+    if (d < -1) d = -1;
+    return (int)(acos(d) * 6371.0 + 0.5);
+}
+
+const char* const kPrioNames[PR_COUNT] = {"pota", "sota", "dx", "ses", "weak", "strong"};
+
+std::vector<PrioItem> parsePrio(const std::string& text) {
+    std::vector<PrioItem> out;
+    bool seen[PR_COUNT] = {};
+    for (const auto& w0 : parseCallList(text)) {
+        std::string w = w0;
+        bool on = true;
+        if (!w.empty() && w[0] == '-') { on = false; w.erase(0, 1); }
+        for (auto& ch : w) ch = (char)tolower((unsigned char)ch);
+        for (int r = 0; r < PR_COUNT; r++)
+            if (w == kPrioNames[r] && !seen[r]) { seen[r] = true; out.push_back({r, on}); }
+    }
+    for (int r = 0; r < PR_COUNT; r++) if (!seen[r]) out.push_back({r, false});
+    return out;
+}
+
+std::string prioText(const std::vector<PrioItem>& list) {
+    std::string s;
+    for (const auto& it : list) { if (!s.empty()) s += ','; if (!it.on) s += '-'; s += kPrioNames[it.rule]; }
+    return s;
 }

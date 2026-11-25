@@ -18,6 +18,15 @@ void ota_register(httpd_handle_t srv);
 static App* s_app;
 extern const char index_html_start[] asm("_binary_index_html_start");
 extern const char index_html_end[] asm("_binary_index_html_end");
+extern const uint8_t icon_png_start[] asm("_binary_icon_png_start");
+extern const uint8_t icon_png_end[] asm("_binary_icon_png_end");
+
+// The page's icon, for the browser tab and a phone's home screen (browsers ask for these names on their own).
+static esp_err_t hIcon(httpd_req_t* req) {
+    httpd_resp_set_type(req, "image/png");
+    httpd_resp_set_hdr(req, "Cache-Control", "max-age=86400");
+    return httpd_resp_send(req, (const char*)icon_png_start, icon_png_end - icon_png_start);
+}
 
 static std::string urlDecode(const char* s, size_t n) {
     std::string o;
@@ -125,7 +134,7 @@ void web_start(App& app) {
     s_app = &app;
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 10240;
-    cfg.max_uri_handlers = 14;
+    cfg.max_uri_handlers = 20;
     cfg.recv_wait_timeout = 30;                      // a firmware upload pauses while the Wi-Fi chip erases
     cfg.lru_purge_enable = true;
     httpd_handle_t srv = nullptr;
@@ -137,6 +146,10 @@ void web_start(App& app) {
         {"/api/cmd", HTTP_POST, hCmd, nullptr},
         {"/log.adi", HTTP_GET, hLog, nullptr},
         {"/archive.adi", HTTP_GET, hLog, (void*)1},
+        {"/favicon.ico", HTTP_GET, hIcon, nullptr},
+        {"/icon.png", HTTP_GET, hIcon, nullptr},
+        {"/apple-touch-icon.png", HTTP_GET, hIcon, nullptr},
+        {"/apple-touch-icon-precomposed.png", HTTP_GET, hIcon, nullptr},
     };
     for (auto& u : uris) httpd_register_uri_handler(srv, &u);
 #if CONFIG_IDF_TARGET_ESP32P4

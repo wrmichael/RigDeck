@@ -1,4 +1,5 @@
 #include "settings.h"
+#include "qso.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cctype>
@@ -113,6 +114,23 @@ bool Settings::set(const std::string& k, const std::string& v) {
     if (k == "consoleLog") return toInt(v, 0, 1, consoleLog);
     if (k == "confirmQso") return toInt(v, 0, 1, confirmQso);
     if (k == "deadman") return toInt(v, 0, 1, deadman);
+    if (k == "dnw") {                                   // calls, or prefixes ending in *, at most 100 and 600 characters
+        std::string out;
+        auto list = parseCallList(v);
+        if (list.size() > 100) return false;
+        for (const auto& c : list) {
+            if (c.size() > 13 || c == "*" || c.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/*") != std::string::npos) return false;
+            if (c.find('*') != std::string::npos && c.find('*') != c.size() - 1) return false;
+            if (!out.empty()) out += ',';
+            out += c;
+        }
+        if (out.size() > 600) return false;
+        dnw = out;
+        return true;
+    }
+    if (k == "prioOn") return toInt(v, 0, 1, prioOn);
+    if (k == "prio") { prio = prioText(parsePrio(v)); return true; }
+    if (k == "dxKm") return toInt(v, 100, 20000, dxKm);
     if (k == "txLevels") {
         if (v.size() > 400 || v.find_first_of("\r\n=") != std::string::npos) return false;
         txLevels = v;
@@ -143,7 +161,7 @@ std::string Settings::serialize(bool secrets) const {
     I("watchdogMin", watchdogMin); I("rfPower", rfPower); I("logProto", logProto); I("logPort", logPort);
     I("cwWpm", cwWpm); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);
     I("gpsModule", gpsModule); I("gpsModBaud", gpsModBaud); I("gpsRxPin", gpsRxPin); I("gpsPpsPin", gpsPpsPin);
-    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("confirmQso", confirmQso); I("deadman", deadman); S("deadmanHost", deadmanHost); S("txLevels", txLevels);
+    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("confirmQso", confirmQso); I("deadman", deadman); S("dnw", dnw); I("prioOn", prioOn); S("prio", prio); I("dxKm", dxKm); S("deadmanHost", deadmanHost); S("txLevels", txLevels);
     return s;
 }
 

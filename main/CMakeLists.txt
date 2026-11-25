@@ -15,5 +15,6 @@ idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS "."
     PRIV_REQUIRES core fatfs sdmmc esp_driver_sdmmc esp_app_format esp_wifi esp_netif esp_event nvs_flash esp_http_server spiffs esp_timer lwip esp_driver_uart esp_driver_gpio esp_partition app_update mbedtls
-    EMBED_TXTFILES "web/index.html")
+    EMBED_TXTFILES "web/index.html"
+    EMBED_FILES "web/icon.png")
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error -Wno-format -Wno-missing-field-initializers)

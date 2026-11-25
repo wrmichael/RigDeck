@@ -58,6 +58,10 @@ struct Settings {
     int bright = 100;                    // display backlight, % (5 - 100)
     int contrast = 100;                  // display colour contrast, % (50 - 150; 100 = as designed)
     int confirmQso = 0;
+    std::string dnw;                     // do-not-work list: "W1ABC,K2XYZ,XX9*" (never worked automatically)
+    int prioOn = 0;                      // 1 = choose between stations by the priority list below
+    std::string prio = "pota,sota,dx,ses,-weak,strong";   // order of the rules; '-' = rule off
+    int dxKm = 2500;                     // the "DX" rule: farther than this, from the grid in its message
     int deadman = 0;                     // 1 = no internet: finish the QSO in progress, then stop Auto CQ / hunt
     std::string txLevels;
     int levelFor(const std::string& radio) const;          // -1 = none remembered

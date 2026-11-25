@@ -363,6 +363,56 @@ int main() {
         CHECK(s.dxCall.empty());
     }
 
+    // --- do-not-work list and answer priority ---
+    {
+        auto L = parseCallList("w1abc, XX9*\nK2XYZ");
+        CHECK(L.size() == 3 && callListed(L, "W1ABC") && callListed(L, "W1ABC/P") && callListed(L, "VE3/W1ABC"));
+        CHECK(callListed(L, "XX9ZZ") && callListed(L, "k2xyz") && !callListed(L, "W1ABD") && !callListed(L, "K1XX9"));
+        CHECK(gridKm("EM69", "EM69") == 0 && gridKm("EM69", "JO01") > 6000 && gridKm("EM69", "bogus") == -1);
+        auto P = parsePrio("dx,-weak,pota");
+        CHECK(P.size() == PR_COUNT && P[0].rule == PR_DX && P[0].on && P[1].rule == PR_WEAK && !P[1].on && P[2].rule == PR_POTA);
+        CHECK(prioText(parsePrio(prioText(P))) == prioText(P));
+        Settings st;
+        CHECK(st.set("dnw", "w1abc  k2xyz,XX9*") && st.dnw == "W1ABC,K2XYZ,XX9*" && !st.set("dnw", "W1*X") && !st.set("dnw", "W1 <b>"));
+
+        auto mk = [](std::vector<std::pair<const char*, int>> v) {
+            std::vector<Decode> out;
+            for (auto& x : v) { Decode d; d.text = x.first; d.snr = x.second; out.push_back(d); }
+            return out;
+        };
+        Sequencer h;                                                  // Auto hunt
+        h.myCall = "W9XYZ"; h.myGrid = "EN37"; h.opMode = 2; h.txEnabled = true; h.now = [] { return (int64_t)0; };
+        h.doNotWork = parseCallList("K1ABC");
+        h.onDecodes(mk({{"CQ K1ABC FN42", 10}, {"CQ N0CALL DM79", -15}}), 0);
+        CHECK(h.dxCall == "N0CALL");                                  // the listed station is skipped
+        Sequencer h2 = h; h2.clearQso(); h2.doNotWork.clear();
+        h2.onDecodes(mk({{"CQ K1ABC FN42", -20}, {"CQ POTA N0CALL DM79", -15}, {"CQ G4AAA IO91", 5}, {"CQ W9A EN61", -1}}), 0);
+        CHECK(h2.dxCall == "G4AAA");                                  // priority off: the strongest
+        Sequencer h3 = h2; h3.clearQso(); h3.prioOn = true; h3.prio = parsePrio("pota,dx,strong");
+        h3.workedToday = [](const std::string&) { return false; };
+        h3.onDecodes(mk({{"CQ K1ABC FN42", -20}, {"CQ POTA N0CALL DM79", -15}, {"CQ G4AAA IO91", 5}}), 0);
+        CHECK(h3.dxCall == "N0CALL");                                 // POTA first
+        Sequencer h4 = h3; h4.clearQso(); h4.prio = parsePrio("dx,weak");
+        h4.onDecodes(mk({{"CQ K1ABC FN42", -20}, {"CQ JA1ZZZ PM95", 3}, {"CQ G4AAA IO91", 5}}), 0);
+        CHECK(h4.dxCall == "JA1ZZZ");                                 // both DX: then the weaker
+        Sequencer h5 = h3; h5.clearQso(); h5.prio = parsePrio("ses,strong");
+        h5.onDecodes(mk({{"CQ K1ABC FN42", 9}, {"CQ W9A EN61", -12}}), 0);
+        CHECK(h5.dxCall == "W9A");                                    // 1x1 special event call first
+        Sequencer h6 = h3; h6.clearQso(); h6.prio = parsePrio("sota,pota");
+        h6.onDecodes(mk({{"CQ POTA N0CALL DM79", 2}, {"CQ SOTA K7SUM DN31", -18}}), 0);
+        CHECK(h6.dxCall == "K7SUM");                                  // CQ SOTA is answered too, and first here
+
+        Sequencer c;                                                  // Auto CQ: two callers
+        c.myCall = "W9XYZ"; c.myGrid = "EN37"; c.opMode = 1; c.txEnabled = true; c.now = h.now;
+        c.doNotWork = parseCallList("N0CALL");
+        c.startCq();
+        c.onDecodes(mk({{"W9XYZ N0CALL DM79", 8}, {"W9XYZ K1ABC FN42", -14}}), 1);
+        CHECK(c.dxCall == "K1ABC");                                   // the listed caller is ignored
+        Sequencer c2 = c; c2.clearQso(); c2.doNotWork = parseCallList("K1ABC,N0CALL"); c2.startCq();
+        c2.onDecodes(mk({{"W9XYZ N0CALL DM79", 8}, {"W9XYZ K1ABC FN42", -14}}), 1);
+        CHECK(c2.dxCall.empty() && c2.txMsg == 6);                    // nobody to answer: keep calling CQ
+    }
+
     printf(fails ? "t_units: %d of %d FAILED\n" : "t_units: all %d checks passed\n", fails ? fails : checks, checks);
     return fails ? 1 : 0;
 }

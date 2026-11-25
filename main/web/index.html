@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/png" href="/icon.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>RigDeck</title>
 <style>
 :root{--bg:#0d1317;--pan:#151e25;--pan2:#1c2831;--line:#2a3944;--tx:#ff5b5b;--rx:#3fcf8e;--amb:#f6b93b;--txt:#dce5ea;--dim:#8498a5;--cq:#7fd0ff;--me:#ff9d9d;
@@ -72,6 +74,11 @@ table.log td,table.log th{padding:3px 8px;text-align:left;border-bottom:1px soli
 table.log th{color:var(--dim);font-weight:500}
 .form{display:grid;grid-template-columns:minmax(120px,200px) minmax(0,1fr);gap:8px 12px;align-items:center;max-width:620px}
 .form label{color:var(--dim)}
+.prio{list-style:none;margin:6px 0 0;padding:0;max-width:620px;display:flex;flex-direction:column;gap:6px}
+.prio li{display:flex;align-items:center;gap:8px;background:#0b1014;border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.prio li span{flex:1;min-width:0}.prio li.off span{color:var(--dim)}
+.prio button{padding:4px 10px}
+tr.dnw td{opacity:.4}
 .hint{color:var(--dim);font-size:12px}
 .hide{display:none!important}
 </style>
@@ -223,6 +230,14 @@ table.log th{color:var(--dim);font-weight:500}
       <label for="s_maxRetries">Repeats before giving up</label><input id="s_maxRetries" inputmode="numeric">
       <label for="s_watchdogMin">TX watchdog, minutes</label><input id="s_watchdogMin" inputmode="numeric">
       <label for="s_confirmQso">POTA mode: confirm each QSO</label><select id="s_confirmQso"><option value="0">Off</option><option value="1">On: Auto CQ / Auto hunt wait for Next QSO after each contact</option></select>
+      <h4 style="grid-column:1/-1;margin:10px 0 0">Choosing stations</h4>
+      <label for="s_dnw">Do-not-work list</label><input id="s_dnw" maxlength="600" placeholder="e.g. W1ABC, K2XYZ, XX9*" autocomplete="off" style="text-transform:uppercase">
+      <p class="hint" style="grid-column:1/-1;margin:0">Never answered or called, in any mode; a listed station that answers your CQ is ignored. W1ABC also covers W1ABC/P and VE3/W1ABC; XX9* covers every call that starts with XX9. Commas or spaces between calls.</p>
+      <label for="s_prioOn">Answer priority</label><select id="s_prioOn"><option value="0">Off: the strongest signal first</option><option value="1">On: use the order below</option></select>
+      <input type="hidden" id="s_prio">
+      <div style="grid-column:1/-1"><ol id="prioList" class="prio"></ol>
+        <p class="hint" style="margin:4px 0 0">When several stations call you (Auto CQ) or call CQ (Auto hunt), the first rule that tells them apart decides; ties go to the next rule, then to the first one heard. The do-not-work list is applied first.</p></div>
+      <label for="s_dxKm">DX means farther than, km</label><input id="s_dxKm" inputmode="numeric">
       <label for="s_radioType">Radio</label><select id="s_radioType"><option value="0">Find automatically</option><option value="1">Icom (CI-V): IC-7100, IC-705, IC-7300, IC-9700, IC-7610, IC-905</option><option value="2">Yaesu: FTX-1, FTDX10, FT-991A, FT-710, FTDX101</option><option value="3">QRP Labs QMX / QMX+</option><option value="4">Kenwood / Elecraft: TS-2000, TS-480, TS-590, K2, K3, KX2, KX3</option><option value="5">No CAT: SignaLink or other sound card</option></select>
       <label for="s_pttMethod">PTT</label><select id="s_pttMethod"><option value="0">CAT command</option><option value="1">Serial port RTS (Digirig)</option><option value="2">Serial port DTR</option><option value="3">VOX (the sound card keys the radio)</option></select>
       <label for="s_catBaud">CAT rate tried first (4800, 9600, 19200, 38400 are tried too)</label><select id="s_catBaud"><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select>
@@ -315,7 +330,8 @@ function addRow(cls,t,snr,dt,f,msg,id,sep){
   const tb=document.querySelector("#act tbody"), box=$("act");
   const stick=box.scrollTop+box.clientHeight>=box.scrollHeight-30;
   const tr=document.createElement("tr");
-  tr.className=cls+(sep?" sep":"");
+  tr.className=cls+(sep?" sep":"")+(cls!=="tx"&&listed(msgFrom(msg))?" dnw":"");
+  if(tr.className.includes("dnw")) tr.title="On your do-not-work list";
   if(id) tr.dataset.id=id;
   tr.innerHTML=`<td>${t}</td><td class="n">${snr}</td><td class="n">${dt}</td><td class="n">${f}</td><td>${esc(msg)}</td>`;
   tb.appendChild(tr);
@@ -419,6 +435,7 @@ function render(){
     for(const [id,key] of [["dvBright","bright"],["dvContrast","contrast"]]) if(S.cfg[key]!==undefined){$(id).value=S.cfg[key];$(id+"V").textContent=S.cfg[key]+" %";}
     if(S.cfg.consoleLog!==undefined) $("dvConsole").checked=!!+S.cfg.consoleLog;
     rigName=S.cfg.rigName||"";
+    dnwSet(S.cfg.dnw);renderPrio();
     $("rigname").textContent=rigName;$("rigname").hidden=!rigName;$("rigname").title=rigName;
     document.title=rigName?rigName+" - RigDeck":"RigDeck";
   }
@@ -577,6 +594,39 @@ $("freq").onclick=async()=>{
   cmd("rdata",{v:md.endsWith("-D")?"1":"0"});
 };
 $("dvConsole").onchange=()=>{cmd("set",{consoleLog:$("dvConsole").checked?"1":"0"});setTimeout(loadConsoleLogs,1500);};
+// Answer priority list: s_prio holds "pota,-sota,dx,..." ('-' = rule off); the list edits it.
+const PRIO={pota:"POTA / WWFF (CQ POTA, CQ WWFF)",sota:"SOTA (CQ SOTA)",dx:"DX (farther than the distance below)",ses:"Special event (1x1 calls such as W9A)",weak:"Weakest signal",strong:"Strongest signal"};
+function prioItems(){
+  const seen={},out=[];
+  for(const w of ($("s_prio").value||"").split(",")){const on=!w.startsWith("-"),k=w.replace(/^-/,"").trim();if(PRIO[k]&&!seen[k]){seen[k]=1;out.push({k,on});}}
+  for(const k in PRIO) if(!seen[k]) out.push({k,on:false});
+  return out;
+}
+function renderPrio(){
+  const it=prioItems(),ol=$("prioList");ol.innerHTML="";
+  it.forEach((x,i)=>{
+    const li=document.createElement("li");li.className=x.on?"":"off";
+    li.innerHTML=`<input type="checkbox" id="pr_${x.k}" ${x.on?"checked":""} aria-label="Use this rule"><span>${i+1}. ${esc(PRIO[x.k])}</span><button type="button" data-up="${i}" aria-label="Move up" ${i?"":"disabled"}>&#9650;</button><button type="button" data-dn="${i}" aria-label="Move down" ${i<it.length-1?"":"disabled"}>&#9660;</button>`;
+    ol.appendChild(li);
+  });
+  const store=a=>{$("s_prio").value=a.map(x=>(x.on?"":"-")+x.k).join(",");renderPrio();};
+  ol.querySelectorAll("input").forEach((c,i)=>c.onchange=()=>{it[i].on=c.checked;store(it);});
+  ol.querySelectorAll("button[data-up]").forEach(b=>b.onclick=()=>{const i=+b.dataset.up;[it[i-1],it[i]]=[it[i],it[i-1]];store(it);});
+  ol.querySelectorAll("button[data-dn]").forEach(b=>b.onclick=()=>{const i=+b.dataset.dn;[it[i+1],it[i]]=[it[i],it[i+1]];store(it);});
+}
+// Do-not-work list, for greying out decodes (the board itself does the skipping).
+let dnwList=[];
+function dnwSet(t){dnwList=String(t||"").toUpperCase().split(/[\s,;]+/).filter(Boolean);}
+function msgFrom(m){
+  const w=String(m).trim().toUpperCase().split(/\s+/);
+  if(w[0]==="CQ"){for(let i=1;i<w.length;i++){if(/\d/.test(w[i])&&!/^[A-R]{2}\d{2}$/.test(w[i])&&!/^\d{3}$/.test(w[i]))return w[i];}return "";}
+  return w[1]||"";
+}
+function listed(call){
+  if(!call||!dnwList.length)return false;
+  const parts=call.split("/");
+  return dnwList.some(e=>e.endsWith("*")?(e.length>1&&(call.startsWith(e.slice(0,-1))||parts.some(p=>p.length>2&&p.startsWith(e.slice(0,-1))))):(call===e||parts.includes(e)));
+}
 // Download names: RIGNAME-CALLSIGN-YYYYMMDD-HHMM-what.ext (the RigDeck name is left out when it is not set).
 function dlName(stamp,what,ext){
   const safe=t=>String(t||"").trim().replace(/[^A-Za-z0-9_.]+/g,"_").replace(/^_+|_+$/g,"");
@@ -771,7 +821,7 @@ function demoState(){
   return {utc:now,clk:{ok:true,src:"demo",age:1},mode:"FT8",op:1,radio:{ser:true,aud:true,civ:true,model:"IC-7100",freq:14074000,band:"20m",rmode:1,data:1,ptt:false,s:95,po:0,swr:0,alc:0,wpm:22},
     slot:{len:15000,t,par:slot&1},tx:{en:false,on:false,msg:6,par:0,text:"",last:"",freq:1500,lvl:50,tune:false,wd:false,wdLeft:-1,wdMin:6},
     qso:{dx:"",grid:"",rs:-99,rr:-99,try:0,m:["","","","","","CQ W9XYZ EN37",""]},lvl:-22,dec:d,decId:demoState.id,decMs:640,
-    psk:{seq:0,f:1000,afc:1000,q:20,text:""},log:{n:0,all:0,behind:false,ok:0,fail:0,last:[]},msg:"",net:"Preview mode: open this page from the device to control the radio",cfg:{rigName:"Shack",call:"W9XYZ",grid:"EN37",txLevel:"50",macro1:"CQ|CQ CQ DE {MYCALL} {MYCALL} K",macro2:"His call|{CALL}",macro3:"Report|{CALL} UR {RST} {RST} BK",macro4:"TU 73|TU 73 DE {MYCALL} E E",macro5:"My call|{MYCALL}",macro6:"AGN?|AGN?"}};
+    psk:{seq:0,f:1000,afc:1000,q:20,text:""},log:{n:0,all:0,behind:false,ok:0,fail:0,last:[]},msg:"",net:"Preview mode: open this page from the device to control the radio",cfg:{rigName:"Shack",call:"W9XYZ",grid:"EN37",dnw:"EA3BB",prioOn:"1",prio:"pota,sota,dx,ses,-weak,strong",dxKm:"2500",txLevel:"50",macro1:"CQ|CQ CQ DE {MYCALL} {MYCALL} K",macro2:"His call|{CALL}",macro3:"Report|{CALL} UR {RST} {RST} BK",macro4:"TU 73|TU 73 DE {MYCALL} E E",macro5:"My call|{MYCALL}",macro6:"AGN?|AGN?"}};
 }
 demoState.id=0;
 poll(); setInterval(poll,700); setInterval(pollSpec,300); setTimeout(syncTime,1500); setInterval(syncTime,20000);

@@ -565,6 +565,10 @@ void App::syncSeq() {
     seq.maxRetries = cfg.maxRetries;
     seq.cqParity = cfg.cqParity;
     seq.useRR73 = cfg.useRR73 != 0;
+    if (seqDnw_ != cfg.dnw) { seqDnw_ = cfg.dnw; seq.doNotWork = parseCallList(cfg.dnw); }
+    seq.prioOn = cfg.prioOn != 0;
+    if (seqPrio_ != cfg.prio) { seqPrio_ = cfg.prio; seq.prio = parsePrio(cfg.prio); }
+    seq.dxKm = cfg.dxKm;
 }
 
 void App::status(const std::string& s) { status_ = s; }
@@ -1397,6 +1401,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
             ParsedMsg p;
             if (!parseMsg(sstr(d.text), p) || p.from.empty() || p.from == cfg.call) return err("Nothing to call in that message");
             syncSeq();
+            if (seq.blocked(p.from)) return err(p.from + " is on your do-not-work list (Settings, Choosing stations)");
             if (p.to == cfg.call && p.kind != K_OTHER && p.kind != K_CQ) seq.respondTo(p, d.snr, d.parity);
             else seq.callStation(p.from, (p.kind == K_CQ || p.kind == K_GRID) ? p.grid : "", d.snr, d.parity);
             if (clk::valid()) seq.txEnabled = true;
