@@ -9,6 +9,8 @@
   POTA/WWFF, SOTA, DX (distance from the grid), special event (1x1 calls), weakest, strongest.
 - Auto hunt answers CQ SOTA once per day, band and mode, like CQ POTA and CQ WWFF.
 - The web page has an icon (browser tab, phone home screen).
+- Settings export / import (web page, Settings, Device): a text file without passwords, named after the
+  RigDeck; on import every change is listed and can be ticked off first (this unit's own items start unticked).
 
 ## 1.0.0 (2026-11-23) — first stable release
 Highlights since the first public builds:

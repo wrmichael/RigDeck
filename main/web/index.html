@@ -79,6 +79,10 @@ table.log th{color:var(--dim);font-weight:500}
 .prio li span{flex:1;min-width:0}.prio li.off span{color:var(--dim)}
 .prio button{padding:4px 10px}
 tr.dnw td{opacity:.4}
+.btnlike span{display:inline-block;background:var(--pan2,#1c2831);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+.btnlike span:focus-visible{outline:2px solid var(--amb);outline-offset:1px}
+table.imp{border-collapse:collapse;font-size:13px}table.imp th,table.imp td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top;max-width:260px;overflow-wrap:anywhere}
+table.imp th{color:var(--dim);font-weight:500}
 .hint{color:var(--dim);font-size:12px}
 .hide{display:none!important}
 </style>
@@ -294,6 +298,14 @@ tr.dnw td{opacity:.4}
     <h4 style="margin:14px 0 4px">Console logs (for troubleshooting)</h4>
     <label><input type="checkbox" id="dvConsole"> Copy the console log to the microSD card (RigDeck/logs/console_<i>date</i>_<i>time</i>.txt, a new file each start and each day, kept 7 days)</label>
     <div id="dvLogs" class="hint"></div>
+    <h4 style="margin:14px 0 4px">Settings file</h4>
+    <div class="row"><button type="button" id="setExp">Export settings</button><label class="btnlike"><input type="file" id="setImp" accept=".txt,text/plain" style="display:none"><span role="button" tabindex="0" id="setImpB">Import settings…</span></label></div>
+    <div id="impBox" hidden>
+      <p class="hint" style="margin:6px 0">Changes in the file. Ticked ones are applied; things that belong to this unit (its name, hotspot, home network, TX levels, offsets, screen) start unticked.</p>
+      <div style="overflow-x:auto"><table class="imp"><thead><tr><th></th><th>Setting</th><th>Now</th><th>From the file</th></tr></thead><tbody id="impRows"></tbody></table></div>
+      <div class="row" style="margin-top:8px"><button type="button" id="impApply" class="on">Apply ticked settings</button><button type="button" id="impCancel">Cancel</button><span id="impInfo" class="hint"></span></div>
+    </div>
+    <p class="hint">Export saves every setting except passwords as a text file named after this RigDeck. Import it on another RigDeck to copy the station setup; you see each change before it is applied.</p>
     <h3 style="margin-top:16px">Clock</h3>
     <div class="row"><span id="clkinfo"></span><button data-trim="-100">-0.1 s</button><button data-trim="-20">-20 ms</button><button data-trim="20">+20 ms</button><button data-trim="100">+0.1 s</button></div>
     <p class="hint">Without internet or GPS the clock follows this browser's clock each time the page is open. If most stations show the same DT offset, nudge the clock until DT is near zero. With GPS on, change "GPS sentence delay" instead: lower it if DT values are mostly negative, raise it if they are mostly positive.</p>
@@ -633,6 +645,50 @@ function dlName(stamp,what,ext){
   const call=(S&&S.stor&&S.stor.station)||(S&&S.cfg&&S.cfg.call)||"";
   return [safe(rigName),safe(call)||"RigDeck",stamp,what].filter(Boolean).join("-")+"."+ext;
 }
+// Settings export / import: key=value lines, the same as the board's settings.txt, without passwords.
+const IMP_LOCAL=new Set(["rigName","apSsid","staSsid","txLevels","dialHz","dialMode","dialData","txFreq","cqParity","bright","contrast","gpsRxPin","gpsPpsPin"]);
+async function freshCfg(){const j=await (await fetch("/api/state?cfg=1",{cache:"no-store"})).json();return j.cfg||{};}
+$("setExp").onclick=async()=>{
+  try{
+    const cfg=demo?(S&&S.cfg)||{}:await freshCfg();
+    const txt="# RigDeck settings"+(rigName?" from "+rigName:"")+", "+new Date().toISOString().slice(0,16).replace("T"," ")+" UTC (no passwords)\n"+Object.keys(cfg).map(k=>k+"="+cfg[k]).join("\n")+"\n";
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"text/plain"}));
+    a.download=dlName(new Date().toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-"),"settings","txt");
+    document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  }catch(e){banner("Could not read the settings from the board: "+e.message);}
+};
+$("setImpB").onclick=()=>$("setImp").click();
+$("setImpB").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("setImp").click();}};
+let impData={};
+$("setImp").onchange=async()=>{
+  const f=$("setImp").files[0];$("setImp").value="";if(!f)return;
+  if(f.size>20000){banner("That file is too big for a RigDeck settings file.");return;}
+  const text=await f.text(), now=demo?(S&&S.cfg)||{}:await freshCfg().catch(()=>(S&&S.cfg)||{});
+  impData={};const rows=[];
+  for(const line of text.split(/\r?\n/)){
+    const m=line.match(/^([A-Za-z][A-Za-z0-9]*)=(.*)$/);if(!m)continue;
+    const [,k,v]=m;if(k==="apPass"||k==="staPass")continue;
+    if(!(k in now)||String(now[k])===v)continue;
+    impData[k]=v;rows.push(`<tr><td><input type="checkbox" data-k="${esc(k)}" ${IMP_LOCAL.has(k)?"":"checked"} aria-label="Apply ${esc(k)}"></td><td>${esc(k)}</td><td>${esc(now[k])}</td><td>${esc(v)}</td></tr>`);
+  }
+  $("impRows").innerHTML=rows.join("")||`<tr><td></td><td colspan="3">Nothing differs from this RigDeck's settings.</td></tr>`;
+  $("impApply").disabled=!rows.length;$("impInfo").textContent=rows.length?rows.length+" setting(s) differ":"";
+  $("impBox").hidden=false;
+};
+$("impCancel").onclick=()=>{$("impBox").hidden=true;impData={};};
+$("impApply").onclick=async()=>{
+  const keys=[...document.querySelectorAll("#impRows input[data-k]:checked")].map(c=>c.dataset.k);
+  if(!keys.length){$("impInfo").textContent="Nothing ticked.";return;}
+  // The board takes commands of up to 2 kB: send the settings in a few parts.
+  const parts=[];let cur={},len=0;
+  for(const k of keys){const n=encodeURIComponent(k).length+encodeURIComponent(impData[k]).length+2;if(len+n>1500&&len){parts.push(cur);cur={};len=0;}cur[k]=impData[k];len+=n;}
+  parts.push(cur);
+  const bad=[];let restart=false;
+  for(const p of parts){const j=await cmd("set",p);if(!j.ok)bad.push(j.err||j.msg||"refused");if(j.restart)restart=true;}
+  $("impInfo").textContent=bad.length?"Some settings were not applied: "+bad.join("; "):(restart?"Applied. Restart the device for the hotspot changes.":"Applied "+keys.length+" setting(s).");
+  if(!bad.length)$("impBox").hidden=true;
+  cfgLoaded=false;render.call=undefined;
+};
 async function loadConsoleLogs(){
   try{
     const j=await (await fetch("/api/consolelogs",{cache:"no-store"})).json();
