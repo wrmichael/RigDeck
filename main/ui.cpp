@@ -1083,6 +1083,7 @@ struct SField { const char* key; const char* label; int tab; SKind kind; int max
 const char* kSetTabs[] = {"Station", "Operating", "Radio", "CW", "Logging", "Wi-Fi", "Clock", "Device"};
 constexpr int kSetTabN = sizeof kSetTabs / sizeof kSetTabs[0];
 const SField kSet[] = {
+    {"rigName", "RigDeck name", 0, SK_TEXT, 24, nullptr, nullptr, "optional, e.g. Shack or Mobile"},
     {"call", "Callsign", 0, SK_UPPER, 11, nullptr, nullptr, ""},
     {"grid", "Grid locator", 0, SK_UPPER, 6, nullptr, nullptr, ""},
     {"op", "Operator (ADIF OPERATOR)", 0, SK_UPPER, 11, nullptr, nullptr, "optional"},

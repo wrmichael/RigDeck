@@ -7,6 +7,7 @@ enum OpMode { OP_MANUAL = 0, OP_AUTO_CQ = 1, OP_AUTO_HUNT = 2 };
 enum LogProto { LOG_NONE = 0, LOG_TCP_ADIF = 1, LOG_UDP_ADIF = 2, LOG_UDP_WSJTX = 3 };
 
 struct Settings {
+    std::string rigName;                 // this unit's name ("Shack", "Mobile"): shown on the web page, used in download names
     std::string call;                    // must be set before the firmware will transmit
     std::string grid;                    // 4 or 6 character locator
     std::string op;                      // ADIF OPERATOR: who is at the key, if different from the station callsign

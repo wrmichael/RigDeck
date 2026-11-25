@@ -147,10 +147,11 @@ int main() {
     CHECK(s.set("grid", "en37") && s.grid == "EN37" && !s.set("grid", "ZZ99") && s.set("grid", "EN37ab"));
     CHECK(!s.set("apPass", "short") && s.set("apPass", "longenough") && !s.set("txFreq", "5000") && s.set("txFreq", "1234"));
     CHECK(s.set("civAddr", "0x88") && s.civAddr == 0x88 && !s.set("bogus", "1"));
+    CHECK(s.set("rigName", "  Mobile 705 ") && s.rigName == "Mobile 705" && !s.set("rigName", "a/b") && !s.set("rigName", std::string(25, 'x')) && s.rigName == "Mobile 705");
     s.logHost = "192.168.4.2";
     CHECK(s.save("test/out/settings.txt"));
     Settings s2;
-    CHECK(s2.load("test/out/settings.txt") && s2.call == "W9XYZ" && s2.apPass == "longenough" && s2.txFreq == 1234 && s2.logHost == "192.168.4.2");
+    CHECK(s2.load("test/out/settings.txt") && s2.call == "W9XYZ" && s2.apPass == "longenough" && s2.txFreq == 1234 && s2.logHost == "192.168.4.2" && s2.rigName == "Mobile 705");
     CHECK(s.json().find("longenough") == std::string::npos && s.json().find("\"call\":\"W9XYZ\"") != std::string::npos);
 
     // --- message parsing ---

@@ -60,6 +60,15 @@ bool Settings::set(const std::string& k, const std::string& v) {
         cqTag = t;
         return true;
     }
+    if (k == "rigName") {                               // printable, no quotes or slashes, at most 24 characters
+        std::string t = v;
+        while (!t.empty() && t.front() == ' ') t.erase(0, 1);
+        while (!t.empty() && t.back() == ' ') t.pop_back();
+        if (t.size() > 24) return false;
+        for (unsigned char ch : t) if (ch < 32 || ch == '"' || ch == '/' || ch == '\\' || ch == '<' || ch == '>') return false;
+        rigName = t;
+        return true;
+    }
     if (k == "apSsid") { if (v.empty() || v.size() > 32) return false; apSsid = v; return true; }
     if (k == "apPass") { if (!v.empty() && (v.size() < 8 || v.size() > 63)) return false; apPass = v; return true; }
     if (k == "staSsid") { if (v.size() > 32) return false; staSsid = v; return true; }
@@ -125,7 +134,7 @@ std::string Settings::serialize(bool secrets) const {
     std::string s;
     auto S = [&](const char* k, const std::string& v) { s += k; s += '='; s += v; s += '\n'; };
     auto I = [&](const char* k, int v) { snprintf(b, sizeof b, "%d", v); S(k, b); };
-    S("call", call); S("grid", grid); S("op", op); S("mySig", mySig); S("mySigInfo", mySigInfo); S("cqTag", cqTag); S("apSsid", apSsid); S("staSsid", staSsid); S("logHost", logHost);
+    S("rigName", rigName); S("call", call); S("grid", grid); S("op", op); S("mySig", mySig); S("mySigInfo", mySigInfo); S("cqTag", cqTag); S("apSsid", apSsid); S("staSsid", staSsid); S("logHost", logHost);
     if (secrets) { S("apPass", apPass); S("staPass", staPass); }
     I("radioType", radioType); I("pttMethod", pttMethod); I("dialMode", dialMode); I("dialData", dialData); s += "dialHz=" + std::to_string(dialHz) + "\n"; I("catBaud", catBaud); I("keyWpm", keyWpm);
     for (int i = 0; i < 6; i++) { snprintf(b, sizeof b, "macro%d", i + 1); S(b, macro[i]); }

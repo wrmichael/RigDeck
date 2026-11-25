@@ -1,5 +1,9 @@
 # Changes
 
+## 1.0.1 (Beta)
+- RigDeck name (Settings, Station): shown at the top right of the web page and in the browser tab, and used in
+  download names: NAME-CALLSIGN-YYYYMMDD-HHMM-current.adi, -archive.adi, -console.txt.
+
 ## 1.0.0 (2026-11-23) — first stable release
 Highlights since the first public builds:
 - FT8, FT4, FT-CW and PSK31; Auto CQ, Auto hunt, POTA mode ("Next QSO"), directed CQ, POTA/WWFF once per day.

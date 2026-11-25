@@ -29,6 +29,7 @@ header{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:8px 1
 .dot.ok::before{background:var(--rx)}.dot.bad::before{background:var(--tx)}
 #clock{font:500 16px var(--mono);margin-left:auto}
 #mycall{font-weight:600}
+#rigname{font:600 26px/1 var(--mono);color:var(--txt);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .meter{width:150px;height:9px;background:#0b1014;border:1px solid var(--line);border-radius:5px;overflow:hidden}
 .meter i{display:block;height:100%;width:0;background:var(--rx)}
 #slot{height:6px;background:#0b1014}#slot i{display:block;height:100%;width:0;background:var(--rx)}
@@ -85,6 +86,7 @@ table.log th{color:var(--dim);font-weight:500}
   <div class="dots"><span class="dot" id="dUsb">USB</span><span class="dot" id="dCiv">CI-V</span><span class="dot" id="dAud">Audio</span><span class="dot" id="dClk">Clock</span></div>
   <div id="clock">--:--:--</div>
   <div id="mycall"></div>
+  <div id="rigname" hidden></div>
 </header>
 <div id="slot"><i></i></div>
 <div id="banner"></div>
@@ -207,6 +209,7 @@ table.log th{color:var(--dim);font-weight:500}
   <div class="pan">
     <h3>Station</h3>
     <div class="form" id="form">
+      <label for="s_rigName">RigDeck name</label><input id="s_rigName" maxlength="24" placeholder="optional, e.g. Shack or Mobile">
       <label for="s_call">Callsign</label><input id="s_call" maxlength="11">
       <label for="s_grid">Grid locator</label><input id="s_grid" maxlength="6">
       <label for="s_op">Operator callsign (ADIF OPERATOR)</label><input id="s_op" maxlength="11" placeholder="optional">
@@ -290,7 +293,7 @@ const BANDS={FT8:{"160":1.84,"80":3.573,"40":7.074,"30":10.136,"20":14.074,"17":
  FT4:{"80":3.575,"40":7.0475,"30":10.14,"20":14.08,"17":18.104,"15":21.14,"12":24.919,"10":28.18,"6":50.318,"2":144.17},
  CW:{"160":1.835,"80":3.565,"40":7.065,"30":10.125,"20":14.065,"17":18.095,"15":21.065,"12":24.91,"10":28.065,"6":50.095,"2":144.065},
  PSK31:{"80":3.58,"40":7.07,"30":10.142,"20":14.07,"17":18.1,"15":21.07,"12":24.92,"10":28.12}};
-let S=null, since=0, pskSince=0, cfgLoaded=false, lastTx="", lastRtt=60, specSeq=-1, lastSlot=-1, busy=false;
+let rigName="", S=null, since=0, pskSince=0, cfgLoaded=false, lastTx="", lastRtt=60, specSeq=-1, lastSlot=-1, busy=false;
 
 async function cmd(c,args){
   if(demo) return {ok:true};
@@ -390,8 +393,7 @@ function render(){
   // log
   $("logn").textContent=(S.stor?S.stor.station+": ":"")+S.log.n+" contacts in the current log, "+S.log.all+" in the archive"+(S.stor&&S.stor.sd?" (on the microSD card)":"")+(S.log.behind?" (some are not in the archive yet: clearing the current log copies them there first)":"");
   const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
-  const stn=(S.stor&&S.stor.station)||"rigdeck";
-  $("dlcur").download=`${stn}-current-${stamp}.adi`;$("dlall").download=`${stn}-archive-${stamp}.adi`;
+  $("dlcur").download=dlName(stamp,"current","adi");$("dlall").download=dlName(stamp,"archive","adi");
   if(S.stor){const st=S.stor, sz=b=>b>=1e9?(b/1e9).toFixed(1)+" GB":b>=1e6?(b/1e6).toFixed(1)+" MB":Math.round(b/1e3)+" kB", fr=(t,u)=>`${sz(Math.max(0,t-u))} free of ${sz(t)}`;
     $("dvStor").textContent=`Log of station ${st.station}: ${st.sd?"on the microSD card":"in the board's own memory"}\n`+
       (st.intT?`Board memory: ${fr(st.intT,st.intU)}\n`:"")+(st.sd&&st.sdT?`microSD card: ${fr(st.sdT,st.sdU)}\n`:`microSD card: ${st.sdInfo||"none"}\n`)+
@@ -416,6 +418,9 @@ function render(){
     for(const k in S.cfg){const e=$("s_"+k);if(e) e.value=k==="civAddr"?"0x"+(+S.cfg[k]).toString(16).toUpperCase():S.cfg[k];}
     for(const [id,key] of [["dvBright","bright"],["dvContrast","contrast"]]) if(S.cfg[key]!==undefined){$(id).value=S.cfg[key];$(id+"V").textContent=S.cfg[key]+" %";}
     if(S.cfg.consoleLog!==undefined) $("dvConsole").checked=!!+S.cfg.consoleLog;
+    rigName=S.cfg.rigName||"";
+    $("rigname").textContent=rigName;$("rigname").hidden=!rigName;$("rigname").title=rigName;
+    document.title=rigName?rigName+" - RigDeck":"RigDeck";
   }
   // SSB / CW logger
   {const MN={0:"LSB",1:"USB",2:"AM",3:"CW",4:"RTTY",5:"FM",7:"CW-R",8:"RTTY-R",23:"DV"}, cw=r.rmode===3||r.rmode===7;
@@ -572,12 +577,18 @@ $("freq").onclick=async()=>{
   cmd("rdata",{v:md.endsWith("-D")?"1":"0"});
 };
 $("dvConsole").onchange=()=>{cmd("set",{consoleLog:$("dvConsole").checked?"1":"0"});setTimeout(loadConsoleLogs,1500);};
+// Download names: RIGNAME-CALLSIGN-YYYYMMDD-HHMM-what.ext (the RigDeck name is left out when it is not set).
+function dlName(stamp,what,ext){
+  const safe=t=>String(t||"").trim().replace(/[^A-Za-z0-9_.]+/g,"_").replace(/^_+|_+$/g,"");
+  const call=(S&&S.stor&&S.stor.station)||(S&&S.cfg&&S.cfg.call)||"";
+  return [safe(rigName),safe(call)||"RigDeck",stamp,what].filter(Boolean).join("-")+"."+ext;
+}
 async function loadConsoleLogs(){
   try{
     const j=await (await fetch("/api/consolelogs",{cache:"no-store"})).json();
     const el=$("dvLogs");
     if(!j.files.length){el.textContent=j.on?"Console logs: none yet":"Console logs: none (needs a microSD card at start-up)";return;}
-    el.innerHTML="Console logs (newest first): "+j.files.map(f=>`<a href="/consolelog?f=${encodeURIComponent(f.name)}" download="${f.name}">${f.name.slice(8,-4).replace("_"," ")}</a> (${f.size>=1e6?(f.size/1e6).toFixed(1)+" MB":Math.max(1,Math.round(f.size/1e3))+" kB"})`).join(", ")+
+    el.innerHTML="Console logs (newest first): "+j.files.map(f=>`<a href="/consolelog?f=${encodeURIComponent(f.name)}" download="${esc(dlName((f.name.match(/(\d{8})_(\d{4})/)||[]).slice(1).join("-"),"console","txt"))}">${f.name.slice(8,-4).replace("_"," ")}</a> (${f.size>=1e6?(f.size/1e6).toFixed(1)+" MB":Math.max(1,Math.round(f.size/1e3))+" kB"})`).join(", ")+
       ` <button type="button" id="dvLogsR">Refresh</button>`;
     $("dvLogsR").onclick=loadConsoleLogs;
   }catch(e){ $("dvLogs").textContent=""; }
@@ -760,7 +771,7 @@ function demoState(){
   return {utc:now,clk:{ok:true,src:"demo",age:1},mode:"FT8",op:1,radio:{ser:true,aud:true,civ:true,model:"IC-7100",freq:14074000,band:"20m",rmode:1,data:1,ptt:false,s:95,po:0,swr:0,alc:0,wpm:22},
     slot:{len:15000,t,par:slot&1},tx:{en:false,on:false,msg:6,par:0,text:"",last:"",freq:1500,lvl:50,tune:false,wd:false,wdLeft:-1,wdMin:6},
     qso:{dx:"",grid:"",rs:-99,rr:-99,try:0,m:["","","","","","CQ W9XYZ EN37",""]},lvl:-22,dec:d,decId:demoState.id,decMs:640,
-    psk:{seq:0,f:1000,afc:1000,q:20,text:""},log:{n:0,all:0,behind:false,ok:0,fail:0,last:[]},msg:"",net:"Preview mode: open this page from the device to control the radio",cfg:{call:"W9XYZ",grid:"EN37",txLevel:"50",macro1:"CQ|CQ CQ DE {MYCALL} {MYCALL} K",macro2:"His call|{CALL}",macro3:"Report|{CALL} UR {RST} {RST} BK",macro4:"TU 73|TU 73 DE {MYCALL} E E",macro5:"My call|{MYCALL}",macro6:"AGN?|AGN?"}};
+    psk:{seq:0,f:1000,afc:1000,q:20,text:""},log:{n:0,all:0,behind:false,ok:0,fail:0,last:[]},msg:"",net:"Preview mode: open this page from the device to control the radio",cfg:{rigName:"Shack",call:"W9XYZ",grid:"EN37",txLevel:"50",macro1:"CQ|CQ CQ DE {MYCALL} {MYCALL} K",macro2:"His call|{CALL}",macro3:"Report|{CALL} UR {RST} {RST} BK",macro4:"TU 73|TU 73 DE {MYCALL} E E",macro5:"My call|{MYCALL}",macro6:"AGN?|AGN?"}};
 }
 demoState.id=0;
 poll(); setInterval(poll,700); setInterval(pollSpec,300); setTimeout(syncTime,1500); setInterval(syncTime,20000);
