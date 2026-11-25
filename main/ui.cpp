@@ -1719,6 +1719,7 @@ void aRefresh() {
             aMapExt = aMapPend; aMapExtLen = aMapPendLen;
             aMapPend = nullptr; aMapPendSet = false;
             aShownSeq = 0xffffffff;
+            if (g_app) g_app->logLine(aMapExt ? "APRS map: touch screen now draws the detailed map" : "APRS map: touch screen back to the built-in outlines");
             if (aMapNote) setText(aMapNote, aMapExt ? "Rings: quarters of the range. Detailed map: Natural Earth 1:10m." : "Rings: quarters of the range. Outlines: Natural Earth.");
         }
     }

@@ -195,6 +195,13 @@ extern "C" void app_main(void) {
     s_app.begin("/fs", logDir);
     ESP_LOGI(TAG, "RigDeck %s, call=%s grid=%s, free heap %u kB", s_app.fwVersion.c_str(), s_app.cfg.call.c_str(), s_app.cfg.grid.c_str(),
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_DEFAULT) / 1024));
+    {
+        static const char* const kReset[] = {"unknown", "power on", "external pin", "software restart", "crash", "interrupt watchdog",
+                                             "task watchdog", "other watchdog", "deep sleep", "brownout", "SDIO", "USB", "JTAG",
+                                             "eFuse", "power glitch", "CPU lockup"};
+        int r = (int)esp_reset_reason();
+        ESP_LOGI(TAG, "started after: %s (%d)", r >= 0 && r < (int)(sizeof kReset / sizeof kReset[0]) ? kReset[r] : "?", r);
+    }
 
     net_start(s_app);
     web_start(s_app);
