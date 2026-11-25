@@ -276,6 +276,16 @@ void Radio::textAnswer(const std::string& a) {
     if (c == "ID") {
         if (alive) textId_ = atoi(a.c_str() + 2);
         if (alive && proto == RP_KENWOOD && textId_ == 17 && !omAsked_) { omAsked_ = true; sendText("OM;"); }   // which Elecraft?
+        if (alive && proto == RP_QMX && !vnAsked_) { vnAsked_ = true; sendText("VN;"); }                     // firmware version
+        return;
+    }
+    if (c == "VN" && proto == RP_QMX) {                                  // "VN1_04_003QMX": version, then the model
+        std::string v = a.substr(2);
+        size_t q = v.find("QMX");
+        std::string model = q == std::string::npos ? "" : v.substr(q);
+        if (q != std::string::npos) v.resize(q);
+        std::lock_guard<std::mutex> lk(mtx_);
+        fw_ = v.substr(0, 20) + (model.size() > 3 ? " (" + model.substr(0, 8) + ")" : "");
         return;
     }
     if (c == "OM" && proto == RP_KENWOOD) {                              // K3 / KX3 / KX2: product number at the end

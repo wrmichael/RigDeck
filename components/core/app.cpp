@@ -958,6 +958,10 @@ void App::tick() {
     radio.poll();
     int64_t mono = clk::monoMs();
     std::lock_guard<std::mutex> lk(mtx_);
+    {                                                              // the radio's firmware version, once per connection
+        std::string fw = radio.firmware();
+        if (fw != radioFw_) { radioFw_ = fw; if (!fw.empty()) logLine(std::string("radio firmware: ") + radio.modelName() + " " + fw); }
+    }
 
     if (pttOffRepeat_ && mono >= pttOffRepeat_ && txState_ == ST_IDLE) { pttOffRepeat_ = 0; radio.ptt(false); }
     if (radio.proto == RP_NONE && radio.mode >= 0 && (radio.mode != cfg.dialMode || radio.dataMode != cfg.dialData)) {
@@ -2204,7 +2208,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     o += std::string(",\"mode\":\"") + modeName(mode_) + "\",\"op\":" + jnum(cfg.opMode);
     if (mode_ == DM_APRS) o += ",\"aprs\":" + aprsJson();
     o += std::string(",\"radio\":{\"ser\":") + jbool(usbSerial) + ",\"aud\":" + jbool(usbAudio) + ",\"civ\":" + jbool(radio.connected());
-    o += ",\"model\":" + jstr(radio.connected() ? radio.modelName() : "") + ",\"freq\":" + jnum((long long)f) + ",\"band\":" + jstr(bandName(f)) + ",\"rmode\":" + jnum(radio.mode.load()) + ",\"data\":" + jnum(radio.dataMode.load());
+    o += ",\"model\":" + jstr(radio.connected() ? radio.modelName() : "") + ",\"fw\":" + jstr(radio.connected() ? radioFw_ : "") + ",\"freq\":" + jnum((long long)f) + ",\"band\":" + jstr(bandName(f)) + ",\"rmode\":" + jnum(radio.mode.load()) + ",\"data\":" + jnum(radio.dataMode.load());
     o += std::string(",\"ptt\":") + jbool(radio.pttState) + ",\"s\":" + jnum(radio.smeter.load()) + ",\"po\":" + jnum(radio.po.load());
     o += ",\"swr\":" + jnum(radio.swr.load()) + ",\"alc\":" + jnum(radio.alc.load()) + ",\"ng\":" + jnum(radio.ng.load());
     o += ",\"proto\":" + jnum(radio.proto.load()) + ",\"wpm\":" + jnum(radio.keySpeed.load()) + ",\"bk\":" + jnum(radio.breakIn()) +

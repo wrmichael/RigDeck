@@ -1,5 +1,10 @@
 # Changes
 
+## 1.1.4-beta
+- QMX / QMX+: RigDeck asks the radio for its firmware version (CAT VN;), shows it next to the model on the web
+  page and writes it to the console log ("radio firmware: QMX 1_04_003").
+- The last console lines before a restart now reach the microSD card.
+
 ## 1.1.3-beta
 - Before a planned restart (update, Restart button) RigDeck closes the radio's serial port and switches its USB
   port off, so the radio sees the host leave cleanly.

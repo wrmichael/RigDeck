@@ -472,7 +472,7 @@ function render(){
   const mhz=r.freq?(r.freq/1e6).toFixed(6):"--.------";
   const MODES={0:"LSB",1:"USB",2:"AM",3:"CW",4:"RTTY",5:"FM",7:"CW-R",8:"RTTY-R"};
   const noCat=r.model==="No CAT";
-  $("freq").innerHTML=`${mhz.slice(0,-3)}<small>${mhz.slice(-3)} MHz ${esc(r.band)} ${MODES[r.rmode]!==undefined?MODES[r.rmode]+(r.data===1?"-D":""):""} ${esc(r.model||"")}${noCat?" (set the radio to this; tap to change)":""}</small>`;
+  $("freq").innerHTML=`${mhz.slice(0,-3)}<small>${mhz.slice(-3)} MHz ${esc(r.band)} ${MODES[r.rmode]!==undefined?MODES[r.rmode]+(r.data===1?"-D":""):""} ${esc(r.model||"")}${r.fw?" "+esc(r.fw):""}${noCat?" (set the radio to this; tap to change)":""}</small>`;
   $("freq").style.cursor=noCat?"pointer":"";
   $("freq").title=noCat?"No CAT: tap to type the frequency and mode you set on the radio":"";
   $("dUsb").className="dot "+(r.ser?"ok":"bad");

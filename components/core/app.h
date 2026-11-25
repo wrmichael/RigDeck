@@ -150,6 +150,7 @@ public:
 
 private:
     std::string seqDnw_, seqPrio_ = "\x01";       // what the sequencer's lists were built from
+    std::string radioFw_;                           // the radio's firmware version as last reported
     std::mutex usbProbMtx_;
     std::string usbProb_;
     int trainBk_ = -1;                              // CW trainer: the radio's break-in before it was turned off
