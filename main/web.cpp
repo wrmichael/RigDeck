@@ -96,7 +96,7 @@ static esp_err_t hSpec(httpd_req_t* req) { WebBusy wb("spectrum"); return sendJs
 
 static esp_err_t hCmd(httpd_req_t* req) {
     WebBusy wb("command");
-    if (req->content_len > 2048) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "too long");
+    if (req->content_len > 4096) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "too long");   // the whole Settings form fits
     std::string body(req->content_len, 0);
     size_t got = 0;
     while (got < body.size()) {

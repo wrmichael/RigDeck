@@ -865,7 +865,7 @@ async function otaNet(ch){
 $("otaStable").onclick=()=>otaNet("stable");$("otaBeta").onclick=()=>otaNet("beta");
 $("save").onclick=async()=>{
   const a={};
-  document.querySelectorAll("#form input,#form select").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=e.value;});
+  document.querySelectorAll("#form input[id^=\"s_\"],#form select[id^=\"s_\"]").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=e.value;});
   const j=await cmd("set",a);
   if(j.ok){$("saveinfo").textContent=j.restart?"Saved. Restart the device to apply the hotspot changes.":"Saved.";cfgLoaded=false;render.call=undefined;}
 };

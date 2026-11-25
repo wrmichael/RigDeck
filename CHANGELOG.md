@@ -1,5 +1,9 @@
 # Changes
 
+## 1.0.2 (Beta)
+- Fixed: Save settings on the web page failed in 1.0.1 (the new priority list's tick boxes were sent as
+  settings). Larger settings commands are accepted.
+
 ## 1.0.1 (Beta)
 - RigDeck name (Settings, Station): shown at the top right of the web page and in the browser tab, and used in
   download names: NAME-CALLSIGN-YYYYMMDD-HHMM-current.adi, -archive.adi, -console.txt.
