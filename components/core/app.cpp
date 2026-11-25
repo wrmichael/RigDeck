@@ -85,7 +85,7 @@ void App::begin(const std::string& dataDir, const std::string& logDir) {
     logOnSd_ = !logDir.empty() && logDir != dataDir;
     logDir_ = logOnSd_ ? logDir : dataDir;
     if (logOnSd_) mkdir(logDir_.c_str(), 0777);
-    cfg.load(dir_ + "/settings.txt");
+    freshSettings = !cfg.load(dir_ + "/settings.txt");
     alcLoad();
     radio.addr = (uint8_t)cfg.civAddr;
     seq.now = [] { return clk::utcMs(); };

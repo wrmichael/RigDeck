@@ -546,7 +546,7 @@ function render(){
   $("dlcur").download=dlName(stamp,"current","adi");$("dlall").download=dlName(stamp,"archive","adi");
   { const r=S.radio||{},w=(S.wchip&&S.wchip.ver)||"";
       const h=`<span class="dim">RigDeck</span><span>${esc(S.ver||"")}</span><span class="dim">Wi-Fi chip</span><span>${esc(w||"unknown")}</span>`+
-        `<span class="dim">Radio</span><span>${esc(r.model||"none connected")}</span>`+(r.fw?`<span class="dim">Radio firmware</span><span>${esc(r.fw)}</span>`:"");
+        `<span class="dim">Radio</span><span>${esc(r.model||"none connected")}</span>`+(r.fw?`<span class="dim">Radio firmware</span><span>${esc(r.fw)}</span>`:"")+`<span class="dim">All stations</span><span><a href="/multi" target="_blank" rel="noopener">every RigDeck in one window</a></span>`;
       if($("dvAbout").innerHTML!==h)$("dvAbout").innerHTML=h; }
   if(S.stor){const st=S.stor, sz=b=>b>=1e9?(b/1e9).toFixed(1)+" GB":b>=1e6?(b/1e6).toFixed(1)+" MB":Math.round(b/1e3)+" kB", fr=(t,u)=>`${sz(Math.max(0,t-u))} free of ${sz(t)}`;
     $("dvStor").textContent=`Log of station ${st.station}: ${st.sd?"on the microSD card":"in the board's own memory"}\n`+

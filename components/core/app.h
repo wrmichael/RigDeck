@@ -121,6 +121,8 @@ public:
     std::atomic<bool> ntpSynced{false};
     std::string fwVersion = "dev";                  // set by the platform (version.txt on the ESP32)
     // Beta builds carry "-beta" in their version (version.txt); Stable builds a plain number.
+    bool freshSettings = false;                    // no settings file at start-up: a new unit
+    bool saveSettings() { std::lock_guard<std::mutex> lk(mtx_); return cfg.save(dir_ + "/settings.txt"); }
     bool betaBuild() const { return fwVersion.find("beta") != std::string::npos || fwVersion == "dev"; }
     bool consoleLogOn() const { return cfg.consoleLog < 0 ? betaBuild() : cfg.consoleLog != 0; }
     std::string otaUpd_;

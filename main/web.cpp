@@ -21,6 +21,8 @@ void ota_register(httpd_handle_t srv);
 static App* s_app;
 extern const char index_html_start[] asm("_binary_index_html_start");
 extern const char index_html_end[] asm("_binary_index_html_end");
+extern const char multi_html_start[] asm("_binary_multi_html_start");
+extern const char multi_html_end[] asm("_binary_multi_html_end");
 extern const uint8_t icon_png_start[] asm("_binary_icon_png_start");
 extern const uint8_t icon_png_end[] asm("_binary_icon_png_end");
 
@@ -82,6 +84,15 @@ static esp_err_t hIndex(httpd_req_t* req) {
     size_t n = index_html_end - index_html_start;
     if (n && index_html_start[n - 1] == 0) n--;      // EMBED_TXTFILES appends a NUL
     return httpd_resp_send(req, index_html_start, n);
+}
+
+// All stations in one window: each RigDeck's own page in a frame (the list is kept in the browser).
+static esp_err_t hMulti(httpd_req_t* req) {
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    size_t n = multi_html_end - multi_html_start;
+    if (n && multi_html_start[n - 1] == 0) n--;
+    return httpd_resp_send(req, multi_html_start, n);
 }
 
 static esp_err_t hState(httpd_req_t* req) {
@@ -160,6 +171,7 @@ void web_start(App& app) {
     if (httpd_start(&srv, &cfg) != ESP_OK) { ESP_LOGE(TAG, "HTTP server failed to start"); return; }
     static const httpd_uri_t uris[] = {
         {"/", HTTP_GET, hIndex, nullptr},
+        {"/multi", HTTP_GET, hMulti, nullptr},
         {"/api/state", HTTP_GET, hState, nullptr},
         {"/api/spec", HTTP_GET, hSpec, nullptr},
         {"/api/cmd", HTTP_POST, hCmd, nullptr},

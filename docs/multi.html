@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RigDeck stations</title>
+<style>
+:root{--bg:#0d1317;--pan:#151e25;--pan2:#1c2831;--line:#2a3944;--amb:#f6b93b;--txt:#dce5ea;--dim:#8498a5;--bad:#ff6b6b;--ok:#3fcf8e}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 10px;background:var(--pan);border-bottom:1px solid var(--line)}
+h1{font-size:20px;margin:0 8px 0 0;color:var(--amb);letter-spacing:.5px;white-space:nowrap}
+button,select,input{font:inherit;color:var(--txt);background:var(--pan2);border:1px solid var(--line);border-radius:6px;padding:5px 10px}
+button{cursor:pointer}button:hover{border-color:var(--amb)}
+button.pri{background:var(--amb);color:#1a1300;border-color:var(--amb);font-weight:600}
+label{color:var(--dim);display:flex;gap:6px;align-items:center}
+#grid{display:grid;gap:6px;padding:6px;height:calc(100% - var(--hh,48px))}
+.tile{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--pan);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.tile.max{position:fixed;inset:var(--hh,48px) 6px 6px 6px;z-index:5}
+.bar{display:flex;align-items:center;gap:6px;padding:3px 6px;background:var(--pan2);border-bottom:1px solid var(--line);min-height:32px}
+.bar .nm{font-weight:700;color:var(--amb);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .ad{color:var(--dim);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.bar button{padding:2px 8px;font-size:14px}
+.body{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
+.body iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:var(--bg)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--dim);flex:none}
+.dot.up{background:var(--ok)}.dot.down{background:var(--bad)}
+#empty,#warn{padding:30px;max-width:760px;margin:0 auto;color:var(--dim)}
+#warn{color:var(--txt);background:#3a1d1d;border:1px solid var(--bad);border-radius:8px;margin:12px auto}
+dialog{background:var(--pan);color:var(--txt);border:1px solid var(--line);border-radius:10px;max-width:560px;width:calc(100% - 32px)}
+dialog::backdrop{background:#000a}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}
+.lst{margin:8px 0;padding:0;list-style:none}
+.lst li{display:flex;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid var(--line)}
+.lst li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+textarea{width:100%;min-height:90px;font:13px ui-monospace,Consolas,monospace;color:var(--txt);background:var(--bg);border:1px solid var(--line);border-radius:6px}
+.hint{color:var(--dim);font-size:13px}
+@media(max-width:700px){h1{font-size:17px}}
+</style>
+</head>
+<body>
+<header id="hd">
+  <h1>RigDeck stations</h1>
+  <button class="pri" id="bAdd">+ Add station</button>
+  <button id="bList">Stations…</button>
+  <label>Columns <select id="cols"><option value="0">Auto</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+  <label>Size <select id="zoom"><option value="1">100 %</option><option value="0.85">85 %</option><option value="0.75">75 %</option><option value="0.67">67 %</option><option value="0.5">50 %</option></select></label>
+  <button id="bReload" title="Reload every station">⟳ All</button>
+</header>
+<div id="warn" hidden></div>
+<div id="empty" hidden>
+  <p><b>No stations yet.</b> Press <b>+ Add station</b> and enter each RigDeck's address, for example <code>192.168.68.95</code> (Settings → Wi-Fi on each unit shows it). Up to 10.</p>
+  <p class="hint">Each station is its own RigDeck web page in a frame, with every button working as usual. The list is kept in this browser. To use it on another computer, copy it from <b>Stations…</b>, or bookmark this page with <code>?s=</code> and the addresses separated by commas.</p>
+</div>
+<div id="grid"></div>
+
+<dialog id="dlg">
+  <h3 style="margin-top:0;color:var(--amb)">Stations</h3>
+  <div class="row"><input id="nAddr" placeholder="Address, e.g. 192.168.68.95" style="flex:2;min-width:180px"><input id="nName" placeholder="Name (optional)" style="flex:1;min-width:110px"><button class="pri" id="nOk">Add</button></div>
+  <p class="hint" id="nMsg"></p>
+  <ul class="lst" id="lst"></ul>
+  <p class="hint">Copy or paste the whole list (one station per line: address, then a name if you like):</p>
+  <textarea id="txt"></textarea>
+  <div class="row"><button id="tApply">Use this list</button><button id="tLink">Copy a bookmark link</button><span style="flex:1"></span><button id="dClose">Close</button></div>
+</dialog>
+
+<script>
+"use strict";
+const MAX=10, KEY="rd_multi", KEYV="rd_multi_view";
+const $=id=>document.getElementById(id);
+let st=[], view={cols:0,zoom:1,max:-1};
+function load(){
+  try{const q=new URLSearchParams(location.search).get("s");
+    if(q){st=q.split(",").map(x=>x.trim()).filter(Boolean).slice(0,MAX).map(a=>{const [addr,...n]=a.split("~");return {addr:clean(addr),name:n.join("~")};}).filter(x=>x.addr);}
+    else st=JSON.parse(localStorage.getItem(KEY)||"[]");}catch(e){st=[];}
+  try{Object.assign(view,JSON.parse(localStorage.getItem(KEYV)||"{}"));}catch(e){}
+  view.max=-1;
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(st));localStorage.setItem(KEYV,JSON.stringify({cols:view.cols,zoom:view.zoom}));}catch(e){}}
+function clean(a){a=(a||"").trim().replace(/^https?:\/\//i,"").replace(/\/.*$/,"");return /^[A-Za-z0-9.\-:\[\]]+$/.test(a)?a:"";}
+function url(s){return "http://"+s.addr+"/";}
+function colsFor(n){if(view.cols>0)return view.cols;const w=innerWidth;if(n<=1)return 1;if(n<=2)return w>900?2:1;if(n<=4)return w>900?2:1;if(n<=6)return w>1400?3:2;return w>1600?4:3;}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+function build(){
+  const g=$("grid");g.innerHTML="";
+  $("empty").hidden=st.length>0;
+  st.forEach((s,i)=>{
+    const t=document.createElement("div");t.className="tile";t.dataset.i=i;
+    t.innerHTML=`<div class="bar"><span class="dot" title="checking"></span><span class="nm">${esc(s.name||s.addr)}</span><span class="ad">${s.name?esc(s.addr):""}</span>
+      <button data-a="left" title="Move left">◀</button><button data-a="right" title="Move right">▶</button>
+      <button data-a="reload" title="Reload">⟳</button><button data-a="max" title="Fill the window (Esc to go back)">⤢</button>
+      <a href="${esc(url(s))}" target="_blank" rel="noopener"><button title="Open in its own tab">↗</button></a></div>
+      <div class="body"><iframe src="${esc(url(s))}" title="${esc(s.name||s.addr)}" allow="autoplay; clipboard-write" loading="eager"></iframe></div>`;
+    t.querySelector(".bar").addEventListener("click",e=>{const b=e.target.closest("button[data-a]");if(b)act(i,b.dataset.a);});
+    t.querySelector(".bar").addEventListener("dblclick",e=>{if(!e.target.closest("button"))act(i,"max");});
+    g.appendChild(t);
+  });
+  layout();probe();
+}
+function layout(){
+  const hh=$("hd").offsetHeight+($("warn").hidden?0:$("warn").offsetHeight+24);
+  document.documentElement.style.setProperty("--hh",hh+"px");
+  const n=st.length,c=colsFor(n),r=Math.max(1,Math.ceil(n/c)),g=$("grid");
+  g.style.gridTemplateColumns=`repeat(${c},minmax(0,1fr))`;
+  const avail=innerHeight-hh-12, rowH=Math.max(260,Math.floor((avail-(r-1)*6)/r));
+  g.style.gridAutoRows=rowH+"px";
+  g.style.height=(r*rowH+(r-1)*6+12)+"px";
+  document.querySelectorAll(".tile").forEach(t=>{
+    t.classList.toggle("max",+t.dataset.i===view.max);
+    const b=t.querySelector(".body"),f=t.querySelector("iframe"),z=+view.zoom||1;
+    f.style.width=(b.clientWidth/z)+"px";f.style.height=(b.clientHeight/z)+"px";f.style.transform=`scale(${z})`;
+  });
+}
+function act(i,a){
+  if(a==="reload"){const f=document.querySelector(`.tile[data-i="${i}"] iframe`);f.src=f.src;}
+  else if(a==="max"){view.max=view.max===i?-1:i;layout();}
+  else if(a==="left"&&i>0){[st[i-1],st[i]]=[st[i],st[i-1]];save();build();}
+  else if(a==="right"&&i<st.length-1){[st[i+1],st[i]]=[st[i],st[i+1]];save();build();}
+}
+// Up/down light: the board answers /api/state (no-cors: we only learn that it answered).
+async function probe(){
+  document.querySelectorAll(".tile").forEach(async t=>{
+    const s=st[+t.dataset.i],d=t.querySelector(".dot");if(!s)return;
+    const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),4000);
+    try{await fetch(url(s)+"api/state",{mode:"no-cors",cache:"no-store",signal:ac.signal});d.className="dot up";d.title="answering";}
+    catch(e){d.className="dot down";d.title="not answering";}
+    clearTimeout(tm);
+  });
+}
+function listUi(){
+  const l=$("lst");l.innerHTML="";
+  st.forEach((s,i)=>{const li=document.createElement("li");
+    li.innerHTML=`<span><b>${esc(s.name||s.addr)}</b> ${s.name?'<span class="hint">'+esc(s.addr)+'</span>':""}</span><button data-r="${i}">Remove</button>`;
+    li.querySelector("button").onclick=()=>{st.splice(i,1);save();build();listUi();};l.appendChild(li);});
+  $("txt").value=st.map(s=>s.addr+(s.name?" "+s.name:"")).join("\n");
+  $("nOk").disabled=st.length>=MAX;$("nMsg").textContent=st.length>=MAX?"10 stations is the most this page shows.":"";
+}
+function addOne(addr,name){
+  const a=clean(addr);if(!a){$("nMsg").textContent="That does not look like an address (e.g. 192.168.68.95).";return false;}
+  if(st.some(s=>s.addr===a)){$("nMsg").textContent=a+" is already in the list.";return false;}
+  if(st.length>=MAX)return false;
+  st.push({addr:a,name:(name||"").trim().slice(0,32)});save();build();listUi();return true;
+}
+$("bAdd").onclick=$("bList").onclick=()=>{listUi();$("dlg").showModal();$("nAddr").focus();};
+$("dClose").onclick=()=>$("dlg").close();
+$("nOk").onclick=()=>{if(addOne($("nAddr").value,$("nName").value)){$("nAddr").value="";$("nName").value="";$("nAddr").focus();}};
+$("nAddr").onkeydown=$("nName").onkeydown=e=>{if(e.key==="Enter")$("nOk").click();};
+$("tApply").onclick=()=>{
+  const out=[];for(const line of $("txt").value.split(/\n/)){const m=line.trim().match(/^(\S+)\s*(.*)$/);if(!m)continue;const a=clean(m[1]);if(a&&!out.some(s=>s.addr===a)&&out.length<MAX)out.push({addr:a,name:m[2].slice(0,32)});}
+  st=out;save();build();listUi();
+};
+$("tLink").onclick=async()=>{
+  const u=location.origin+location.pathname+"?s="+st.map(s=>encodeURIComponent(s.addr+(s.name?"~"+s.name:""))).join(",");
+  try{await navigator.clipboard.writeText(u);$("nMsg").textContent="Link copied.";}catch(e){$("txt").value=u;$("nMsg").textContent="Copy the link from the box.";}
+};
+$("cols").onchange=()=>{view.cols=+$("cols").value;save();layout();};
+$("zoom").onchange=()=>{view.zoom=+$("zoom").value;save();layout();};
+$("bReload").onclick=()=>{document.querySelectorAll("iframe").forEach(f=>f.src=f.src);probe();};
+addEventListener("resize",layout);
+addEventListener("keydown",e=>{if(e.key==="Escape"&&view.max>=0&&!$("dlg").open){view.max=-1;layout();}});
+setInterval(probe,30000);
+
+load();
+$("cols").value=String(view.cols||0);$("zoom").value=String(view.zoom||1);
+if(location.protocol==="https:"){
+  $("warn").hidden=false;
+  $("warn").innerHTML="Browsers do not show the RigDeck pages (plain http) inside a page loaded over https. Open this page from one of your RigDecks instead: <b>http://&lt;its address&gt;/multi</b>, or save this file to your computer (right-click, Save as) and open it from there.";
+}
+build();
+</script>
+</body>
+</html>

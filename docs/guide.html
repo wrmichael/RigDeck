@@ -85,6 +85,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
     <li><a href="#listen">Listening in the browser</a></li>
     <li><a href="#time">Keeping the time</a></li>
     <li><a href="#wifi">Wi-Fi</a></li>
+    <li><a href="#multi">All stations in one window</a></li>
     <li><a href="#update">Updates and settings files</a></li>
     <li><a href="#trouble">Troubleshooting</a></li>
   </ol>
@@ -117,7 +118,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 </ol>
 <h3>First start</h3>
 <ol class="steps">
-  <li>On a phone or laptop, join the Wi-Fi network <b>RigDeck</b> (or RigDeck-XXXXXX). The password is <code>ft8ft8ft8</code>.</li>
+  <li>On a phone or laptop, join the Wi-Fi network <b>RigDeck-XXXXXX</b> (six letters and digits from the board; units set up before 1.1.6 are called <b>RigDeck</b>). The password is <code>ft8ft8ft8</code>.</li>
   <li>Open <b>http://192.168.4.1</b>. You can also do everything below on the touch screen: the gear button at the top right opens Settings.</li>
   <li>Settings, <b>Station</b>: enter your <b>callsign</b> and <b>grid</b>. RigDeck will not transmit until both are set. Optionally give the unit a <b>RigDeck name</b> <span class="pill">BETA</span> such as "Shack" or "Mobile": it shows at the top right of the web page, in gold on the touch screen (after the radio model, and on the APRS screen), and in the names of downloaded files.</li>
   <li>Settings, <b>Wi-Fi</b>: change the hotspot password. <b>More than one RigDeck?</b> Give each its own hotspot name (for example RigDeck-Shack, RigDeck-Mobile). With the same name on two units, a phone joins whichever it finds first and you may be working the other unit than you think. Settings import leaves the hotspot name alone for this reason. To give RigDeck internet time and reach a logging PC, enter your home network (2.4 GHz) and press <b>Save + connect</b>.</li>
@@ -352,6 +353,16 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
   <li>Phones often leave a hotspot with no internet. On Android choose <b>Stay connected</b> and turn off switching to mobile data for the RigDeck network; on iPhone turn off <b>Wi-Fi Assist</b>.</li>
   <li>When RigDeck is on your home network it gets the hotspot name (or RigDeck-XXXXXX) as its network name, which helps you find it in your router's list.</li>
   <li>Frequent dropouts: update the board's Wi-Fi chip (Settings, Wi-Fi chip) with the file from the flasher page.</li>
+</ul>
+
+<h2 id="multi">All stations in one window <span class="pill">BETA</span></h2>
+<p>With several RigDecks on your home network, one browser window can show them all, each as its full web page with every button working.</p>
+<ul>
+  <li>Open <b>http://&lt;any RigDeck's address&gt;/multi</b> (Settings, Device has the link "every RigDeck in one window"), press <b>+ Add station</b> and enter each unit's address and a name. Up to 10.</li>
+  <li><b>Columns</b> and <b>Size</b> fit them to your screen; ◀ ▶ change the order, ⤢ (or a double-click on a station's title bar) fills the window with one station, Esc goes back, ↗ opens it in its own tab. The dot is green while the station answers.</li>
+  <li>The list is kept in that browser. <b>Stations…</b> lets you copy it, paste it into another browser, or copy a bookmark link that holds the list.</li>
+  <li>Instead of a RigDeck you can open the page from a file on your computer: <a href="multi.html" download>save multi.html</a> and double-click it. It does not work straight from this site: browsers do not show plain-http pages inside an https page.</li>
+  <li>Give the units fixed addresses in your router (DHCP reservation) so the list stays right.</li>
 </ul>
 
 <h2 id="update">Updates and settings files</h2>

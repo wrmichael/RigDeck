@@ -258,6 +258,15 @@ void net_start(App& app) {
     esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, onEvent, nullptr, nullptr);
     esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_LOST_IP, onEvent, nullptr, nullptr);
 
+    if (app.freshSettings && app.cfg.apSsid == "RigDeck") {     // a new unit: its own hotspot name from the MAC address
+        uint8_t mac[6] = {};
+        esp_read_mac(mac, ESP_MAC_BASE);
+        char n[24];
+        snprintf(n, sizeof n, "RigDeck-%02X%02X%02X", mac[3], mac[4], mac[5]);
+        app.cfg.apSsid = n;
+        app.saveSettings();
+        ESP_LOGI(TAG, "new unit: hotspot name %s", n);
+    }
     wifi_config_t ap = {};
     strlcpy((char*)ap.ap.ssid, app.cfg.apSsid.c_str(), sizeof ap.ap.ssid);
     ap.ap.ssid_len = (uint8_t)strlen((char*)ap.ap.ssid);

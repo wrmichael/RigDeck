@@ -325,7 +325,7 @@ On Windows with Espressif's EIM installer, `start.bat` opens a PowerShell with E
 
 ## Using it
 
-1. Join the hotspot **RigDeck**, password **ft8ft8ft8**, and open **http://192.168.4.1**.
+1. Join the hotspot **RigDeck-XXXXXX** (from 1.1.6 each new unit has its own; older units **RigDeck**), password **ft8ft8ft8**, and open **http://192.168.4.1**.
 2. Settings tab: enter callsign and grid, change the hotspot password, Save. It refuses to
    transmit until callsign and grid are set.
 3. Header dots: USB (serial port found), CI-V (radio answering), Audio (codec open), Clock.
