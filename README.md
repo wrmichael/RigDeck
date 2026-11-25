@@ -19,8 +19,9 @@ port with one cable and it:
 - creates its own **Wi-Fi hotspot** with a web page that mirrors everything, so a phone or laptop
   can run it too.
 
-Radios: Icom **IC-7100** (tested on the air), Icom **IC-705**, Yaesu **FTX-1** and QRP Labs **QMX / QMX+**
-(tested against simulated radios so far; reports welcome).
+Radios tested on the air: Icom **IC-7100** and **IC-705**, QRP Labs **QMX / QMX+**, and an Elecraft
+**K2** with no CAT control (through a SignaLink sound card). Yaesu **FTX-1** and the other radios below are
+tested against simulated radios so far; reports welcome.
 
 > RigDeck started life as "IC7100-FT8". A controller upgraded from that firmware keeps its saved hotspot
 > name until you change it in Settings; new installs use **RigDeck**.
@@ -28,8 +29,8 @@ Radios: Icom **IC-7100** (tested on the air), Icom **IC-705**, Yaesu **FTX-1** a
 ## Status
 
 **Version 1.0.0** (2026-11-23), the first stable release. Running on the Waveshare
-ESP32-P4-WIFI6-Touch-LCD-7B with ESP-IDF 6.1, tested on the air with an IC-7100, an IC-705 and a
-SignaLink sound card (No CAT), on several units for many hours: FT8 contacts in Auto CQ and Auto hunt,
+ESP32-P4-WIFI6-Touch-LCD-7B with ESP-IDF 6.1, tested on the air with an IC-7100, an IC-705, a QMX / QMX+ and a
+K2 through a SignaLink sound card (No CAT), on several units for many hours: FT8 contacts in Auto CQ and Auto hunt,
 logging to the microSD card and to Log4OM, firmware updates over Wi-Fi, internal memory steady with
 large headroom (lowest about 190 kB, DMA-capable about 155 kB).
 
@@ -37,7 +38,7 @@ Known issues in 1.0.0:
 
 - Automatic TX audio level is confirmed on the IC-705 but not yet on the IC-7100: set the level
   by hand there (it is remembered for that radio).
-- The Yaesu, Kenwood, Elecraft and other Icom drivers, the QMX and the Digirig PTT lines are tested
+- The Yaesu, Kenwood, Elecraft (with CAT) and other Icom drivers and the Digirig PTT lines are tested
   against simulated radios only.
 
 Checked on a PC with `sh test/build.sh`: FT8/FT4 encode/decode loopback, two simulated stations
@@ -212,12 +213,13 @@ Radios and interfaces:
 
 | Radio / interface | How it connects | Status |
 |---|---|---|
-| IC-7100, IC-705, FTX-1, QMX | one USB cable | tested |
+| IC-7100, IC-705, QMX / QMX+ | one USB cable | tested on the air |
+| FTX-1 | one USB cable | should work, untested |
 | IC-7300, IC-7610, IC-9700, IC-905 | one USB cable (CI-V + sound card) | should work, untested |
 | FTDX10, FT-991A, FT-710, FTDX101 | one USB cable (CAT at the radio's rate + sound card) | should work, untested |
 | TS-2000, TS-480, TS-590, K2, K3 | Digirig with the radio's CAT cable (or a CP2102 USB-RS232 cable + sound card on a hub) | should work, untested |
 | Elecraft KX2, KX3 | Digirig with the Elecraft (ACC1, 3.5 mm) CAT cable; audio to the mic and phones jacks; PTT "CAT command" | should work, untested |
-| SignaLink USB (any radio) | Radio "No CAT": the SignaLink keys the radio on its own | should work, untested |
+| SignaLink USB (any radio) | Radio "No CAT": the SignaLink keys the radio on its own | tested on the air (K2) |
 | Digirig without a CAT cable | Radio "No CAT", PTT "Serial RTS" | should work, untested |
 
 - **No CAT** (Settings > Radio): a sound card cannot tell RigDeck the band, mode or frequency, so
