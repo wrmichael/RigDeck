@@ -130,6 +130,12 @@ int main() {
         CHECK(js.find("Hello RigDeck") != std::string::npos);
         CHECK(app.command("aprsmsg", {{"to", "W9ABC-7"}, {"text", "Hi back"}}).find("\"ok\":true") != std::string::npos);
         CHECK(app.command("aprsmsg", {{"to", "bad call!"}, {"text", "x"}}).find("\"ok\":false") != std::string::npos);
+        // Nothing can go out (no radio): the message waits once, and two "Beacon now" presses leave one position report.
+        app.tick(); app.tick();
+        app.command("aprsbeacon", {}); app.command("aprsbeacon", {});
+        app.tick();
+        js = app.stateJson(0, 0, false);
+        CHECK(js.find("\"queued\":3") != std::string::npos);           // the ack, the message once, one beacon
         CHECK(app.command("set", {{"aprsPath", "WIDE1-1,WIDE2-1"}, {"aprsSym", "/>"}, {"aprsLat", "39.77"}, {"aprsLon", "-86.16"}}).find("\"ok\":true") != std::string::npos);
         CHECK(app.command("set", {{"aprsPath", "WIDE1-1,,"}}).find("\"ok\":false") != std::string::npos);
     }

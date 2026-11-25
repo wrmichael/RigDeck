@@ -1160,18 +1160,21 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
         double la, lo;
         std::string src;
         if (aprs::validCallSsid(aprsMyCall()) && aprsMyPos(la, lo, src)) {
-            aprsOut_.push_back(aprs::encodePosition(la, lo, cfg.aprsSym[0], cfg.aprsSym[1], cfg.aprsComment, true));
+            aprsQueueBeacon(aprs::encodePosition(la, lo, cfg.aprsSym[0], cfg.aprsSym[1], cfg.aprsComment, true));
             logLine("APRS beacon queued, position from " + src);
         } else logLine(aprs::validCallSsid(aprsMyCall()) ? "APRS beacon skipped: no position (Settings, APRS)" : "APRS beacon skipped: callsign-SSID not valid");
         aprsNextBeacon_ = mono + (int64_t)cfg.aprsBeaconMin * 60000;
     }
-    // Outgoing messages: up to 3 sends, 30 s apart, until acknowledged.
+    // Outgoing messages: up to 3 sends, 30 s apart (counted from the send), until acknowledged. The next copy is
+    // queued only after the last one went out, so a busy channel does not stack them up.
     for (auto& m : aprsMsgs_)
-        if (m.out && !m.acked && m.tries < 3 && mono >= m.nextMono) {
-            aprsOut_.push_back(aprs::encodeMessage(m.to, m.text, m.id));
+        if (m.out && !m.acked && m.tries < 3 && m.nextMono >= 0 && mono >= m.nextMono) {
+            std::string info = aprs::encodeMessage(m.to, m.text, m.id);
+            if (std::find(aprsOut_.begin(), aprsOut_.end(), info) != aprsOut_.end()) continue;
+            aprsOut_.push_back(info);
             m.tries++;
             logLine("APRS message to " + m.to + " queued, try " + std::to_string(m.tries) + " of 3");
-            m.nextMono = mono + 30000;
+            m.nextMono = -1;                                               // set again when this copy is sent
         }
     // Send when the channel has been clear for a moment (a random wait, so stations do not collide).
     if (aprsDem_.busy()) { aprsClearSince_ = 0; return; }
@@ -1187,6 +1190,8 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
         frames.push_back(aprs::encodeFrame(f));
         aprsRaw_.push_back({clk::utcMs(), "TX " + aprs::tnc2(f).substr(0, 200)});
         logLine("APRS sent: " + aprs::tnc2(f).substr(0, 160));
+        for (auto& m : aprsMsgs_)                                          // a message copy left: the next try in 30 s
+            if (m.out && !m.acked && m.nextMono < 0 && aprs::encodeMessage(m.to, m.text, m.id) == aprsOut_[i]) m.nextMono = mono + 30000;
     }
     while (aprsRaw_.size() > 30) aprsRaw_.pop_front();
     aprsOut_.erase(aprsOut_.begin(), aprsOut_.begin() + (long)frames.size());
@@ -1195,6 +1200,12 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
     aprsLastTx_ = mono;
     aprsClearSince_ = 0;
     startTx(GEN_APRS);
+}
+
+void App::aprsQueueBeacon(const std::string& info) {              // mtx_ held
+    for (auto& o : aprsOut_)
+        if (!o.empty() && (o[0] == '=' || o[0] == '!' || o[0] == '@' || o[0] == '/')) { o = info; return; }
+    aprsOut_.push_back(info);
 }
 
 std::string App::aprsJson() {                                     // mtx_ held
@@ -1765,8 +1776,9 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
             double la, lo;
             std::string src;
             if (!aprsMyPos(la, lo, src)) return err("No position: set a grid, a fixed position, or a GPS");
-            aprsOut_.push_back(aprs::encodePosition(la, lo, cfg.aprsSym[0], cfg.aprsSym[1], cfg.aprsComment, true));
+            aprsQueueBeacon(aprs::encodePosition(la, lo, cfg.aprsSym[0], cfg.aprsSym[1], cfg.aprsComment, true));
             status("APRS: position beacon queued (" + src + ")");
+            logLine("APRS beacon queued by hand, position from " + src);
             return ok();
         }
         std::string to = upperTrim(arg(a, "to")), text = arg(a, "text");
@@ -1776,7 +1788,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         AprsMsg m;
         m.utc = clk::utcMs(); m.from = aprsMyCall(); m.to = to; m.text = text; m.out = true;
         m.id = std::to_string(++aprsMsgId_ % 1000);
-        m.tries = 0; m.nextMono = 0;
+        m.tries = 0; m.nextMono = 0;                                       // the first copy goes at once
         aprsMsgs_.push_back(m);
         while (aprsMsgs_.size() > 40) aprsMsgs_.pop_front();
         return ok();

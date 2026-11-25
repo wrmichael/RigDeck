@@ -221,6 +221,7 @@ private:
     bool aprsTuneReq_ = false, aprsWasEnabled_ = false;
     std::string aprsMyCall() const;
     bool aprsMyPos(double& lat, double& lon, std::string& src) const;
+    void aprsQueueBeacon(const std::string& info);   // one position report waiting at a time: a newer one replaces it
     void aprsRx(const float* s, size_t n);
     void aprsTick(int64_t mono);
     void aprsHandle(const aprs::Frame& f);
