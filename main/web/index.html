@@ -31,7 +31,9 @@ header{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;padding:8px 1
 .dot.ok::before{background:var(--rx)}.dot.bad::before{background:var(--tx)}
 #clock{font:500 16px var(--mono);margin-left:auto}
 #mycall{font-weight:600}
-#rigname{font:600 26px/1 var(--mono);color:var(--txt);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+@font-face{font-family:"Audiowide RD";src:url(data:font/ttf;base64,AAEAAAALAIAAAwAwT1MvMmpDYREAABo0AAAAYGNtYXAAyAFfAAAalAAAAFRnYXNwABcACQAAHRgAAAAQZ2x5ZkhoWAAAAAC8AAAXbGhlYWQIs5pJAAAY0AAAADZoaGVhELoH1AAAGhAAAAAkaG10eG9bGIsAABkIAAABCGxvY2HE3r/lAAAYSAAAAIZtYXhwAFAA1gAAGCgAAAAgbmFtZS06RA0AABroAAACDnBvc3T/aQBmAAAc+AAAACAAAQB0AlgEHgNCAAMAAAEhNSEEHvxWA6oCWOoAAAEAVQAABPUFmgADAAAJASEBBPX8d/7pA4oFmvpmBZoAAwByAAAG9wWaAB0ANQBMAAABFA4EIyEiLgQ9ATQ+AjMhMh4EFSE0LgIHISYOAh0BFB4CNyEyPgI1Ax4BDgEHAQ4BIyImJy4BPgE3AT4BHgEG9y1ScIWWTv4rT5aFcFEtY6bZdgHVTpaFcFIt/vo4XXpD/itBe185OF57QwHVTX1YMHEPCgodF/1CESQTIDoSDwoJHBcCwBYzMSsCWFidhmpLKChLaoadWOqE3J9ZKEtqhp1YTX5aMAEBL1l/TupOflkwATNafUoBqBYzMSsP/isNCh4cFjMxKw8B1Q8KChwAAAEARwAAAjcFmgAFAAApAREjESECN/776wHwBJYBBAAAAQBqAAAFjwWaACkAACkBETQ+BDMhMjY9ATQmIyERITIeBB0BFA4CIyEiDgIHFSEFj/rbESQ5UWpDAko1MzQy/L0DQ0JqUTolEUlufzf9tCAmFQoDBCEB4SVTUko5IjUzczU2AQQiOUpRUyR1ZYtXJxIeJhPdAAEAhgAABTUFmgAcAAABFA4CIyERITI2PQEhESE1NCMhESEyHgQVBTVJbYA3/L4DQjUz/FYDqmj8vgNCQ2pROiQRAW1li1cmAQQ2M90BBttrAQQiOUpRUyQAAAEAbAAABZEFmgAOAAApAREhIi4CNREhESERIQWR/vr8ZBwwIxQBBAMbAQYCShUjMBsCzf22AkoAAQCAAAAFpQWaACUAAAEUDgQjIREhMjY9ATQmIyEiLgI1ESERIRUUFjMhMh4CFQWlESU5UWpC/EcDuTE1NDT9tmWLVicErvxWNjMCTDaAbUkBbSVSUUo5IgEEPC10MzZJboA3AeL+/N40NCdXjGUAAAIAegAABZ8FmgAmADUAAAEhMh4CHQEUDgQjISIuBDURND4EMyERIQ4DFREVFB4CMyEyNj0BNCYjAX4CtDd/bkkRJTlRakP+KTBtamNKLS1KY2ptMAKM/XQyUTogIzxRLwHVMjU0NQNQJ1eMZXQlUlFKOSIWMUtrjFgB11iMa0wxFv78BCI4TzH+kmkzUTofPC10MzYAAAEAQwAABPIFmgALAAABFhQHASEBIREhMhYE4RER/S/+0wKq/LYELSM9BVgfRR/7KwSWAQQjAAMAagAABY8FmgAsADwATAAAARQOBCMhIi4CPQE0PgI3LgE9ATQ+AjMhMh4EHQEUBx4DFQE0JiMhIgYdARQWMyEyNjUTNCYjISIGHQEUFjMhMjY1BY8RJTpRakL9tDaAbUkRJTopEhJJbYA2AWBDa1E5JBEjIDgqGP6FNjP+ojUzNTEBYDU0dDcv/bQwODstAkwyNAFtJVJRSjkiJleLZXQmVFJKGypWJnVkjFYnIjlKUVMkdWJIFTlKXTgCSjU2NjN1NDQ1M/4pMjc8LXQwOTwtAAIAVQAABXoFmgAoADcAABM1ND4EMyEyHgQVERQOBCMhESE+Az0BISIuBCU0LgIjISIGHQEUFjMhVREkOlFqQwHVMG5rYkstLUtia24w/XcCiTFROyD9TiVSUUo5IgQfIjtRL/4rMDk2NQKwA7h1JFNRSjkiFjFMa4xY/ilYjGtLMRYBBAQgN08zaRElOVJqQzNSOh88LXUzNQACAHwAAAYWBZoAEQAcAAApAREhESERNBI2JDMhMh4CFQEhESEiDgQVBhb+/Pxu/vxswAEGmwJKGzAkFPtqA5L+NwxNZXBePQFg/qACzZ0BCL5qFCQwG/1NAjIHHDpmmW0AAAIAlQAABi4FmgAgADkAAAEUDgIjISIuAjURND4CMyEyHgIdARQGBx4DFSE0LgIjIREhMj4CPQE0IyERITI+AjUGLiFLeFf8JRwwIxQUIzAcA2Ywbl8/LjMsTToi/vwgOlIz/bYB1TNSOh82/RsDWgcUEAwBOzBuXj8UIzAcBJQbMCQUIkt4VzFFn0cbTGR+TDNROh8BBh86UTMxOPxuAgoYFQAAAQCEAAAFmwWaABsAACkBIi4ENRE0PgQzIREhIgYVERQWMyEFm/xWJFNRSjkiESQ6UWpDA6r8VjM2NzIDqhEkOVFrQwLAJFNRSjki/vw2Nf1CMjcAAgCVAAAGLgWaABcAJQAAARQOAiMhIi4CNRE0PgIzITIeAhUhNC4CIyERITI+AjUGLlug3IH9QhwwIxQUIzAcAr6B3KBb/vwxWn1M/cMCPUx9WjECWIPcn1oUIzAcBJQbMCQUWp/dgkx+WTH8bjFZfU0AAgCRAAAFpwWaAAMAGAAAASERIRMhIi4CNRE0PgIzIREhERQWMyEFMvzLAzV1/FY2gG1JFCMwHAST++42NAOoAkoBBvywJleLZQOqGzAkFP78/NczNgACAJcAAAWtBZoAAwAOAAABIREhEyERIRE0PgIzIQU5/MoDNnT77v78FCMwHASTAkoBBgFG+2oFFxswJBQAAAEAhAAABh4FmgApAAAlFA4CIyEiLgQ1ETQ+BDMhESEiBhURFBYzIREhESEyHgIVBh4UIzAc/FYkU1FKOSIRJDpRakMEIfvfMzY3MgMp/UwDNRwwIxSDHDAjFBEkOVFrQwLAJFNRSjki/vw2Nf1CMjcBRgEGFSQvGwAAAQCZAAAGMgWaAAsAAAEhESERIREhESERIQGdA5EBBP78/G/+/AEEA1ACSvpmAkr9tgWaAAEAmQAAAZ0FmgADAAApAREhAZ3+/AEEBZoAAQAoAAAFTQWaAA0AAAEUDgIjIREhMjY1ESEFTTZhhk/8RwO5MDYBBgFtToZiNwEENzIELQAAAgCZAAAGdgWaAAgADAAAKQEBIxEzASEJASERIQZ2/o/9t7e3AkkBcf0f/gj+/AEEAkoBBgJK/TP9MwWaAAABAJcAAAW8BZoACgAAKQEiLgI1ESERIQW8+14cMCMUAQQEIRQjMBwFF/tqAAEAl//sBxwFtQAdAAApAREBDgEjIiYnAREhETQ2NzYeAhcJAT4BFx4BFQcc/vr+MxE9IyI7Ef4x/vw1KxUqJyALAlACUBdRLCo2A1b81R8gIB8DK/yqBSstRgwFAw8bE/v7BAUmIAsMRi0AAAEAl//sBjAFswAVAAAlFA4CIyImJwERIRE0Njc2FhcBESEGMBUjMBsYMRP8Sv78LSMlThwDtgEEbxwwIxQSFAPg/A4FKyhBEA8PHfwhA/IAAgBq/+wGeAWuABcALwAAARQOAiMhIi4CNRE0PgIzITIeAhUhNC4CIyEiDgIVERQeAjMhMj4CNQZ4WqDbgf6ggdygW1ug3IEBYIHboFr+/DFZfUv+oEx9WjExWn1MAV5MfVoxAkSD3KBZWaDcgwESgt2fWlqf3YJNfVkxMVl9Tf7uTX1ZMTFZfU0AAQCTAAAGLAWaACkAAAEUDgQjIREhPgM9AS4DIyEiBhURIRE0PgIzITIeBBUGLCxLYmttMP20AkwyUTogBSA3TjP9tjQ2/vxJbYA2AkxYjGtLMRYDQlmMa0wwFgEEBCE4TzJ2MVI6ITYz+9MELWSMVictS2JrbTAAAgBq/yMGeAWuABoAMgAAARQOAgcFISchIi4CNRE0PgIzITIeAhUhNC4CIyEiDgIVERQeAjMhMj4CNQZ4NWGJVAEw/of6/wCB3KBbW6DcgQFggdugWv78MVl9S/6gTH1aMTFafUwBXkx9WjECRGSxkGwf8clZoNyDARKC3Z9aWp/dgk19WTExWX1N/u5NfVkxMVl9TQAAAQCXAAAGbgWaACcAAAEUDgQjASEBIxEhPgM9ATQuAiMhESERND4CMyEyHgIVBjAsS2JrbTACH/5u/eK7AkwxUTsgCxETCPym/vwUIzAcA9tXeEshA7hZjGtMMRb+KwHVAQQEIThPM6QWFwsC+2oFFxswJBQ/X24wAAABAGAAAAX5BZoALgAAARQOBCMhESEyNjU0LgIjISIuAjU0PgIzIREhIgYVFBYzITMeBQX5J0BWXF8q/BUD60tTFik7JP2qP5J9U1N9kj8DdfyLSlNTSgJWAipeXVRBJgGmTXteQioUAQRYSiQ8LBgtZKJ1daFlLf78WkpLVwEVLENeegABACgAAAWnBZoABwAAASERIREhESEFp/3D/vz9wgV/BJb7agSWAQQAAQB6AAAGFAWaABoAACUUDgIjISIuBDURIREUHgQzIREhBhQUJDAb/bZTqp+MaTwBBD1ecGVNDAHJAQSDHDAjFCRLdJ/NfgLN/TNumGY6HAcElgAAAf/7/+wGMgWaAAsAAAkBDgEjIiYnASEJAQYy/VkQPyYlPxH9WgEjAfgB+gWa+pkgJycgBWf79wQJAAEAR//pB74FmgAbAAABAw4BBwYmJwkBDgEjIiYnAyETAT4BMzIWFwETB77wCDgoKUkV/iT+IxE7Ii9ICPIBCKwBmhE7IiI6EwGYrAWa+sAoOggHICIDDvzyHSA8MAVA/E0Cjh0gIB39cgOzAAEAEAAABj8FmgALAAAJASEJASEJASEJASEDJgG2AWP9lwJl/p/+TP5O/p4CZP2aAWADmgIA/TH9NQH8/gQCywLPAAEAUwAABe0FmgAjAAABFA4EKwERIREjIi4ENREhERQeAjMhPgM1ESEF7S1KY2ptMGn++mgwbWtiSy0BBCA6UzMB1SVOQCoBBAO6WYxrTDEW/ikB1xYxTGuNWAHg/iAzUTofBhMuUkQB4AABAEQAAAVxBZoAEwAAARYGBwEhESEiJicmNjcBIREhMhYFYg8MGvymA2/7bCZBEBENGQNc/I8EliZBBUwjTRv8Q/78KyMjTBwDvQEEKwABADUAAATWBDkAKQAAARQOAiMhIi4CNTQ+AjMhFSEiBhUUFjMhMjY1ETQmIyE1ITIeAhUE1iZViWL+KzZ9a0gmVYliAdX+KzU6Qy4B0zU6PzD9xQI7Nn1rSAFmNn1rSCZViWI2fmtI+EEwMzlAMAFrMzz3JlWJYgABAHQAAAUiBgIAJwAAARQOBCMhIi4ENREhERQWMyEyNjURNCYjIREhMh4EFQUiESQ5UWpD/islUlFKOSIBBDwtAdUxNzou/isB1SVSUUo4IgFtJVJRSjkiESQ5UWtDBJX7azA5Oi8BYDE3AQQRJDlRakMAAAEAZAAABJEEOQAZAAApASIuAjURND4EMyERISIGFREUFjMhBJH9PzaAbUkRJDlRakMCwf0/MzU2NAK/JleLZQFgJVJRSjgi/vw0Nv6iMzYAAQBuAAAFHAYCACUAAAEUDgQjISIuBDURND4CMyERISIGFREUFjMhMjY1ESEFHCI4SlFTJf4rQ2pROSQRSW2ANgHV/i00NjUzAdU1NAEEAW1Da1E5JBEiOUpRUyQBYGSLVyb+/DUz/qI1NjYzBJUAAAEAZAAABQUEOQApAAABFA4CIyE1ITI2NTQmIyEiBhURFBYzIRUhIi4CNRE0PgIzITIeAgUFJlWJYv4rAdU1OkEu/is1OkEwAdP+KzZ9a0gmVYliAdU2fWtIAtM2fWtI90EwMzpBMP6VNDr4JlWJYgFtNn1rSCZViQAAAgB+AAAENwYOAAMAEwAAASERITUhIgYVESERND4EMyEEN/20Akz9tjU2/vwiOUpRUiUCTAM1AQTRNTP7XgSiQ2pROSQRAAEAZP4rBRIEOQAzAAAFFA4EIyERITI2NRE0JiMhIgYVERQWMyERISIuBDURND4EMyEyHgQVBRIiOEpRUyX+KwHVNTQ0Nf4rMDg2NAHT/islUlFKOCIRJDlRakMB1SVTUUo4ImhDa1E5JBEBBDYzAzUzNTst/qAzNv78ESQ5UWtDAWAlUlFKOCIRJDlRakMAAAIAfgAABSwGAgAPABMAACkBETQmIyERITIeBBUBIREhBSz+/DQ0/isB1SVSUUo4IvxW/vwBBALNMzUBBBEkOVFqQ/0zBgIAAAIAfgAAAYIGAgADAAcAAAEhNSERIREhAYL+/AEE/vwBBAUX6/n+BDkAAAL+Qf4rAYIGAgADABMAAAEhNSERFA4EIyERITI2NREhAYL+/AEEIjhKUVIl/isB1TQ0AQQFF+v5lkNrUTkkEQEENjMEoQACAH4AAAVwBgIACgAOAAApAQEmNz4BNwEhCQEhESEFcP6J/fQsAwIZFgHbAaD9nP52/vwBBAH6KDwcMREBf/4T/bIGAgAAAQB0AAACVQYCAA0AACEjIi4CNREhERQWOwECVXQ4f25IAQQ8LXQmV4tlBJX7azA5AAABAHoAAAaIBDkAJAAAKQERNCYjIREhETQ+AjMhMhYXNSEyHgQVESERNCYrARYVBD/+/DY1/q7+/BQkMBsB1TZ8OAFgJVJRSjgi/vwzNeoNAs0zNfzLA7gbLyMUJipQESQ5UWpD/TMCzTM1MDgAAAEAegAABSgEOQAYAAApARE0LgIjIREhETQ+AjMhMh4EFQUo/vwjPFEv/jn+/BQkMBsCSjFta2FLLAJYM1E6H/zLA7gbLyMUFjFLa4xYAAIAZAAABRIEOQAZACkAAAEUDgQjISIuAjURND4CMyEyHgIVBTQmIyEiBhURFBYzITI2NQUSIjhKUVMl/is2gG1JSW2ANgHVZIxWJ/78NjP+LTQ2NjQB0zU0AW1Da1E5JBEmV4tlAWBki1cmSG2ANwI2NDUz/qAzNjYzAAABAHT+rgUiBDkAJwAAARQOBCMhESEyNjURNCYjISIGFREhETQ+BDMhMh4EFQUiIjhKUVIl/isB1TQ0NTP+LTU2/vwiOUpRUyQB1UNqUTkkEQFtQ2tROSQRAQQ2MwFeNjQ1M/vhBB9DalE5JBEiOEpRUiUAAAEAZP6uBRIEOQAlAAABIRE0JiMhIgYVERQWMyERISIuAjURND4EMyEyHgQVBRL+/DQ1/iswODY0AdP+KzaAbUkRJDlRakMB1SVTUUo4Iv6uBB8zNTst/qAzNv78JleLZQFgJVJRSjgiESQ5UWpDAAABAHQAAAQsBDkADwAAASEiBhURIRE0PgQzIQQs/bc1Nv78IjlKUVMkAksDNTUz/TMCzUNqUTkkEQAAAQBVAAAEjwQ5ACwAAAEUDgQjIREhMjY1JiMhIi4CNTQ+AjMhESEiDgIVHgMzITIeAgSPIjhKUVMl/UACvjU2BWT+bVZ4SyE+Xm4wAn/9gxQXCwIBCg8TCQGTZIxWJwFtQ2tROSQRAQQ2M2g8WmgtV3dKIf78CQ8RCBASCAFIbYAAAAEAMgAABFEFmgALAAABIREhESERIREhESEEUf46/vn+rgFSAQcBxgM1/MsDNQEEAWH+nwABAGoAAAUYBDkAGAAAJRQOAiMhIi4ENREhERQeAjMhESEFGBQjLxv9tDBtamNKLQEEIzxRLwHHAQSDHDAjFBYxS2uMWAJY/agzUTofAzUAAAEAev/+BYQEOQAWAAABBgIOAgQjIi4CNREhETI+BDcFhCx2mb3l/vOdGzAkFAEEX6+chWhJEgQ5if728c2VVRQjLxsDuvzTUoesta5FAAEAegAAB24EPwAmAAABBgIOAyMiLgI1EQEOASMiLgI1ESERAT4BFx4BFRE+AzcHbj6QnaShmUQcMCQU/fwULxkbLyQVAQQCBhxNJSUrVIh1ZzEEOYv+8/DLk1MUIzAcAeX9vxQTFCMwHAO2/ZgCQxwPEA9BJ/2WUbS/xWIAAAEABwAABYgEOQALAAAJAiEJASEJASEJAQVN/i0CDv6a/qb+pv6ZAg3+LwFkAR8BIQQ5/gL9xQF5/ocCPQH8/scBOQAAAgB0/isFIgQ5AA8AHQAABRQOBCMhESEyNjURIQEhIi4CNREhERQWMyEFIiI4SlFSJf4rAdU0NAEE/pT+Kzh/bkgBBDY1AdNoQ2tROSQRAQQ2MwSh+8cmV4tlAsz9NDM2AAABAEYAAASKBDkAEwAAARYGBwEhESEiJicmNjcBIREhMhYEehAPG/2nAnH8VihBEA8PHQJW/Y8DrCdBA+klTBz9qP78LSMlTR0CVgEEKgABAAAAQgB8AAcAWAAEAAEAAAAAAAAAAAAAAAAAAgABAAAAAAAAAA4AHgCPAJ8A2gEHASMBWwGmAcECKgJ3AqgC+gMkA10DiAOnA+QD/gQLBCYERQRbBJEEuQT+BToFhQXCBgQGGAZCBl8GlQa2BusHEgdOB4gHsAfoCCUISAiQCLQIyQjsCQ8JKAlfCYYJxAn+CjYKUwqUCq4K1gr9CzwLXguPC7YAAAABAAAAAQDF4eoh018PPPUACQgAAAAAAMuZRWQAAAAA1TEJf/5B/bgKiwfrAAAACQACAAAAAAAAApoAAAKaAAAEkgB0BUYAVQdnAHIC1gBHBgUAagXBAIYGMABsBgEAgAX0AHoFIQBDBfgAagX0AFUGrQB8BnkAlQX6AIQGlgCVBgsAkQXoAJcGlgCEBssAmQI2AJkF4AAoBoIAmQXkAJcHswCXBscAlwbiAGoGcwCTBuIAagaeAJcGOgBgBc8AKAarAHoGLv/7CAUARwZMABAGQABTBbUARAU6ADUFhgB0BO4AZAWaAG4FOgBkBGcAfgWGAGQFoAB+AgEAfgIB/kEFiAB+AoIAdAb9AHoFkgB6BXUAZAWGAHQFhgBkBF0AdATLAFUEggAyBZIAagVnAHoHTgB6BZAABwWgAHQEzwBGAAEAAAfr/bgAAArs/kH+7QqLAAEAAAAAAAAAAAAAAAAAAABCAAMEggGQAAUAAAWaBTMAAAEfBZoFMwAAA9EAZgIAAAACAAUDAAAAAgAEAAAAAQAAAAAAAAAAAAAAAEFPRUYAQAAgAHoH6/24AAAH6wJIAAAAAQAAAAAEOwWaAAAAIAAEAAAAAgAAAAMAAAAUAAMAAQAAABQABABAAAAADAAIAAIABAAgAC0AOQBaAHr//wAAACAALQAvAEEAYf///+H/1f/U/83/xwABAAAAAAAAAAAAAAAAAAAABwBaAAMAAQQJAAAA/gAAAAMAAQQJAAEAEgD+AAMAAQQJAAIADgEQAAMAAQQJAAMAOAEeAAMAAQQJAAQAIgFWAAMAAQQJAAUAGgF4AAMAAQQJAAYAIgGSAEMAbwBwAHkAcgBpAGcAaAB0ACAAKABjACkAIAAyADAAMQAyACAAYgB5ACAAQgByAGkAYQBuACAASgAuACAAQgBvAG4AaQBzAGwAYQB3AHMAawB5ACAARABCAEEAIABBAHMAdABpAGcAbQBhAHQAaQBjACAAKABBAE8ARQBUAEkAKQAgACgAYQBzAHQAaQBnAG0AYQBAAGEAcwB0AGkAZwBtAGEAdABpAGMALgBjAG8AbQApACwAIAB3AGkAdABoACAAUgBlAHMAZQByAHYAZQBkAA0ARgBvAG4AdAAgAE4AYQBtAGUAIAAiAEEAdQBkAGkAbwB3AGkAZABlACIAQQB1AGQAaQBvAHcAaQBkAGUAUgBlAGcAdQBsAGEAcgAxAC4AMAAwADMAOwBBAE8ARQBGADsAQQB1AGQAaQBvAHcAaQBkAGUALQBSAGUAZwB1AGwAYQByAEEAdQBkAGkAbwB3AGkAZABlACAAUgBlAGcAdQBsAGEAcgBWAGUAcgBzAGkAbwBuACAAMQAuADAAMAAzAEEAdQBkAGkAbwB3AGkAZABlAC0AUgBlAGcAdQBsAGEAcgAAAAMAAAAAAAD/ZgBmAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAgAAgAQAAH//wAD) format("truetype");font-display:swap}
+/* The RigDeck name: Audiowide (letters, digits, - and /; SIL OFL, see logo/), in gold like the start screen. */
+#rigname{margin-left:auto;font:400 26px/1.1 "Audiowide RD",var(--mono);letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:0 2px;background:linear-gradient(180deg,#fff6cf 0%,#f8d873 28%,#d9a53a 52%,#9a6516 66%,#e9c45f 86%,#fff0b0 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 1px 0 rgba(0,0,0,.6)) drop-shadow(0 0 6px rgba(246,185,59,.25))}
 .meter{width:150px;height:9px;background:#0b1014;border:1px solid var(--line);border-radius:5px;overflow:hidden}
 .meter i{display:block;height:100%;width:0;background:var(--rx)}
 #slot{height:6px;background:#0b1014}#slot i{display:block;height:100%;width:0;background:var(--rx)}
@@ -79,6 +81,17 @@ table.log th{color:var(--dim);font-weight:500}
 .prio li span{flex:1;min-width:0}.prio li.off span{color:var(--dim)}
 .prio button{padding:4px 10px}
 tr.dnw td{opacity:.4}
+.cwtset label{display:inline-flex;align-items:center;gap:6px;margin-right:8px}
+.ctbig{font:600 22px var(--mono)}.ctbig.ok{color:var(--rx)}.ctbig.bad{color:var(--tx)}
+.ctstats{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-top:8px}
+.ctstats div{background:#0b1014;border:1px solid var(--line);border-radius:6px;padding:4px 6px;text-align:center;font-size:11px;color:var(--dim)}
+.ctstats b{display:block;font:600 18px var(--mono);color:var(--txt)}.ctstats .new b{color:var(--amb)}
+.ctres{font:15px var(--mono);margin-top:8px;white-space:pre-wrap;overflow-wrap:anywhere}.ctres .ok{color:var(--rx)}.ctres .bad{color:var(--tx);text-decoration:line-through}.ctres .miss{color:var(--amb)}
+.ctpads{gap:12px}.ctpad{min-width:140px;min-height:90px;font:600 20px var(--mono);touch-action:none;user-select:none}
+.ctpad.down{background:var(--amb);color:#1a1300}
+.ctsendout{min-height:60px;font:600 22px var(--mono);background:#0b1014;border:1px solid var(--line);border-radius:6px;padding:8px;overflow-wrap:anywhere}
+.listen{display:inline-flex;align-items:center;gap:8px;margin-left:6px}.listen input{width:90px}
+#listen.on{background:var(--rx);border-color:var(--rx);color:#04170e;font-weight:600}
 .btnlike span{display:inline-block;background:var(--pan2,#1c2831);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
 .btnlike span:focus-visible{outline:2px solid var(--amb);outline-offset:1px}
 table.imp{border-collapse:collapse;font-size:13px}table.imp th,table.imp td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top;max-width:260px;overflow-wrap:anywhere}
@@ -104,7 +117,7 @@ table.imp th{color:var(--dim);font-weight:500}
 <button id="tl" type="button" title="Transmit status. While this page is open and in view you count as present; tap to restart the watchdog after it was hidden."><i></i><i></i><i></i><span>TX off</span></button>
 <div id="txline"></div>
 <nav>
-  <button data-tab="op" class="on">Operate</button><button data-tab="qlog">SSB / CW log</button><button data-tab="log">Log</button><button data-tab="set">Settings</button>
+  <button data-tab="op" class="on">Operate</button><button data-tab="qlog">SSB / CW log</button><button data-tab="log">Log</button><button data-tab="cwt">CW trainer</button><button data-tab="set">Settings</button>
 </nav>
 <main>
 <section id="tab-op">
@@ -112,7 +125,7 @@ table.imp th{color:var(--dim);font-weight:500}
     <div class="row">
       <span id="modes"><button data-mode="FT8">FT8</button><button data-mode="FT4">FT4</button><button data-mode="CW" title="FT8-style contacts sent in Morse code">FT-CW</button><button data-mode="PSK31">PSK31</button></span>
       <span id="bands"></span>
-      <input id="dial" size="10" inputmode="decimal" placeholder="MHz" aria-label="Dial frequency in MHz"><button id="setdial">Set</button>
+      <input id="dial" size="10" inputmode="decimal" placeholder="MHz" aria-label="Dial frequency in MHz"><button id="setdial">Set</button><span class="listen"><button type="button" id="listen" aria-pressed="false" title="Play the radio's receive audio in this browser">&#128264; Listen</button><input type="range" id="lvol" min="0" max="100" value="70" aria-label="Listening volume" hidden></span>
     </div>
     <canvas id="wf" width="512" height="110" title="Click to set your transmit frequency"></canvas>
   </div>
@@ -213,6 +226,80 @@ table.imp th{color:var(--dim);font-weight:500}
     <table class="log"><thead><tr><th>Date</th><th>UTC</th><th>Call</th><th>Band</th><th>Mode</th><th>Deleted</th><th></th></tr></thead><tbody id="trrows"></tbody></table>
     <p class="hint" id="trHint">Deleted contacts are kept here for 7 days. Restore puts a contact back where it was (current log, archive or both).</p>
     <p class="hint">Every contact is written to two files: the current log and the archive. Clearing the current log leaves the archive untouched, so download the current log into your logging program, clear it, and the next download holds only new contacts. Edit or Delete fixes a contact in both files. Each station callsign has its own log: change the callsign in Settings and RigDeck switches to that station's files. Free space and "Erase all logs" are under Settings, Device.</p>
+  </div>
+</section>
+
+<section id="tab-cwt" class="hide">
+  <div class="pan" style="margin-bottom:12px">
+    <h3>CW trainer</h3>
+    <div class="row cwtset">
+      <label>Speed <input id="ct_wpm" type="number" min="5" max="50" value="20" style="width:64px"> wpm</label>
+      <label>Spacing as <input id="ct_eff" type="number" min="3" max="50" value="20" style="width:64px"> wpm</label>
+      <label>Tone <input id="ct_tone" type="number" min="300" max="1000" step="10" value="600" style="width:72px"> Hz</label>
+      <label>Volume <input id="ct_vol" type="range" min="0" max="100" value="60" style="width:100px"></label>
+      <label>Sound <select id="ct_out"><option value="b">This browser</option><option value="r">Radio sidetone (no transmit)</option></select></label>
+    </div>
+    <p class="hint" id="ct_outinfo">The trainer plays Morse in this browser; no radio is needed. "Spacing as" slower than the speed spreads the characters apart (Farnsworth).</p>
+    <div class="row" role="tablist" id="ct_modes">
+      <button data-ct="icr" class="on">Characters</button><button data-ct="grp">Groups</button><button data-ct="wrd">Words</button><button data-ct="call">Callsigns</button><button data-ct="qso">QSO</button><button data-ct="send">Send</button>
+    </div>
+  </div>
+
+  <div class="pan ctp" id="ct_icr">
+    <h3>Instant character recognition</h3>
+    <p class="hint">One character at a time: type it as soon as you recognise it. RigDeck times each answer and plays your slow and missed characters more often. When every character in play is right 4 times out of the last 5 and quick, the next one is added.</p>
+    <div class="row">
+      <label>Order <select id="ct_order"><option value="koch">Koch (LCWO)</option><option value="abc">A to Z, then 0 to 9</option></select></label>
+      <label>Characters in play <button type="button" id="ct_less" aria-label="Fewer">&minus;</button> <b id="ct_n">2</b> <button type="button" id="ct_more" aria-label="More">+</button></label>
+      <label><input type="checkbox" id="ct_auto" checked> Add the next one automatically</label>
+    </div>
+    <div class="row"><button type="button" id="ct_icrgo" class="on">Start</button><input id="ct_icrin" maxlength="1" size="3" autocomplete="off" aria-label="Type the character" style="font:600 26px var(--mono);text-align:center;text-transform:uppercase"><span id="ct_icrmsg" class="ctbig"></span></div>
+    <div id="ct_stats" class="ctstats"></div>
+    <div class="row" style="margin-top:8px"><button type="button" id="ct_reset" class="danger">Reset character statistics</button></div>
+  </div>
+
+  <div class="pan ctp hide" id="ct_grp">
+    <h3>Random groups</h3>
+    <p class="hint">Groups from the characters in play on the Characters page. Copy them into the box, then Check.</p>
+    <div class="row"><label>Groups <input id="ct_gn" type="number" min="1" max="50" value="10" style="width:60px"></label><label>Letters per group <input id="ct_gl" type="number" min="1" max="10" value="5" style="width:60px"></label><button type="button" id="ct_grpgo" class="on">Play</button><button type="button" id="ct_grpchk">Check</button><button type="button" class="ctstop">Stop</button></div>
+    <textarea id="ct_grpin" rows="3" style="width:100%;font:18px var(--mono);text-transform:uppercase" aria-label="Your copy"></textarea>
+    <div id="ct_grpres" class="ctres"></div>
+  </div>
+
+  <div class="pan ctp hide" id="ct_wrd">
+    <h3>Words</h3>
+    <p class="hint">A word plays; type it and press Enter. A miss plays it again. Your own list: one word or phrase per line (or separated by commas).</p>
+    <div class="row">
+      <label>List <select id="ct_list"><option value="common">Common English words</option><option value="ham">Ham abbreviations and Q codes</option><option value="own">My own list</option></select></label>
+      <label><input type="checkbox" id="ct_once" checked> Each once, random order</label>
+      <button type="button" id="ct_wrdgo" class="on">Start</button><button type="button" class="ctstop">Stop</button>
+    </div>
+    <textarea id="ct_own" rows="3" style="width:100%;font:15px var(--mono)" placeholder="My own list, e.g. RIG, ANT, WX, CU AGN" hidden></textarea>
+    <div class="row"><input id="ct_wrdin" size="18" autocomplete="off" aria-label="Type the word" style="font:600 20px var(--mono);text-transform:uppercase"><button type="button" id="ct_wrdrep">Repeat</button><button type="button" id="ct_wrdskip">Show and skip</button><span id="ct_wrdmsg" class="ctbig"></span></div>
+    <div id="ct_wrdres" class="hint"></div>
+  </div>
+
+  <div class="pan ctp hide" id="ct_call">
+    <h3>Callsigns</h3>
+    <p class="hint">Made-up callsigns from many countries, with portable and prefix forms now and then. Type each one and press Enter.</p>
+    <div class="row"><button type="button" id="ct_callgo" class="on">Start</button><button type="button" class="ctstop">Stop</button><input id="ct_callin" size="14" autocomplete="off" aria-label="Type the callsign" style="font:600 20px var(--mono);text-transform:uppercase"><button type="button" id="ct_callrep">Repeat</button><button type="button" id="ct_callskip">Show and skip</button><span id="ct_callmsg" class="ctbig"></span></div>
+    <div id="ct_callres" class="hint"></div>
+  </div>
+
+  <div class="pan ctp hide" id="ct_qso">
+    <h3>QSO copy</h3>
+    <p class="hint">A made-up contact: a ragchew exchange or a contest-style one. Head-copy or write it down, then Show to compare.</p>
+    <div class="row"><label>Style <select id="ct_qstyle"><option value="rag">Ragchew</option><option value="pota">POTA</option><option value="contest">Contest</option></select></label><button type="button" id="ct_qsogo" class="on">Play</button><button type="button" class="ctstop">Stop</button><button type="button" id="ct_qsoshow">Show</button></div>
+    <textarea id="ct_qsoin" rows="3" style="width:100%;font:16px var(--mono);text-transform:uppercase" aria-label="Your copy"></textarea>
+    <div id="ct_qsores" class="ctres"></div>
+  </div>
+
+  <div class="pan ctp hide" id="ct_send">
+    <h3>Sending practice</h3>
+    <p class="hint">Key with this page: <b>straight key</b> = hold the Space bar or the big pad; <b>paddles</b> = keys <kbd>Z</kbd> (dit) and <kbd>X</kbd> (dah), or the two pads (iambic). What you send is decoded below at the speed set above. To practise with the radio's own key or paddle, use Radio sidetone and key the radio with break-in off.</p>
+    <div class="row"><label>Key <select id="ct_key"><option value="s">Straight key</option><option value="i">Paddles (iambic)</option></select></label><button type="button" id="ct_sendclr">Clear</button><span id="ct_sendwpm" class="hint"></span></div>
+    <div class="row ctpads"><button type="button" id="ct_pad" class="ctpad">KEY</button><button type="button" id="ct_dit" class="ctpad hide">DIT</button><button type="button" id="ct_dah" class="ctpad hide">DAH</button></div>
+    <div id="ct_sendout" class="ctsendout" aria-live="polite"></div>
   </div>
 </section>
 
@@ -551,7 +638,8 @@ wf.addEventListener("click",e=>{
 document.querySelector("nav").addEventListener("click",e=>{
   const t=e.target.dataset.tab; if(!t) return;
   document.querySelectorAll("nav button").forEach(b=>b.className=b.dataset.tab===t?"on":"");
-  ["op","qlog","log","set"].forEach(x=>$("tab-"+x).classList.toggle("hide",x!==t));
+  ["op","qlog","log","cwt","set"].forEach(x=>$("tab-"+x).classList.toggle("hide",x!==t));
+  if(t!=="cwt") ctStop();
   if(t==="log"&&!LG.edit) lgLoad();
   if(t==="set") loadConsoleLogs();
 });
@@ -639,6 +727,214 @@ function listed(call){
   const parts=call.split("/");
   return dnwList.some(e=>e.endsWith("*")?(e.length>1&&(call.startsWith(e.slice(0,-1))||parts.some(p=>p.length>2&&p.startsWith(e.slice(0,-1))))):(call===e||parts.includes(e)));
 }
+// Listening: fetch the board's received audio (12 kHz mu-law) a few times a second and play it with a
+// short buffer. The board's web server answers one request at a time, so short polls rather than a stream.
+const listenS={on:false,ctx:null,gain:null,pos:0,next:0,timer:0,busy:false,mu:null};
+function muTable(){const t=new Float32Array(256);for(let i=0;i<256;i++){const u=~i&255,sgn=u&128,e=(u>>4)&7,m=u&15;let x=((m<<3)+132)<<e;x-=132;t[i]=(sgn?-x:x)/32768;}return t;}
+async function listenPoll(){
+  if(!listenS.on||listenS.busy)return;listenS.busy=true;
+  try{
+    if(demo){ // demo page: a little band noise
+      const n=2400,b=new Uint8Array(4+n);for(let i=0;i<n;i++)b[4+i]=(Math.random()*20+118)|0;listenPlay(b.subarray(4));
+    }else{
+      const r=await fetch("/api/audio?pos="+listenS.pos,{cache:"no-store"});const b=new Uint8Array(await r.arrayBuffer());
+      if(b.length>=4){listenS.pos=(b[0]|b[1]<<8|b[2]<<16|b[3]<<24)>>>0;if(b.length>4)listenPlay(b.subarray(4));}
+    }
+  }catch(e){}
+  listenS.busy=false;
+}
+function listenPlay(u8){
+  const c=listenS.ctx,t=listenS.mu,n=u8.length,buf=c.createBuffer(1,n*2,24000),d=buf.getChannelData(0);
+  let prev=listenS.last||0;
+  for(let i=0;i<n;i++){const v=t[u8[i]];d[2*i]=(prev+v)/2;d[2*i+1]=v;prev=v;}      // 12 kHz -> 24 kHz
+  listenS.last=prev;
+  const src=c.createBufferSource();src.buffer=buf;src.connect(listenS.gain);
+  const now=c.currentTime;
+  if(listenS.next<now+0.05||listenS.next>now+1.5)listenS.next=now+0.35;          // (re)start with a small cushion
+  src.start(listenS.next);listenS.next+=buf.duration;
+}
+$("listen").onclick=async()=>{
+  const b=$("listen");
+  if(listenS.on){listenS.on=false;clearInterval(listenS.timer);b.classList.remove("on");b.setAttribute("aria-pressed","false");b.innerHTML="&#128264; Listen";$("lvol").hidden=true;if(listenS.ctx)listenS.ctx.suspend();return;}
+  try{
+    if(!listenS.ctx){const AC=window.AudioContext||window.webkitAudioContext;listenS.ctx=new AC();listenS.gain=listenS.ctx.createGain();listenS.gain.connect(listenS.ctx.destination);listenS.mu=muTable();}
+    await listenS.ctx.resume();
+  }catch(e){banner("This browser cannot play audio here.");return;}
+  listenS.gain.gain.value=(+$("lvol").value/100)**2*2;
+  listenS.on=true;listenS.pos=0;listenS.next=0;b.classList.add("on");b.setAttribute("aria-pressed","true");b.innerHTML="&#9632; Stop";$("lvol").hidden=false;
+  listenPoll();listenS.timer=setInterval(listenPoll,200);
+};
+$("lvol").oninput=()=>{if(listenS.gain)listenS.gain.gain.value=(+$("lvol").value/100)**2*2;};
+// ---- CW trainer: Morse played in this browser (Web Audio), or by the radio's keyer with break-in off ----
+const MORSE={A:".-",B:"-...",C:"-.-.",D:"-..",E:".",F:"..-.",G:"--.",H:"....",I:"..",J:".---",K:"-.-",L:".-..",M:"--",N:"-.",O:"---",P:".--.",Q:"--.-",R:".-.",S:"...",T:"-",U:"..-",V:"...-",W:".--",X:"-..-",Y:"-.--",Z:"--..",
+ "0":"-----","1":".----","2":"..---","3":"...--","4":"....-","5":".....","6":"-....","7":"--...","8":"---..","9":"----.",
+ ".":".-.-.-",",":"--..--","?":"..--..","/":"-..-.","=":"-...-","+":".-.-.","-":"-....-","@":".--.-.","'":".----.",":":"---...",";":"-.-.-.","(":"-.--.",")":"-.--.-"};
+const MORSE_REV={};for(const k in MORSE)MORSE_REV[MORSE[k]]=k;MORSE_REV["...-.-"]="<SK>";MORSE_REV["-.--."]="(";
+const CT_ORDER={koch:"KMURESNAPTLWI.JZ=FOY,VG5/Q92H38B?47C1D60X".split(""),abc:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split("")};
+const CT_WORDS={common:"THE OF AND TO A IN IS YOU THAT IT HE WAS FOR ON ARE AS WITH HIS THEY I AT BE THIS HAVE FROM OR ONE HAD BY WORD BUT NOT WHAT ALL WERE WE WHEN YOUR CAN SAID THERE USE AN EACH WHICH SHE DO HOW THEIR IF WILL UP OTHER ABOUT OUT MANY THEN THEM THESE SO SOME HER WOULD MAKE LIKE HIM INTO TIME HAS LOOK TWO MORE WRITE GO SEE NUMBER NO WAY COULD PEOPLE MY THAN FIRST WATER BEEN CALL WHO OIL ITS NOW FIND LONG DOWN DAY DID GET COME MADE MAY PART",
+ ham:"CQ DE K KN R TU 73 88 RST UR FB OM YL XYL WX HR ES NAME QTH QRZ QRL QRM QRN QRP QRO QRQ QRS QRT QRV QSB QSL QSO QSY ANT RIG PWR GM GA GE GN TNX TKS PSE AGN BK CPY DX FER HW OP SRI WID ABT CUL HPE 5NN 599 579 ES TEST POTA SOTA SIG BAND"};
+const CT={on:false,ctx:null,gain:null,mode:"icr",timer:0,stopAt:0,cur:"",shown:0,list:[],li:0,right:0,tries:0,firstTry:true};
+function ctSettings(){const w=Math.max(5,Math.min(50,+$("ct_wpm").value||20));let e=Math.max(3,Math.min(w,+$("ct_eff").value||w));return {w,e,tone:+$("ct_tone").value||600,vol:+$("ct_vol").value/100};}
+function ctAudio(){
+  if(!CT.ctx){const AC=window.AudioContext||window.webkitAudioContext;CT.ctx=new AC();CT.gain=CT.ctx.createGain();CT.gain.connect(CT.ctx.destination);}
+  CT.ctx.resume();CT.gain.gain.value=ctSettings().vol**2;return CT.ctx;
+}
+// Element timing: a dot is 1.2/wpm s. Farnsworth: characters at full speed, extra space between them (ARRL formula).
+function ctTiming(){const s=ctSettings(),dot=1.2/s.w;let gapC=3*dot,gapW=7*dot;
+  if(s.e<s.w){const ta=(60*s.w-37.2*s.e)/(s.w*s.e);gapC=3*ta/19;gapW=7*ta/19;}return {dot,gapC,gapW};}
+function ctText(t){return String(t).toUpperCase().replace(/<(SK|AR|BT|KN)>/g,m=>({"<SK>":"\u0001","<AR>":"+","<BT>":"=","<KN>":"("}[m]));}
+// Plays text; returns the seconds it takes. Browser: scheduled oscillator with soft edges. Radio: the keyer.
+function ctPlay(text){
+  const s=ctSettings(),T=ctTiming(),t=ctText(text);
+  let dur=0;for(const ch of t){if(ch===" "){dur+=T.gapW-T.gapC;continue;}const code=ch==="\u0001"?"...-.-":MORSE[ch];if(!code)continue;for(const e of code)dur+=(e==="."?1:3)*T.dot+T.dot;dur+=T.gapC-T.dot;}
+  if($("ct_out").value==="r"){
+    cmd("cwtrainsend",{text:String(text).replace(/<SK>/g,"SK")});return dur;
+  }
+  const c=ctAudio(),o=c.createOscillator(),g=c.createGain();o.frequency.value=s.tone;g.gain.value=0;o.connect(g);g.connect(CT.gain);
+  let tt=c.currentTime+0.08;const r=0.005;
+  for(const ch of t){
+    if(ch===" "){tt+=T.gapW-T.gapC;continue;}
+    const code=ch==="\u0001"?"...-.-":MORSE[ch];if(!code)continue;
+    for(const e of code){const l=(e==="."?1:3)*T.dot;g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime(1,tt+r);g.gain.setValueAtTime(1,tt+l-r);g.gain.linearRampToValueAtTime(0,tt+l);tt+=l+T.dot;}
+    tt+=T.gapC-T.dot;
+  }
+  o.start();o.stop(tt+0.1);CT.osc=o;return dur+0.08;
+}
+function ctStop(){CT.on=false;clearTimeout(CT.timer);try{CT.osc&&CT.osc.stop();}catch(e){}if($("ct_out").value==="r")cmd("cwstop");}
+document.querySelectorAll(".ctstop").forEach(b=>b.onclick=ctStop);
+$("ct_modes").addEventListener("click",e=>{const m=e.target.dataset.ct;if(!m)return;ctStop();CT.mode=m;
+  document.querySelectorAll("#ct_modes button").forEach(b=>b.className=b.dataset.ct===m?"on":"");
+  document.querySelectorAll(".ctp").forEach(p=>p.classList.toggle("hide",p.id!=="ct_"+m));});
+// Settings remembered in this browser.
+const CTS_KEY="rd_cwt";
+let CTS={wpm:20,eff:20,tone:600,vol:60,order:"koch",n:2,auto:true,own:"",st:{}};
+try{Object.assign(CTS,JSON.parse(localStorage.getItem(CTS_KEY)||"{}"));}catch(e){}
+function ctSave(){CTS.wpm=+$("ct_wpm").value;CTS.eff=+$("ct_eff").value;CTS.tone=+$("ct_tone").value;CTS.vol=+$("ct_vol").value;CTS.order=$("ct_order").value;CTS.auto=$("ct_auto").checked;CTS.own=$("ct_own").value;try{localStorage.setItem(CTS_KEY,JSON.stringify(CTS));}catch(e){}}
+$("ct_wpm").value=CTS.wpm;$("ct_eff").value=CTS.eff;$("ct_tone").value=CTS.tone;$("ct_vol").value=CTS.vol;$("ct_order").value=CTS.order;$("ct_auto").checked=CTS.auto;$("ct_own").value=CTS.own;
+["ct_wpm","ct_eff","ct_tone","ct_vol","ct_order","ct_auto","ct_own"].forEach(id=>$(id).addEventListener("change",()=>{ctSave();ctIcrShow();if(id==="ct_wpm"&&$("ct_out").value==="r")cmd("cwspeed",{wpm:$("ct_wpm").value});}));
+$("ct_list").onchange=()=>{$("ct_own").hidden=$("ct_list").value!=="own";};
+$("ct_out").onchange=async()=>{
+  const r=$("ct_out").value==="r";
+  if(r){const j=await cmd("cwtrain",{on:1});if(!j.ok){$("ct_out").value="b";return;}cmd("cwspeed",{wpm:$("ct_wpm").value});
+    $("ct_outinfo").textContent="Radio sidetone: RigDeck switched the radio's break-in off, so its keyer only makes sidetone and does not transmit. Keep the radio in CW. Turn the power down for the first try. Timing (Characters) is only measured with the browser's sound; Spacing as and Tone are the radio's.";}
+  else{cmd("cwtrain",{on:0});$("ct_outinfo").textContent="The trainer plays Morse in this browser; no radio is needed. \"Spacing as\" slower than the speed spreads the characters apart (Farnsworth).";}
+};
+// --- Characters (ICR) with adaptive weighting ---
+function ctSet(){const o=CT_ORDER[$("ct_order").value]||CT_ORDER.koch;return o.slice(0,Math.max(2,Math.min(o.length,CTS.n)));}
+function ctStat(ch){return CTS.st[ch]||(CTS.st[ch]={h:[],ms:[]});}
+function ctIcrShow(){
+  $("ct_n").textContent=ctSet().length;
+  $("ct_stats").innerHTML=ctSet().map(ch=>{const s=ctStat(ch),ok=s.h.filter(Boolean).length,ms=s.ms.length?Math.round(s.ms.reduce((a,b)=>a+b,0)/s.ms.length):0;
+    return `<div class="${s.h.length?"":"new"}"><b>${esc(ch)}</b>${s.h.length?ok+"/"+s.h.length:"new"}${ms?"<br>"+ms+" ms":""}</div>`;}).join("");
+}
+function ctPick(){
+  const set=ctSet(),w=set.map(ch=>{const s=ctStat(ch),miss=s.h.filter(x=>!x).length,ms=s.ms.length?s.ms.reduce((a,b)=>a+b,0)/s.ms.length:1500;return 1+miss*2+Math.min(4,ms/500)+(s.h.length<5?2:0);});
+  let r=Math.random()*w.reduce((a,b)=>a+b,0);for(let i=0;i<set.length;i++){r-=w[i];if(r<=0){if(set[i]===CT.cur&&set.length>2)continue;return set[i];}}return set[set.length-1];
+}
+function ctIcrNext(){
+  if(!CT.on)return;CT.cur=ctPick();$("ct_icrin").value="";$("ct_icrmsg").textContent="";$("ct_icrmsg").className="ctbig";
+  const d=ctPlay(CT.cur);CT.shown=performance.now()+d*1000;CT.firstTry=true;$("ct_icrin").focus();
+  CT.timer=setTimeout(()=>{if(CT.on&&$("ct_icrin").value==="")ctIcrAnswer("");},d*1000+5000);
+}
+function ctIcrAnswer(v){
+  clearTimeout(CT.timer);if(!CT.on)return;
+  const ok=v.toUpperCase()===CT.cur,ms=Math.max(0,Math.round(performance.now()-CT.shown)),s=ctStat(CT.cur);
+  s.h.push(ok);if(s.h.length>5)s.h.shift();s.ms.push(ok?ms:5000);if(s.ms.length>5)s.ms.shift();
+  $("ct_icrmsg").textContent=ok?`${CT.cur}  ${ms} ms`:`${CT.cur} (you typed ${v||"nothing"})`;$("ct_icrmsg").className="ctbig "+(ok?"ok":"bad");
+  if($("ct_auto").checked){const set=ctSet(),order=CT_ORDER[$("ct_order").value];
+    const ready=set.every(ch=>{const t=ctStat(ch);return t.h.length>=5&&t.h.filter(Boolean).length>=4&&t.ms.reduce((a,b)=>a+b,0)/t.ms.length<1500;});
+    if(ready&&CTS.n<order.length){CTS.n++;$("ct_icrmsg").textContent+="  New: "+order[CTS.n-1];}}
+  ctSave();ctIcrShow();
+  CT.timer=setTimeout(()=>{if(!ok&&CT.on)ctPlay(CT.cur);CT.timer=setTimeout(ctIcrNext,ok?600:1800);},ok?0:400);
+}
+$("ct_icrgo").onclick=()=>{if(CT.on&&CT.mode==="icr"){ctStop();$("ct_icrgo").textContent="Start";return;}ctAudio();CT.on=true;$("ct_icrgo").textContent="Stop";ctIcrNext();};
+$("ct_icrin").oninput=()=>{const v=$("ct_icrin").value.slice(-1);if(v&&CT.on&&CT.mode==="icr")ctIcrAnswer(v);};
+$("ct_less").onclick=()=>{CTS.n=Math.max(2,CTS.n-1);ctSave();ctIcrShow();};
+$("ct_more").onclick=()=>{CTS.n=Math.min((CT_ORDER[$("ct_order").value]||[]).length,CTS.n+1);ctSave();ctIcrShow();};
+$("ct_reset").onclick=()=>{if(!$("ct_reset").dataset.ask){$("ct_reset").dataset.ask=1;$("ct_reset").textContent="Press again to reset";setTimeout(()=>{delete $("ct_reset").dataset.ask;$("ct_reset").textContent="Reset character statistics";},4000);return;}
+  CTS.st={};CTS.n=2;ctSave();ctIcrShow();delete $("ct_reset").dataset.ask;$("ct_reset").textContent="Reset character statistics";};
+ctIcrShow();
+// --- comparing a copy with what was sent (word by word) ---
+function ctCompare(sent,copy){
+  const a=sent.toUpperCase().split(/\s+/).filter(Boolean),b=copy.toUpperCase().split(/\s+/).filter(Boolean);let ok=0;
+  const out=a.map((w,i)=>{if(b[i]===w){ok++;return `<span class="ok">${esc(w)}</span>`;}return (b[i]?`<span class="bad">${esc(b[i])}</span> `:"")+`<span class="miss">${esc(w)}</span>`;});
+  return `${ok} of ${a.length} right\n`+out.join(" ");
+}
+// --- Groups ---
+$("ct_grpgo").onclick=()=>{ctStop();const set=ctSet(),n=Math.max(1,Math.min(50,+$("ct_gn").value||10)),l=Math.max(1,Math.min(10,+$("ct_gl").value||5));
+  const g=[];for(let i=0;i<n;i++){let w="";for(let j=0;j<l;j++)w+=set[Math.random()*set.length|0];g.push(w);}
+  CT.cur=g.join(" ");CT.on=true;$("ct_grpin").value="";$("ct_grpres").textContent="";ctPlay(CT.cur);$("ct_grpin").focus();};
+$("ct_grpchk").onclick=()=>{if(CT.cur)$("ct_grpres").innerHTML=ctCompare(CT.cur,$("ct_grpin").value);};
+// --- Words and callsigns: one item, type it, Enter ---
+function ctShuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];}return a;}
+function ctCall(){
+  const L="ABCDEFGHIJKLMNOPQRSTUVWXYZ",r=n=>{let s="";for(let i=0;i<n;i++)s+=L[Math.random()*26|0];return s;},d=()=>Math.random()*10|0;
+  const pre=["K","W","N","A"+L[Math.random()*12|0],"VE","VA","G","M","DL","F","EA","I","PA","ON","OH","SM","LA","OK","SP","HA","YO","JA","VK","ZL","PY","LU","ZS","UA"][Math.random()*28|0];
+  let c=pre+d()+r(1+(Math.random()*3|0));if(Math.random()<.1)c+="/P";else if(Math.random()<.06)c=["VE3","DL","F","EA8","KH6"][Math.random()*5|0]+"/"+c;return c;
+}
+function ctItems(kind){
+  if(kind==="call"){const a=[];for(let i=0;i<50;i++)a.push(ctCall());return a;}
+  const v=$("ct_list").value,txt=v==="own"?$("ct_own").value:CT_WORDS[v];
+  const a=(v==="own"?txt.split(/[\n,]+/):txt.split(/\s+/)).map(x=>x.trim().toUpperCase()).filter(Boolean);
+  return $("ct_once").checked?ctShuffle(a):a;
+}
+function ctItemNext(kind){
+  if(!CT.on)return;const p=kind==="call"?"ct_call":"ct_wrd";
+  if(CT.li>=CT.list.length){$(p+"msg").textContent="Done: "+CT.right+" of "+CT.list.length+" first time";$(p+"msg").className="ctbig ok";CT.on=false;return;}
+  CT.cur=CT.list[CT.li];CT.firstTry=true;$(p+"in").value="";$(p+"msg").textContent="";$(p+"msg").className="ctbig";ctPlay(CT.cur);$(p+"in").focus();
+  $(p+"res").textContent=`${CT.li+1} of ${CT.list.length}, ${CT.right} right first time`;
+}
+function ctItemStart(kind){ctStop();ctAudio();CT.list=ctItems(kind);if(!CT.list.length){banner("The list is empty.");return;}if(!$("ct_once").checked&&kind!=="call")CT.list=ctShuffle(CT.list.slice()).slice(0,50);
+  CT.li=0;CT.right=0;CT.on=true;CT.mode=kind==="call"?"call":"wrd";ctItemNext(kind);}
+function ctItemKey(kind,e){
+  if(e.key!=="Enter"||!CT.on)return;const p=kind==="call"?"ct_call":"ct_wrd",v=$(p+"in").value.trim().toUpperCase();
+  if(v===CT.cur){if(CT.firstTry)CT.right++;$(p+"msg").textContent=CT.cur;$(p+"msg").className="ctbig ok";CT.li++;CT.timer=setTimeout(()=>ctItemNext(kind),700);}
+  else{CT.firstTry=false;$(p+"msg").textContent="Not quite: listen again";$(p+"msg").className="ctbig bad";$(p+"in").value="";ctPlay(CT.cur);}
+}
+$("ct_wrdgo").onclick=()=>ctItemStart("wrd");$("ct_callgo").onclick=()=>ctItemStart("call");
+$("ct_wrdin").onkeydown=e=>ctItemKey("wrd",e);$("ct_callin").onkeydown=e=>ctItemKey("call",e);
+$("ct_wrdrep").onclick=()=>{if(CT.cur)ctPlay(CT.cur);};$("ct_callrep").onclick=$("ct_wrdrep").onclick;
+const ctSkip=kind=>{if(!CT.on)return;const p=kind==="call"?"ct_call":"ct_wrd";$(p+"msg").textContent=CT.cur;$(p+"msg").className="ctbig bad";CT.li++;CT.timer=setTimeout(()=>ctItemNext(kind),1500);};
+$("ct_wrdskip").onclick=()=>ctSkip("wrd");$("ct_callskip").onclick=()=>ctSkip("call");
+// --- QSO copy ---
+function ctQso(style){
+  const me=ctCall(),dx=ctCall(),pick=a=>a[Math.random()*a.length|0],rst=pick(["599","579","559","449","589"]),name=pick(["BOB","JIM","ANN","TOM","SUE","BILL","KEN","MARY","JOE","DAVE","PAT","RON"]);
+  const qth=pick(["OHIO","TEXAS","BOSTON","DENVER","OTTAWA","LONDON","BERLIN","PARIS","MADRID","SEATTLE","IOWA","MAINE"]),rig=pick(["IC7300","K3","FT991","QMX","KX2","TS590"]),pw=pick(["5","10","50","100"]),ant=pick(["DIPOLE","VERTICAL","EFHW","YAGI","LOOP"]);
+  if(style==="contest")return `CQ TEST ${dx} ${dx} TEST  ${me}  ${me} 5NN ${pick(["1","4","5","8","14","27"])}  TU 5NN ${pick(["3","5","7","8"])}  TU ${dx} TEST`;
+  if(style==="pota")return `CQ POTA DE ${dx} ${dx} K  ${me}  ${me} GM UR 5NN 5NN ${pick(["OH","IN","CA","NY","TX"])} ${pick(["OH","IN","CA","NY","TX"])}  RR TU UR 5NN ${pick(["OH","IN","CA","NY","TX"])} 73  ${me} TU 73 EE`;
+  return `${me} DE ${dx} GE OM TNX FER CALL UR RST ${rst} ${rst} NAME ${name} ${name} QTH ${qth} ${qth} HW CPY? ${me} DE ${dx} KN  ${dx} DE ${me} R TNX ${name} RIG ${rig} PWR ${pw}W ANT ${ant} WX FB 73 ${dx} DE ${me} <SK>`;
+}
+$("ct_qsogo").onclick=()=>{ctStop();CT.cur=ctQso($("ct_qstyle").value);CT.on=true;$("ct_qsoin").value="";$("ct_qsores").textContent="";ctPlay(CT.cur);};
+$("ct_qsoshow").onclick=()=>{if(CT.cur)$("ct_qsores").innerHTML=ctCompare(CT.cur.replace(/<SK>/g,"SK"),$("ct_qsoin").value);};
+// --- Sending practice: straight key or iambic paddles, decoded by timing ---
+const KS={down:false,t0:0,tUp:0,code:"",out:"",osc:null,g:null,dit:false,dah:false,iam:0,last:"",dots:[]};
+function ksTone(on){const c=ctAudio();if(!KS.g){KS.g=c.createGain();KS.g.gain.value=0;KS.g.connect(CT.gain);KS.osc=c.createOscillator();KS.osc.connect(KS.g);KS.osc.start();}
+  KS.osc.frequency.value=ctSettings().tone;KS.g.gain.setTargetAtTime(on?1:0,c.currentTime,0.003);}
+function ksFlush(){if(KS.code){KS.out+=MORSE_REV[KS.code]||"*";KS.code="";$("ct_sendout").textContent=KS.out;}}
+function ksGapCheck(){const dot=ctTiming().dot*1000,gap=performance.now()-KS.tUp;if(KS.down||KS.iam)return;
+  if(KS.code&&gap>2*dot){ksFlush();}if(KS.out&&!KS.out.endsWith(" ")&&gap>5*dot){KS.out+=" ";$("ct_sendout").textContent=KS.out;}}
+setInterval(ksGapCheck,30);
+function ksElem(len){const dot=ctTiming().dot*1000;KS.code+=len<2*dot?".":"-";KS.dots.push(len<2*dot?len:len/3);if(KS.dots.length>20)KS.dots.shift();
+  const avg=KS.dots.reduce((a,b)=>a+b,0)/KS.dots.length;$("ct_sendwpm").textContent="You send at about "+Math.round(1200/avg)+" wpm";}
+function ksStraight(down){if($("ct_key").value!=="s")return;const now=performance.now();
+  if(down&&!KS.down){KS.down=true;KS.t0=now;ksTone(true);$("ct_pad").classList.add("down");}
+  else if(!down&&KS.down){KS.down=false;KS.tUp=now;ksTone(false);$("ct_pad").classList.remove("down");ksElem(now-KS.t0);}}
+// Iambic A: while a paddle is held, send its element; both held: alternate.
+function ksIambic(){if(KS.iam)return;const step=()=>{const dot=ctTiming().dot*1000;let e="";
+    if(KS.dit&&KS.dah)e=KS.last==="."?"-":".";else if(KS.dit)e=".";else if(KS.dah)e="-";
+    if(!e){KS.iam=0;KS.tUp=performance.now();return;}
+    KS.last=e;const l=e==="."?dot:3*dot;ksTone(true);KS.code+=e;
+    KS.iam=setTimeout(()=>{ksTone(false);KS.iam=setTimeout(step,dot);},l);};step();}
+function ksPaddle(which,down){if($("ct_key").value!=="i")return;KS[which]=down;$(which==="dit"?"ct_dit":"ct_dah").classList.toggle("down",down);if(down)ksIambic();}
+$("ct_key").onchange=()=>{const i=$("ct_key").value==="i";$("ct_pad").classList.toggle("hide",i);$("ct_dit").classList.toggle("hide",!i);$("ct_dah").classList.toggle("hide",!i);};
+$("ct_sendclr").onclick=()=>{KS.out="";KS.code="";$("ct_sendout").textContent="";};
+const ksPad=(el,f)=>{el.addEventListener("pointerdown",e=>{e.preventDefault();el.setPointerCapture(e.pointerId);f(true);});["pointerup","pointercancel"].forEach(ev=>el.addEventListener(ev,()=>f(false)));};
+ksPad($("ct_pad"),ksStraight);ksPad($("ct_dit"),d=>ksPaddle("dit",d));ksPad($("ct_dah"),d=>ksPaddle("dah",d));
+document.addEventListener("keydown",e=>{if($("tab-cwt").classList.contains("hide")||$("ct_send").classList.contains("hide")||e.repeat)return;
+  if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"||e.target.tagName==="SELECT")return;
+  if(e.code==="Space"){e.preventDefault();ksStraight(true);}else if(e.key==="z"||e.key==="Z")ksPaddle("dit",true);else if(e.key==="x"||e.key==="X")ksPaddle("dah",true);});
+document.addEventListener("keyup",e=>{if($("tab-cwt").classList.contains("hide"))return;
+  if(e.code==="Space"){e.preventDefault();ksStraight(false);}else if(e.key==="z"||e.key==="Z")ksPaddle("dit",false);else if(e.key==="x"||e.key==="X")ksPaddle("dah",false);});
 // Download names: RIGNAME-CALLSIGN-YYYYMMDD-HHMM-what.ext (the RigDeck name is left out when it is not set).
 function dlName(stamp,what,ext){
   const safe=t=>String(t||"").trim().replace(/[^A-Za-z0-9_.]+/g,"_").replace(/^_+|_+$/g,"");

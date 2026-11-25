@@ -618,6 +618,7 @@ void App::rxAudio48k(const int16_t* s, size_t n) {
         s += chunk;
         n -= chunk;
         spec_.feed(buf, n12);
+        audioKeep(buf, n12);
         if (mode_ == DM_PSK31) {
             if (pskFreqDirty_.exchange(false)) pskRx_.setFreq((float)pskFreq_.load());
             std::string out;
@@ -630,6 +631,44 @@ void App::rxAudio48k(const int16_t* s, size_t n) {
             }
         } else ftxRx(buf, n12);
     }
+}
+
+// mu-law (G.711) of a sample scaled to +-1.0.
+static uint8_t muLaw(float f) {
+    int x = (int)(f * 32767.0f);
+    if (x > 32635) x = 32635;
+    if (x < -32635) x = -32635;
+    int sign = x < 0 ? 0x80 : 0;
+    if (x < 0) x = -x;
+    x += 132;
+    int exp = 7;
+    for (int m = 0x4000; exp > 0 && !(x & m); m >>= 1) exp--;
+    int mant = (x >> (exp + 3)) & 0x0F;
+    return (uint8_t)~(sign | (exp << 4) | mant);
+}
+
+void App::audioKeep(const float* s, size_t n) {
+    if (audUntil_.load() < clk::monoMs()) return;                  // nobody listening
+    std::lock_guard<std::mutex> lk(audMtx_);
+    const size_t cap = 12000 * 4;                                  // 4 s
+    if (aud_.size() != cap) aud_.assign(cap, 0xFF);
+    for (size_t i = 0; i < n; i++) aud_[(audEnd_ + i) % cap] = muLaw(s[i] * 4.0f);   // decoder input sits low: lift it
+    audEnd_ += (uint32_t)n;
+}
+
+uint32_t App::audioRead(uint32_t from, std::vector<uint8_t>& out, size_t maxBytes) {
+    audUntil_ = clk::monoMs() + 3000;
+    std::lock_guard<std::mutex> lk(audMtx_);
+    out.clear();
+    if (aud_.empty()) return audEnd_;
+    const uint32_t cap = (uint32_t)aud_.size();
+    uint32_t avail = audEnd_ - from;
+    if (from == 0 || avail > cap) avail = std::min<uint32_t>(audEnd_, 3600);   // new listener or too far behind
+    if (avail > maxBytes) avail = (uint32_t)maxBytes;
+    uint32_t start = audEnd_ - avail;
+    out.resize(avail);
+    for (uint32_t i = 0; i < avail; i++) out[i] = aud_[(start + i) % cap];
+    return audEnd_;
 }
 
 void App::ftxRx(const float* s, size_t n) {
@@ -1550,6 +1589,37 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         return ok();
     }
     if (c == "cwstop") { radio.stopCw(); status("CW stopped"); return ok(); }
+    // ---- CW trainer through the radio's sidetone: break-in off, so the keyer does not transmit ----
+    if (c == "cwtrain") {
+        bool on = arg(a, "on") == "1";
+        if (!on) {
+            if (trainBk_ > 0 && radio.connected()) radio.setBreakIn(trainBk_);   // put back what the radio had
+            trainBk_ = -1;
+            status("CW trainer: radio released");
+            return ok();
+        }
+        if (!radio.connected()) return err("Radio not connected");
+        if (!radio.canPracticeCw()) return err("Radio sidetone practice needs an Icom or Yaesu radio; use the browser's sound instead");
+        if (txState_ == ST_TX) return err("not while transmitting");
+        int rm = radio.mode.load();
+        if (rm != 3 && rm != 7) return err("Put the radio in CW mode first");
+        seq.txEnabled = false;
+        if (trainBk_ < 0) trainBk_ = radio.breakIn();
+        radio.setBreakIn(0);
+        status("CW trainer: break-in off, the keyer only makes sidetone");
+        return ok();
+    }
+    if (c == "cwtrainsend") {
+        if (!radio.connected()) return err("Radio not connected");
+        if (txState_ == ST_TX || seq.txEnabled) return err("Transmit is enabled: the trainer does not use the radio while it is");
+        if (radio.breakIn() != 0) return err("The radio has not confirmed break-in off yet");
+        int rm = radio.mode.load();
+        if (rm != 3 && rm != 7) return err("Put the radio in CW mode first");
+        std::string text = arg(a, "text");
+        if (upperTrim(text).empty()) return err("nothing to send");
+        radio.sendCwPractice(text);
+        return ok();
+    }
     if (c == "cwspeed") {
         int w = atoi(arg(a, "wpm").c_str());
         if (w < 6 || w > 48) return err("speed must be 6 to 48 wpm");
@@ -1939,7 +2009,8 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     o += ",\"model\":" + jstr(radio.connected() ? radio.modelName() : "") + ",\"freq\":" + jnum((long long)f) + ",\"band\":" + jstr(bandName(f)) + ",\"rmode\":" + jnum(radio.mode.load()) + ",\"data\":" + jnum(radio.dataMode.load());
     o += std::string(",\"ptt\":") + jbool(radio.pttState) + ",\"s\":" + jnum(radio.smeter.load()) + ",\"po\":" + jnum(radio.po.load());
     o += ",\"swr\":" + jnum(radio.swr.load()) + ",\"alc\":" + jnum(radio.alc.load()) + ",\"ng\":" + jnum(radio.ng.load());
-    o += ",\"proto\":" + jnum(radio.proto.load()) + ",\"wpm\":" + jnum(radio.keySpeed.load()) + "}";
+    o += ",\"proto\":" + jnum(radio.proto.load()) + ",\"wpm\":" + jnum(radio.keySpeed.load()) + ",\"bk\":" + jnum(radio.breakIn()) +
+         ",\"cwp\":" + jnum(radio.canPracticeCw() ? 1 : 0) + "}";
     o += ",\"slot\":{\"len\":" + jnum(L) + ",\"t\":" + jnum(now % L) + ",\"par\":" + jnum((now / L) & 1) + "}";
     o += std::string(",\"tx\":{\"en\":") + jbool(seq.txEnabled) + ",\"wait\":" + jbool(seq.waitNext) + ",\"on\":" + jbool(txState_ == ST_TX) + ",\"msg\":" + jnum(seq.txMsg) + ",\"par\":" + jnum(seq.txParity);
     o += ",\"text\":" + jstr(txState_ == ST_TX ? (gen_ == GEN_TUNE ? "TUNE" : (gen_ == GEN_PSK ? "PSK31" : txText_)) : "") + ",\"last\":" + jstr(lastTx_);

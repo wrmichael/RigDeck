@@ -1,4 +1,6 @@
 #include <atomic>
+#include <map>
+#include <vector>
 // HTTP server: the control page plus a small JSON API the page polls.
 #include "platform.h"
 #include <cstring>
@@ -111,6 +113,22 @@ static esp_err_t hCmd(httpd_req_t* req) {
     return sendJson(req, s_app->command(c, a));
 }
 
+// Listening: the received audio since byte position ?pos=N, as 12 kHz 8-bit mu-law. The first 4 bytes are the
+// new end position (little endian); the page asks again a few times a second.
+static esp_err_t hAudio(httpd_req_t* req) {
+    WebBusy wb("audio");
+    std::map<std::string, std::string> a;
+    parseForm(query(req), a);
+    static std::vector<uint8_t> buf;                 // the server runs one request at a time
+    uint32_t end = s_app->audioRead((uint32_t)strtoul(a["pos"].c_str(), nullptr, 10), buf, 12000);
+    uint8_t hdr[4] = {(uint8_t)end, (uint8_t)(end >> 8), (uint8_t)(end >> 16), (uint8_t)(end >> 24)};
+    httpd_resp_set_type(req, "application/octet-stream");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    if (httpd_resp_send_chunk(req, (const char*)hdr, 4) != ESP_OK) return ESP_FAIL;
+    if (!buf.empty() && httpd_resp_send_chunk(req, (const char*)buf.data(), buf.size()) != ESP_OK) return ESP_FAIL;
+    return httpd_resp_send_chunk(req, nullptr, 0);
+}
+
 static esp_err_t hLog(httpd_req_t* req) {
     WebBusy wb("log download");
     httpd_resp_set_type(req, "text/plain");
@@ -146,6 +164,7 @@ void web_start(App& app) {
         {"/api/cmd", HTTP_POST, hCmd, nullptr},
         {"/log.adi", HTTP_GET, hLog, nullptr},
         {"/archive.adi", HTTP_GET, hLog, (void*)1},
+        {"/api/audio", HTTP_GET, hAudio, nullptr},
         {"/favicon.ico", HTTP_GET, hIcon, nullptr},
         {"/icon.png", HTTP_GET, hIcon, nullptr},
         {"/apple-touch-icon.png", HTTP_GET, hIcon, nullptr},

@@ -58,6 +58,9 @@ public:
     bool decodingNow() const { return decoding_; }                       // operator touched the screen: restarts the TX watchdog
     int wdLeftSec() const;                 // caller holds the lock; -1 = watchdog not counting
     std::string spectrumJson();
+    // Listening on the web page: received audio, 12 kHz 8-bit mu-law, kept while someone reads it.
+    // Copies what came after byte position `from` (or the last 0.3 s) into out; returns the end position.
+    uint32_t audioRead(uint32_t from, std::vector<uint8_t>& out, size_t maxBytes);
     std::string command(const std::string& c, const std::map<std::string, std::string>& args);
     std::string expandMacro(const std::string& macro, const std::string& call, const std::string& rst) const;
     // Log files are per station callsign ("AC9HP_log.adi"): changing the callsign switches logs.
@@ -138,9 +141,11 @@ public:
     int mode() const { return mode_.load(); }
 
 private:
-    std::string seqDnw_, seqPrio_ = "\x01";                     // what the sequencer's lists were built from
+    std::string seqDnw_, seqPrio_ = "\x01";       // what the sequencer's lists were built from
+    int trainBk_ = -1;                              // CW trainer: the radio's break-in before it was turned off
     int64_t slotLen() const { return mode_.load() == DM_FT4 ? 7500 : 15000; }
     void ftxRx(const float* s, size_t n);
+    void audioKeep(const float* s, size_t n);
     void syncSeq();
     void setMode(int m);
     void startTx(int gen);
@@ -163,6 +168,10 @@ private:
     int64_t curSlot_ = -1;
     bool slotRx_ = false, triggered_ = false;
     std::atomic<int> rxPeak_{0};
+    std::mutex audMtx_;                             // listening ring buffer (filled only while a page listens)
+    std::vector<uint8_t> aud_;
+    uint32_t audEnd_ = 0;
+    std::atomic<int64_t> audUntil_{0};              // monotonic ms: keep filling until then
     Psk31Rx pskRx_;
     std::string pskText_;
     uint32_t pskSeq_ = 0;

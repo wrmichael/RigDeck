@@ -316,6 +316,30 @@ void Radio::sendCw(const std::string& text) {
     }
 }
 
+void Radio::setBreakIn(int v) {
+    if (proto == RP_YAESU) { sendText(v ? "BI1;" : "BI0;"); sendText("BI;"); return; }
+    if (proto != RP_CIV) return;
+    send(0x16, {0x47, (uint8_t)v});
+    send(0x16, {0x47});
+}
+
+void Radio::sendCwPractice(const std::string& text) {
+    if (func[0x47].load() != 0) return;                            // only with break-in reported off
+    std::string t;
+    for (char ch : text) {
+        ch = (char)toupper((unsigned char)ch);
+        if (isalnum((unsigned char)ch) || strchr(" /?.,=+-@", ch)) t += ch;
+    }
+    if (t.size() > cwMax(proto)) t.resize(cwMax(proto));
+    if (t.empty()) return;
+    if (proto == RP_YAESU) { sendText("KM1" + t + "};"); sendText("KY01;"); return; }
+    if (proto != RP_CIV) return;
+    for (size_t i = 0; i < t.size(); i += 30) {
+        std::string part = t.substr(i, 30);
+        send(0x17, std::vector<uint8_t>(part.begin(), part.end()));
+    }
+}
+
 void Radio::stopCw() {
     if (proto == RP_YAESU) return sendText("KY00;", true);
     if (kenwoodish()) return sendText("KY                         ;", true);   // 24 spaces after the separator stop the keyer

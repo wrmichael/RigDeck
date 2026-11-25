@@ -57,6 +57,11 @@ public:
 
     // The radio's own CW keyer sends text (the radio must be in CW mode). Used by the logger macros.
     void sendCw(const std::string& text);
+    // CW trainer through the radio's sidetone: break-in off so the keyer only makes sidetone (Icom, Yaesu).
+    bool canPracticeCw() const { int p = proto.load(); return p == RP_CIV || p == RP_YAESU; }
+    void setBreakIn(int v);                          // 0 off, 1 semi (2 full on Icoms); asks the radio to report it back
+    int breakIn() const { return func[0x47].load(); }   // -1 not known yet
+    void sendCwPractice(const std::string& text);    // like sendCw, but never turns break-in on
     void stopCw();
     void setKeySpeed(int wpm);
     std::atomic<int> keySpeed{-1};                     // wpm as last reported, -1 = unknown
