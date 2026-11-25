@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RigDeck User Guide</title>
+<meta name="description" content="How to set up and operate RigDeck: install, connect your radio, make FT8 contacts, log, and keep it on the air.">
+<link rel="icon" type="image/png" href="img/icon.png">
+<style>
+/* Layout: a fixed contents column beside one reading column; on phones the contents fold above. */
+:root{--bg:#0d1317;--pan:#151e25;--pan2:#1c2831;--line:#2a3944;--amb:#f6b93b;--ok:#3fcf8e;--bad:#ff6b6b;--cq:#7fd0ff;--txt:#e6edf1;--dim:#9fb0bb;
+--body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--txt);font:17px/1.6 var(--body)}
+a{color:var(--amb)}
+a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--amb);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:240px minmax(0,1fr);gap:40px}
+nav.toc{position:sticky;top:16px;align-self:start;max-height:calc(100vh - 32px);overflow:auto;font-size:15px}
+nav.toc b{display:block;color:var(--dim);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 8px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+nav.toc a{display:block;padding:5px 10px;border-radius:6px;color:var(--txt);text-decoration:none;border-left:3px solid transparent}
+nav.toc a:hover{background:var(--pan)}
+nav.toc a.here{border-left-color:var(--amb);background:var(--pan);color:var(--amb)}
+main{min-width:0;max-width:760px}
+header.top h1{font-size:40px;line-height:1.1;margin:0;color:var(--amb);text-wrap:balance}
+header.top p{color:var(--dim);font-size:19px;margin:8px 0 0}
+.meta{display:flex;flex-wrap:wrap;gap:8px 16px;margin:16px 0 0;font-size:15px;color:var(--dim)}
+h2{font-size:27px;line-height:1.2;margin:56px 0 12px;padding-top:8px;border-top:1px solid var(--line);text-wrap:balance}
+h3{font-size:20px;margin:28px 0 8px;text-wrap:balance}
+p,li{max-width:68ch}
+ul,ol{padding-left:1.3em}li{margin:4px 0}
+code,kbd{font:15px var(--mono);background:var(--pan2);padding:1px 6px;border-radius:4px}
+kbd{border:1px solid var(--line);border-bottom-width:2px}
+.k{color:#fff;font-weight:600}
+figure{margin:18px 0}
+figure img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:#000}
+figcaption{color:var(--dim);font-size:14px;margin-top:6px}
+.note,.warn,.beta{border-left:4px solid var(--cq);background:var(--pan);padding:10px 14px;border-radius:6px;margin:14px 0}
+.warn{border-left-color:var(--bad)}
+.beta{border-left-color:var(--amb)}
+.pill{display:inline-block;font:600 12px var(--mono);letter-spacing:.04em;color:#1a1300;background:var(--amb);border-radius:999px;padding:1px 8px;vertical-align:middle;margin-left:6px}
+.tbl{overflow-x:auto;margin:12px 0}
+table{border-collapse:collapse;font-size:15px;min-width:520px}
+th,td{text-align:left;vertical-align:top;padding:7px 10px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-weight:600}
+td.st{white-space:nowrap}
+.ok{color:var(--ok)}.dim{color:var(--dim)}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps>li{counter-increment:s;position:relative;padding-left:40px;margin:12px 0}
+.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:var(--pan2);border:1px solid var(--line);color:var(--amb);font:600 14px/26px var(--mono);text-align:center}
+.lights{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.lights div{display:flex;gap:10px;align-items:baseline}
+.lights i{flex:none;width:12px;height:12px;border-radius:50%;display:inline-block;transform:translateY(1px)}
+footer{margin-top:56px;color:var(--dim);font-size:14px}
+@media (max-width:860px){
+  .wrap{grid-template-columns:minmax(0,1fr);gap:20px}
+  nav.toc{position:static;max-height:none;background:var(--pan);border:1px solid var(--line);border-radius:10px;padding:12px}
+  nav.toc ol{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  header.top h1{font-size:32px}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+<meta name="claude:viewport-fit-sides" content="cover">
+</head>
+<body>
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#start">Getting started</a></li>
+    <li><a href="#radio">Connecting your radio</a></li>
+    <li><a href="#screens">The screens</a></li>
+    <li><a href="#levels">Clock and levels</a></li>
+    <li><a href="#ft8">Making FT8 contacts</a></li>
+    <li><a href="#choosing">Choosing stations</a></li>
+    <li><a href="#safety">Transmit safeguards</a></li>
+    <li><a href="#log">Logging</a></li>
+    <li><a href="#ssbcw">SSB / CW logger</a></li>
+    <li><a href="#control">Radio control screen</a></li>
+    <li><a href="#modes">FT-CW and PSK31</a></li>
+    <li><a href="#time">Keeping the time</a></li>
+    <li><a href="#wifi">Wi-Fi</a></li>
+    <li><a href="#update">Updates and settings files</a></li>
+    <li><a href="#trouble">Troubleshooting</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <h1>RigDeck User Guide</h1>
+  <p>Set up RigDeck, connect your radio, and make and log FT8 contacts from the touch screen or any browser.</p>
+  <div class="meta"><span>For RigDeck 1.0.0 (Stable) and 1.0.1 (Beta)</span><span><a href="./">Flasher page</a></span><span><a href="https://github.com/wrmichael/RigDeck">Source and README on GitHub</a></span></div>
+</header>
+
+<div class="beta">Items marked <span class="pill">BETA 1.0.1</span> are in the Beta channel only until they become Stable.</div>
+
+<h2 id="start">Getting started</h2>
+<p>RigDeck is firmware for the <b>Waveshare ESP32-P4-WIFI6-Touch-LCD-7B</b>, a 7-inch touch board. Plug it into your radio's USB port and it decodes, transmits and logs FT8 and FT4 by itself or under your control. It also makes its own Wi-Fi hotspot, so a phone or laptop can run everything from a web page.</p>
+<h3>What you need</h3>
+<ul>
+  <li>The Waveshare board and a 5 V supply (a 2–3 A USB charger gives the most headroom).</li>
+  <li>A USB cable from the board's <b>USB-A</b> port to your radio.</li>
+  <li>Optional: a <b>microSD card</b> (FAT32) for a much bigger log and the console log.</li>
+  <li>Optional: a GPS module for exact time with no internet (see <a href="#time">Keeping the time</a>).</li>
+</ul>
+<h3>Install RigDeck</h3>
+<ol class="steps">
+  <li>Open the <a href="./">flasher page</a> in <b>Chrome</b> or <b>Edge</b> on a computer.</li>
+  <li>Connect the board's <b>USB-C</b> port to the computer with a data cable. The USB-A port is for the radio.</li>
+  <li>Choose <b>Stable</b> (tested, recommended) or <b>Beta</b> (newest features), press <b>Install RigDeck</b> and pick the board's serial port.</li>
+  <li>When updating, leave <b>Erase device</b> unticked: that keeps your log and settings.</li>
+</ol>
+<h3>First start</h3>
+<ol class="steps">
+  <li>On a phone or laptop, join the Wi-Fi network <b>RigDeck</b> (or RigDeck-XXXXXX). The password is <code>ft8ft8ft8</code>.</li>
+  <li>Open <b>http://192.168.4.1</b>. You can also do everything below on the touch screen: the gear button at the top right opens Settings.</li>
+  <li>Settings, <b>Station</b>: enter your <b>callsign</b> and <b>grid</b>. RigDeck will not transmit until both are set. Optionally give the unit a <b>RigDeck name</b> <span class="pill">BETA 1.0.1</span> such as "Shack" or "Mobile": it shows at the top right of the web page and in the names of downloaded files.</li>
+  <li>Settings, <b>Wi-Fi</b>: change the hotspot password. To give RigDeck internet time and reach a logging PC, enter your home network (2.4 GHz) and press <b>Save + connect</b>.</li>
+  <li>Press <b>Save</b>. Hotspot changes take effect after <b>Restart</b>; the home network is joined right away.</li>
+</ol>
+
+<h2 id="radio">Connecting your radio</h2>
+<p>Plug the radio in and leave Settings, Radio on <b>Find automatically</b>: RigDeck tries each serial port as Icom, Yaesu, Kenwood / Elecraft and QMX, and uses the first that answers. That can take up to a minute; choosing the radio's family makes it quicker. You can swap radios without changing settings.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Radio / interface</th><th>How it connects</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><td>Icom IC-7100, IC-705</td><td>one USB cable</td><td class="st ok">tested on the air</td></tr>
+    <tr><td>QRP Labs QMX / QMX+</td><td>one USB cable</td><td class="st ok">tested on the air</td></tr>
+    <tr><td>SignaLink USB with any radio (tested with a K2)</td><td>Radio "No CAT"; the SignaLink keys the radio</td><td class="st ok">tested on the air</td></tr>
+    <tr><td>Yaesu FTX-1</td><td>one USB cable</td><td class="st dim">untested</td></tr>
+    <tr><td>IC-7300, IC-7610, IC-9700, IC-905</td><td>one USB cable</td><td class="st dim">untested</td></tr>
+    <tr><td>FTDX10, FT-991A, FT-710, FTDX101</td><td>one USB cable</td><td class="st dim">untested</td></tr>
+    <tr><td>TS-2000, TS-480, TS-590, K2, K3</td><td>Digirig with the radio's CAT cable, or a CP2102 USB-RS232 cable plus a sound card on a powered hub</td><td class="st dim">untested</td></tr>
+    <tr><td>Elecraft KX2, KX3</td><td>Digirig with the Elecraft CAT cable</td><td class="st dim">untested</td></tr>
+  </tbody>
+</table></div>
+<p class="dim">"Untested" means checked against simulated radios only. Reports from real radios are welcome on GitHub.</p>
+
+<h3>IC-7100</h3>
+<ul>
+  <li>SET &gt; Connectors: <b>DATA MOD: USB</b>. Without it the radio transmits silence.</li>
+  <li><b>USB MOD Level</b> around 20 %, <b>USB AF Level</b> around 50 %; if your radio has ACC/USB Output Select, set it to AF.</li>
+  <li>CI-V address <b>88h</b>, baud 19200 or Auto. USB SEND / keying <b>OFF</b> (RigDeck keys with a CI-V command).</li>
+  <li>For now, set the TX audio level by hand on the IC-7100; automatic level is not confirmed on it yet (see <a href="#safety">Automatic TX level</a>).</li>
+</ul>
+<h3>IC-705</h3>
+<ul>
+  <li>SET &gt; Connectors &gt; MOD Input &gt; <b>DATA MOD: USB</b>; USB AF/IF Output &gt; Output Select <b>AF</b>. Leave USB SEND/Keying OFF and the CI-V address at A4h.</li>
+  <li><b>Stop the 705 charging from RigDeck's USB port</b>, or the board's 5 V sags and the screen dims: SET &gt; Function &gt; <b>Charging (Power ON): OFF</b> and <b>USB Power Input: OFF</b>. Run the radio from its battery or a DC supply.</li>
+  <li>Its GPS can set RigDeck's clock: SET &gt; Connectors &gt; USB (B) Function &gt; <b>GPS Out: DATA → USB (B)</b>, then Settings, Clock, <b>Clock from radio's GPS: On</b>.</li>
+</ul>
+<h3>QMX / QMX+</h3>
+<ul>
+  <li>One USB cable carries CAT and 24-bit audio. RigDeck uses the QMX's <b>DIGI</b> mode and keys it over CAT.</li>
+  <li>The QMX has no ALC and no CAT commands for power, gains or filters, so those controls on the radio screen do nothing. Frequency, band, mode, A/B and keyer speed work.</li>
+</ul>
+<h3>No CAT: SignaLink or another sound card</h3>
+<ul>
+  <li>Settings, Radio: <b>No CAT</b>. PTT is VOX (the SignaLink keys on the audio) unless you choose RTS or DTR.</li>
+  <li>A sound card cannot tell RigDeck the band or frequency, so you tell it: press the FT8 band button for the band the radio is on, or tap the frequency and enter it (web page: type e.g. <code>7.030 CW</code> or <code>14.250 USB</code>). That frequency goes into the log and is remembered across restarts.</li>
+  <li>Want CAT as well? The board has one USB-A port: use a <b>powered USB hub</b> with the sound card and a <b>CP210x</b> USB-serial cable. FTDI, Prolific and CH340 cables are not supported yet. The board's USB-C port cannot be used for a radio.</li>
+</ul>
+<div class="note">A clip-on ferrite (mix 31 for HF) at each end of every USB cable is cheap insurance against RF getting into the USB link. Dropouts on only some bands usually mean RF in the cabling.</div>
+
+<h2 id="screens">The screens</h2>
+<figure><img src="img/screen-qso.png" width="1024" height="600" alt="RigDeck main screen in Auto CQ with waterfall, band activity, a contact in progress, TX buttons and band buttons"><figcaption>The main touch screen during a contact in Auto CQ (sample stations).</figcaption></figure>
+<ul>
+  <li><b>Header:</b> frequency, band and mode, radio model, signal and audio meters, link lights (USB, Audio, CI-V, Clock), UTC time, your call and grid, and the gear button for Settings.</li>
+  <li><b>Waterfall:</b> tap to set your transmit audio frequency (red marker).</li>
+  <li><b>Band activity:</b> every decode. <span style="color:var(--cq)">Blue</span> = CQ, <span style="color:var(--bad)">red</span> = calling you, <span style="color:var(--amb)">amber</span> = your transmissions. Tap a line to work that station.</li>
+  <li><b>Right side:</b> TX enabled / HALT TX, Manual / Auto CQ / Auto hunt, CQ, Tune, Log QSO, Clear, the contact in progress, the TX slot (even/odd), <b>Log: N</b> (logbook), SSB/CW and Radio.</li>
+  <li><b>Bottom row:</b> FT8, FT4, CW (FT-CW) and the band buttons.</li>
+</ul>
+<p>The <b>web page</b> has the same controls in four tabs: Operate, SSB / CW log, Log and Settings. Use it from the hotspot or your home network.</p>
+<figure><img src="img/web-desktop.png" width="1280" height="860" alt="RigDeck web control page in a desktop browser" loading="lazy"><figcaption>The web control page (demo data).</figcaption></figure>
+
+<h2 id="levels">Clock and levels</h2>
+<h3>Clock</h3>
+<p>FT8 needs UTC within about a second. The Clock light shows the source in use. With your home network RigDeck uses internet time; on the hotspot alone it copies the clock of the phone or laptop showing the page. If most stations show the same DT offset, use the trim buttons in Settings, Clock (−0.1 s, −20 ms, +20 ms, +0.1 s). More in <a href="#time">Keeping the time</a>.</p>
+<h3>Receive level</h3>
+<p>The <b>Audio in</b> meter should sit roughly between −30 and −10 dBFS on band noise. Adjust the radio's USB AF level.</p>
+<h3>Transmit level</h3>
+<ol class="steps">
+  <li>Set the radio's power the way you want it (for example 5 W on the IC-705).</li>
+  <li>Press <b>Tune</b> (a 10-second carrier, into a dummy load or a clear frequency).</li>
+  <li>Raise Settings, Operating, <b>TX audio level %</b> or the radio's USB MOD level until power stops rising, then back off until ALC stays near zero.</li>
+  <li>Leave <b>Lower audio when ALC shows</b> on and RigDeck keeps ALC out of the red from then on.</li>
+</ol>
+
+<h2 id="ft8">Making FT8 contacts</h2>
+<p>Pick FT8 or FT4 and a band. Decodes appear at the end of each slot (15 s for FT8, 7.5 s for FT4).</p>
+<div class="tbl"><table>
+  <thead><tr><th>Mode</th><th>What RigDeck does</th></tr></thead>
+  <tbody>
+    <tr><td class="k">Manual</td><td>Tap a decode to call that station; this enables TX. The sequence then runs by itself and TX switches off after 73. On the web page, Tx1–Tx6 choose the next message.</td></tr>
+    <tr><td class="k">Auto CQ</td><td>Press Enable TX. It calls CQ, works whoever answers, logs the contact and calls CQ again.</td></tr>
+    <tr><td class="k">Auto hunt</td><td>It answers plain CQs from stations not yet worked on this band, works them, logs and looks for the next. CQ POTA, CQ WWFF and (from 1.0.1) CQ SOTA are answered once per UTC day, band and mode; other directed CQs (CQ DX, CQ NA ...) are left to you.</td></tr>
+  </tbody>
+</table></div>
+<ul>
+  <li><b>HALT TX</b> unkeys at once, in every mode.</li>
+  <li><b>TX slot</b> chooses even (:00/:30) or odd (:15/:45) for your CQs. It is remembered over a restart.</li>
+  <li><b>Log QSO</b> logs the contact in progress now, for when the other station fades out. It needs at least one signal report, sent or received.</li>
+  <li><b>Call CQ as</b> (Settings, Station): plain CQ, CQ DX, CQ POTA, CQ SOTA, CQ WWFF, CQ NA, CQ EU or CQ TEST.</li>
+  <li><b>POTA mode: confirm each QSO</b> (Settings, Operating): after each contact in Auto CQ or Auto hunt, RigDeck waits until you press <b>Next QSO</b>.</li>
+  <li>A station that does not answer after the set number of repeats (default 5) is skipped for 10 minutes.</li>
+</ul>
+<div class="warn">You are the control operator. Stay with the station, or keep the web page open and in view, and check what your licence allows for automatic operation.</div>
+
+<h2 id="choosing">Choosing stations <span class="pill">BETA 1.0.1</span></h2>
+<p>Settings, Operating, <b>Choosing stations</b>.</p>
+<h3>Do-not-work list</h3>
+<p>Calls listed here are never called or answered, in any mode. If one answers your CQ it is ignored and RigDeck keeps calling. Their decodes are greyed out on the web page, and tapping one shows a message instead of calling.</p>
+<ul>
+  <li><code>W1ABC</code> also covers W1ABC/P and VE3/W1ABC.</li>
+  <li><code>XX9*</code> covers every call that starts with XX9.</li>
+  <li>Separate calls with commas or spaces.</li>
+</ul>
+<h3>Answer priority</h3>
+<p>Off by default: RigDeck takes the strongest signal, as before. Turn it on and, when several stations call you (Auto CQ) or call CQ (Auto hunt), RigDeck applies your rules in order. The first rule that tells two stations apart decides; on a tie the next rule decides, and after the last rule the first one heard.</p>
+<div class="tbl"><table>
+  <thead><tr><th>Rule</th><th>A station counts when</th></tr></thead>
+  <tbody>
+    <tr><td class="k">POTA / WWFF</td><td>it calls CQ POTA or CQ WWFF</td></tr>
+    <tr><td class="k">SOTA</td><td>it calls CQ SOTA</td></tr>
+    <tr><td class="k">DX</td><td>the grid in its message is farther than "DX means farther than, km" (default 2,500 km) from your grid</td></tr>
+    <tr><td class="k">Special event</td><td>it has a 1×1 call such as W9A</td></tr>
+    <tr><td class="k">Weakest / Strongest</td><td>by signal report</td></tr>
+  </tbody>
+</table></div>
+<p>On the web page, tick the rules you want and move them with the ▲ ▼ buttons. The touch screen turns priority on and off; the order is set on the web page.</p>
+
+<h2 id="safety">Transmit safeguards</h2>
+<h3>TX watchdog and the traffic light</h3>
+<p>The watchdog (Settings, Operating, default 6 minutes, 0 = off) turns transmit off when no operator has been present for that long. A touch on the screen, a click or a command counts as present, and so does the web page while it is open <b>and in view</b>. A hidden tab, minimised window or locked phone lets the watchdog count down.</p>
+<div class="lights">
+  <div><i style="background:var(--ok)"></i><span><b>Green:</b> TX enabled, more than half the watchdog time left. Pulses while transmitting.</span></div>
+  <div><i style="background:var(--amb)"></i><span><b>Yellow:</b> TX enabled, past half the watchdog time. Tap the light or anything to restart it.</span></div>
+  <div><i style="background:var(--bad)"></i><span><b>Red:</b> TX off: never enabled, halted, timed out, or stopped by the dead man's switch.</span></div>
+</div>
+<p>The light floats at the bottom right of the web page. All three lamps flash when the page loses its connection to the board.</p>
+<h3>Dead man's switch</h3>
+<p>Settings, Wi-Fi, off by default; for remote operation. RigDeck checks every 20 seconds that the internet answers. After about a minute without it, RigDeck starts no new contact, finishes the one in progress and turns TX off in Auto CQ and Auto hunt. Enable TX again yourself once the internet is back.</p>
+<h3>Automatic TX level</h3>
+<p>With <b>Lower audio when ALC shows</b> on, RigDeck reads the ALC meter while transmitting and turns its audio down a step after each transmission that went into the ALC zone, and back up when there is room, never above your maximum. It works with the Icoms and the FTX-1; it is confirmed on the IC-705. The manual level is remembered <b>per radio</b>, so moving a unit from a SignaLink to an IC-705 brings back each radio's own level.</p>
+<h3>Other limits</h3>
+<ul>
+  <li>Transmit is forced off if a transmission overruns its slot or the USB link to the radio drops.</li>
+  <li>A contact attempt is dropped after the set number of unanswered repeats.</li>
+</ul>
+
+<h2 id="log">Logging</h2>
+<p>Every contact goes into two ADIF files named after the station callsign:</p>
+<ul>
+  <li><b>Current log</b> (<code>AC9HP_log.adi</code>): download it into your logging program, then <b>Clear current log</b>; the next download holds only new contacts.</li>
+  <li><b>Archive</b> (<code>AC9HP_archive.adi</code>): every contact, untouched by clearing.</li>
+</ul>
+<p>Changing the callsign in Settings switches to that callsign's files; changing it back brings the old log back. The operator callsign (ADIF OPERATOR) does not change the files.</p>
+<h3>Where the log lives</h3>
+<p>The board's own memory holds roughly 2,500 contacts. With a FAT32 <b>microSD card</b> in at start-up the logs move onto the card, in the RigDeck folder, with room for hundreds of thousands. Put the card in or take it out with the power off. Settings, Device shows the free space and offers <b>Format microSD card</b> for new cards (most 64 GB and larger cards come as exFAT, which RigDeck cannot read).</p>
+<h3>Downloads</h3>
+<p>Web page, Log tab: <b>Download current log</b> and <b>Download full archive</b>. With a RigDeck name set <span class="pill">BETA 1.0.1</span>, files are named <code>NAME-CALLSIGN-YYYYMMDD-HHMM-current.adi</code>.</p>
+<h3>Editing contacts</h3>
+<ul>
+  <li>Web page, Log tab: find a call, press <b>Edit</b>, change or add any ADIF field, <b>Save changes</b> or <b>Delete contact</b>.</li>
+  <li>Touch screen, <b>Log: N</b>: tap a contact to edit or delete it.</li>
+  <li>A deleted contact can be restored from "Recently deleted" (web) or <b>Undo delete</b> (touch). It is kept for 7 days in the board's memory, for good on a microSD card.</li>
+</ul>
+<h3>Sending contacts to your logging program</h3>
+<ul>
+  <li>Settings, Logging, <b>Send log to</b>: <b>UDP, WSJT-X format</b> (port 2237) for programs that listen for WSJT-X, such as Log4OM, GridTracker and JTAlert; or UDP / TCP with a bare ADIF record.</li>
+  <li>In Log4OM, add a UDP inbound connection of type JT_MESSAGE on that port.</li>
+  <li>The logging PC must be on the hotspot or on the network RigDeck joined.</li>
+  <li><b>Send unsent</b> (Log tab, touch logbook) sends every contact the logger has not received yet, for example after operating in the field. <b>Send test to logger</b> checks the connection without logging anything.</li>
+</ul>
+
+<h2 id="ssbcw">SSB / CW logger</h2>
+<p>The <b>SSB/CW</b> button on the touch screen, or the <b>SSB / CW log</b> tab, logs contacts made by hand. Opening it turns automatic FT8 transmit off.</p>
+<ul>
+  <li>The frequency follows the radio until you type one; SSB / CW choose the logged mode until the contact is logged.</li>
+  <li>Type the call, reports, name and a note, and press <b>LOG</b>. Empty reports are logged as 59 or 599. A call already worked on this band is flagged in red.</li>
+  <li>Six <b>CW macro</b> buttons send through the radio's keyer (radio in CW). Edit them in Settings as <code>Label|text</code>; <code>{CALL}</code>, <code>{RST}</code>, <code>{MYCALL}</code>, <code>{GRID}</code> and <code>{REF}</code> are filled in.</li>
+</ul>
+
+<h2 id="control">Radio control screen</h2>
+<figure><img src="img/screen-radio.png" width="1024" height="600" alt="Radio control screen with tuning steps, bands, modes, filters and level sliders" loading="lazy"><figcaption>Radio control: tuning, bands, modes, filters, DSP and levels.</figcaption></figure>
+<p><b>Radio</b> on the main screen opens a front panel: tuning steps from 10 Hz to 1 MHz, a keypad (<b>Enter</b>), bands from 160 m to 70 cm, modes and DATA, filters, ATT, preamp, noise blanker and reduction, notch, AGC, compressor, VOX, and sliders for AF and RF gain, squelch, power, mic gain and NR level. Values are read back from the radio, so the screen follows its knobs. Controls the radio does not report stay grey.</p>
+
+<h2 id="modes">FT-CW and PSK31</h2>
+<ul>
+  <li><b>FT-CW</b> (CW on the touch screen) is RigDeck's own mode: FT8-style contacts sent as machine-timed Morse. It needs two RigDecks, both at the same speed (Settings, FT-CW speed, default 40 wpm). It needs signals about 15 dB stronger than FT8. Contacts are logged as CW.</li>
+  <li><b>PSK31</b> (web page): click a signal on the waterfall, read the text, type and send, and log with the form.</li>
+</ul>
+
+<h2 id="time">Keeping the time</h2>
+<p>RigDeck sets its clock from, best first: a GPS module with PPS, the radio's GPS, internet time, or the browser showing the web page. A restart keeps the time; switching the power off loses it.</p>
+<h3>GPS module on the board</h3>
+<p>Any 3.3 V-logic NMEA module works; one with a <b>PPS</b> output (u-blox NEO-6M / NEO-M8N, ATGM336H and similar) gives timing within a few milliseconds and needs no internet.</p>
+<ul>
+  <li>Wiring: module <b>TX → GPIO3</b>, <b>PPS → GPIO4</b>, GND → GND, VCC → 3.3 V or 5 V as the module needs.</li>
+  <li>Settings, Clock: <b>GPS module on the header: On</b>, the baud (most modules ship at 9600) and the pins. Save and restart. The Clock light then shows "gps-pps".</li>
+</ul>
+
+<h2 id="wifi">Wi-Fi</h2>
+<ul>
+  <li>The board's Wi-Fi is <b>2.4 GHz only</b>.</li>
+  <li>Phones often leave a hotspot with no internet. On Android choose <b>Stay connected</b> and turn off switching to mobile data for the RigDeck network; on iPhone turn off <b>Wi-Fi Assist</b>.</li>
+  <li>When RigDeck is on your home network it gets the hotspot name (or RigDeck-XXXXXX) as its network name, which helps you find it in your router's list.</li>
+  <li>Frequent dropouts: update the board's Wi-Fi chip (Settings, Wi-Fi chip) with the file from the flasher page.</li>
+</ul>
+
+<h2 id="update">Updates and settings files</h2>
+<h3>Updating over Wi-Fi</h3>
+<p>Settings, <b>Update RigDeck</b>:</p>
+<ul>
+  <li><b>Install latest Stable</b> or <b>Install latest Beta</b> fetches the release from the flasher site. The browser needs internet, so put the board on your home network first.</li>
+  <li><b>Install this file</b> takes a <code>rigdeck-x.y.z.bin</code> you downloaded.</li>
+</ul>
+<p>RigDeck stops transmitting, keeps its settings and logs and restarts in about a minute. If the new version fails to start, the board goes back to the previous one by itself.</p>
+<h3>Exporting and importing settings <span class="pill">BETA 1.0.1</span></h3>
+<p>Web page, Settings, Device, <b>Settings file</b>:</p>
+<ul>
+  <li><b>Export settings</b> saves every setting except passwords as a text file named after the RigDeck.</li>
+  <li><b>Import settings</b> on another RigDeck lists every setting that differs. Ticked ones are applied; things that belong to that unit (its name, hotspot, home network, TX levels and offsets, screen, GPS pins) start unticked.</li>
+</ul>
+
+<h2 id="trouble">Troubleshooting</h2>
+<div class="tbl"><table>
+  <thead><tr><th>What you see</th><th>Try this</th></tr></thead>
+  <tbody>
+    <tr><td>No decodes</td><td>Check the Audio light and the Audio in meter (−30 to −10 dBFS on noise). Check the Clock light and the DT column: large DT values mean the clock is off.</td></tr>
+    <tr><td>Transmits but no power out</td><td>Radio menu <b>DATA MOD: USB</b> (Icom). Raise TX audio level or USB MOD level. On No CAT, check VOX on the sound card.</td></tr>
+    <tr><td>Radio disconnects when transmitting, only on some bands</td><td>Most likely RF on the cables: ferrites (mix 31) on the USB cable at both ends, a choke on the coax, a shorter USB cable away from the coax; try lower power. RigDeck reconnects by itself.</td></tr>
+    <tr><td>IC-705: screen dims, board restarts</td><td>Turn off the radio's charging and USB power input (see <a href="#radio">IC-705</a>).</td></tr>
+    <tr><td>Radio not found</td><td>Wait up to a minute, or choose the radio's family in Settings, Radio. USB-serial cables must use a CP210x chip.</td></tr>
+    <tr><td>"Set your callsign and grid"</td><td>Settings, Station: both are needed before RigDeck transmits.</td></tr>
+    <tr><td>microSD card not used</td><td>It must be FAT32 and in at start-up. Use Format microSD card in Settings, Device.</td></tr>
+    <tr><td>Asked for a log by the developer</td><td>Turn on Settings, Device, <b>Copy the console log to the microSD card</b>; the files are listed there for download.</td></tr>
+  </tbody>
+</table></div>
+
+<footer>RigDeck by AC9HP · MIT licence · <a href="https://github.com/wrmichael/RigDeck">github.com/wrmichael/RigDeck</a> · Screens show sample stations.</footer>
+</main>
+</div>
+<script>
+// Mark the section in view in the contents list.
+(()=>{const links=[...document.querySelectorAll("nav.toc a")],secs=links.map(a=>document.querySelector(a.getAttribute("href")));
+ if(!("IntersectionObserver" in window))return;
+ const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle("here",l.getAttribute("href")==="#"+e.target.id));}});},{rootMargin:"0px 0px -70% 0px"});
+ secs.forEach(s=>s&&io.observe(s));})();
+</script>
+</body>
+</html>

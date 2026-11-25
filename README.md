@@ -5,6 +5,7 @@
 ![RigDeck main screen: waterfall, band activity and a contact in progress in Auto CQ](docs/img/screen-qso.png)
 
 More screens, including the web control page, are on the [flasher page](https://wrmichael.github.io/RigDeck/).
+**[User guide](https://wrmichael.github.io/RigDeck/guide.html)**: setting up, connecting your radio, operating and logging.
 
 RigDeck is firmware for the Waveshare ESP32-P4 7-inch touch board. Plug it into your radio's USB
 port with one cable and it:
@@ -68,7 +69,7 @@ On this board the firmware also drives the 7 inch display, so no phone is needed
   archive counts and **Clear current log** (asks first).
 - Bottom row: FT8/FT4 and band buttons.
 
-Callsign, grid, levels, network logging, PSK31 and the log downloads stay on the web page.
+PSK31 and the log downloads are on the web page only; Settings are on both.
 Touching the screen counts as "operator present" for the TX watchdog, the same as a click on the web page.
 For ESP32-P4 boards without this display: `idf.py menuconfig` > IC-7100 FT8 controller > turn the
 touch interface off.
@@ -101,7 +102,7 @@ cheap insurance against RF getting into the board.
 The IC-705 connects with one micro-USB cable as well. It appears as a single USB device with
 two serial ports and audio (no hub), so it also fits within an ESP32-S3's USB limits. The
 firmware finds the CI-V port and the CI-V address (A4h) by itself; nothing needs changing in
-Settings when you swap radios. **Not yet tried on a real IC-705.**
+Settings when you swap radios. Tested on the air.
 
 - Radio: SET > Connectors > MOD Input > **DATA MOD: USB**; USB AF/IF Output > Output Select **AF**.
   Leave USB SEND/Keying OFF and the CI-V address at A4h.
@@ -134,7 +135,7 @@ serial bridge and an audio codec; the firmware probes the serial ports, recognis
 
 The QMX appears as one USB device (STMicroelectronics VID 0483) with a CDC serial port and 24-bit
 48 kHz USB audio; the firmware speaks its Kenwood TS-480 style CAT and converts audio to and from
-24 bits. **Not yet tried on a real QMX.**
+24 bits. Tested on the air with a QMX and a QMX+.
 
 - FT8 etc. use the QMX's **DIGI** mode (`MD6`), which the firmware selects.
   Transmit is keyed with `TQ1`, and the QMX itself generates the RF from the audio tone.
@@ -300,8 +301,8 @@ The version shows on the touch screen (Settings) and on the web page (Settings t
 ## Build and flash
 
 Built and tested with **ESP-IDF 6.1** (5.5.3 or newer should work; the USB hub support comes from
-Espressif's `usb` component 1.6+, fetched automatically on first build). A ready-to-flash .bin and a
-browser flasher are planned, so you will not need to build it yourself.
+Espressif's `usb` component 1.6+, fetched automatically on first build). You do not need to build it
+yourself: the [browser flasher](https://wrmichael.github.io/RigDeck/) installs a ready-made release.
 
 ```
 idf.py set-target esp32p4
@@ -338,7 +339,9 @@ On Windows with Espressif's EIM installer, `start.bat` opens a PowerShell with E
    - **Auto CQ:** press Enable TX; it calls CQ, works whoever answers (strongest first), logs,
      and calls CQ again.
    - **Auto answer CQs:** it calls the strongest plain CQ it has not worked on this band, works
-     it, logs, and looks for the next. Directed CQs (CQ DX, CQ POTA...) are left to you.
+     it, logs, and looks for the next. CQ POTA, CQ WWFF and CQ SOTA are answered once per UTC day,
+     band and mode; other directed CQs (CQ DX, CQ NA ...) are left to you. The do-not-work list and
+     the answer priority (Settings, Choosing stations) change which station is taken.
    - **Halt TX** unkeys immediately in every mode.
 7. PSK31: click the waterfall on a signal, read the text, type and Send. Log with the form.
 
@@ -355,9 +358,9 @@ of these controllers). Select **CW** on the touch screen or **FT-CW** on the web
 - Works exactly like FT8 from the operator's side: 15 s slots, even/odd, the same messages
   (CQ, grid, dB report, R+report, RR73, 73), Manual / Auto CQ / Auto hunt, tap a decode to call.
   Auto hunt answers the strongest CQ from a station not yet worked on this band (current log or
-  archive, any mode). Directed CQs (CQ DX, CQ NA, CQ SOTA ...) are left to you, except parks:
-  **CQ POTA** and **CQ WWFF** are answered once per UTC day, band and mode, as park activations
-  count. A station that did not answer after the set number of calls is skipped for 10 minutes.
+  archive, any mode). Directed CQs (CQ DX, CQ NA ...) are left to you, except parks and summits:
+  **CQ POTA**, **CQ WWFF** and **CQ SOTA** are answered once per UTC day, band and mode, as
+  activations count. A station that did not answer after the set number of calls is skipped for 10 minutes.
 - **POTA mode: confirm each QSO** (Settings, Operating; off by default): with Auto CQ or Auto hunt,
   when a contact ends (logged, or given up after the set repeats) RigDeck does not start another on
   its own. The CQ button turns into **Next QSO** (amber on the touch screen; on the web page next to
