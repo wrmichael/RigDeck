@@ -134,7 +134,8 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
     <tr><td>Yaesu FTX-1</td><td>one USB cable</td><td class="st dim">untested</td></tr>
     <tr><td>IC-7300, IC-7610, IC-9700, IC-905</td><td>one USB cable</td><td class="st dim">untested</td></tr>
     <tr><td>FTDX10, FT-991A, FT-710, FTDX101</td><td>one USB cable</td><td class="st dim">untested</td></tr>
-    <tr><td>TS-2000, TS-480, TS-590, K2, K3</td><td>Digirig with the radio's CAT cable, or a CP2102 USB-RS232 cable plus a sound card on a powered hub</td><td class="st dim">untested</td></tr>
+    <tr><td>TS-2000, TS-480, TS-590, K2, K3</td><td>Digirig with the radio's CAT cable, or a CP2102 or CH340 USB-RS232 cable plus a sound card on a powered hub</td><td class="st dim">untested</td></tr>
+    <tr><td>FX-4CR <span class="pill">BETA 1.1.0</span></td><td>one USB cable; set the radio's CAT to TS-590S, 115200</td><td class="st dim">untested</td></tr>
     <tr><td>Elecraft KX2, KX3</td><td>Digirig with the Elecraft CAT cable</td><td class="st dim">untested</td></tr>
   </tbody>
 </table></div>
@@ -162,7 +163,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 <ul>
   <li>Settings, Radio: <b>No CAT</b>. PTT is VOX (the SignaLink keys on the audio) unless you choose RTS or DTR.</li>
   <li>A sound card cannot tell RigDeck the band or frequency, so you tell it: press the FT8 band button for the band the radio is on, or tap the frequency and enter it (web page: type e.g. <code>7.030 CW</code> or <code>14.250 USB</code>). That frequency goes into the log and is remembered across restarts.</li>
-  <li>Want CAT as well? The board has one USB-A port: use a <b>powered USB hub</b> with the sound card and a <b>CP210x</b> USB-serial cable. FTDI, Prolific and CH340 cables are not supported yet. The board's USB-C port cannot be used for a radio.</li>
+  <li>Want CAT as well? The board has one USB-A port: use a <b>powered USB hub</b> with the sound card and a <b>CP210x</b> or <b>CH340</b> USB-serial cable (CH340 from 1.1.0). FTDI and Prolific cables are not supported yet. The board's USB-C port cannot be used for a radio.</li>
 </ul>
 <div class="note">A clip-on ferrite (mix 31 for HF) at each end of every USB cable is cheap insurance against RF getting into the USB link. Dropouts on only some bands usually mean RF in the cabling.</div>
 
@@ -362,7 +363,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
     <tr><td>Transmits but no power out</td><td>Radio menu <b>DATA MOD: USB</b> (Icom). Raise TX audio level or USB MOD level. On No CAT, check VOX on the sound card.</td></tr>
     <tr><td>Radio disconnects when transmitting, only on some bands</td><td>Most likely RF on the cables: ferrites (mix 31) on the USB cable at both ends, a choke on the coax, a shorter USB cable away from the coax; try lower power. RigDeck reconnects by itself.</td></tr>
     <tr><td>IC-705: screen dims, board restarts</td><td>Turn off the radio's charging and USB power input (see <a href="#radio">IC-705</a>).</td></tr>
-    <tr><td>Radio not found</td><td>Wait up to a minute, or choose the radio's family in Settings, Radio. USB-serial cables must use a CP210x chip.</td></tr>
+    <tr><td>Radio not found</td><td>Wait up to a minute, or choose the radio's family in Settings, Radio. USB-serial cables must use a CP210x or (from 1.1.0) CH340 chip.</td></tr>
     <tr><td>"Set your callsign and grid"</td><td>Settings, Station: both are needed before RigDeck transmits.</td></tr>
     <tr><td>microSD card not used</td><td>It must be FAT32 and in at start-up. Use Format microSD card in Settings, Device.</td></tr>
     <tr><td>Asked for a log by the developer</td><td>Turn on Settings, Device, <b>Copy the console log to the microSD card</b>; the files are listed there for download.</td></tr>

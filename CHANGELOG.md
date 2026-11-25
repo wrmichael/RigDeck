@@ -1,6 +1,8 @@
 # Changes
 
 ## 1.1.0 (Beta)
+- **CH340 / CH341 USB-serial** (VID 1A86): CAT for the FX-4CR (set it to TS-590S, 115200) and CH340 CAT or
+  CI-V cables; 115200 is now among the CAT rates tried. Untested on hardware.
 - **APRS** (web page, mode APRS): 1200 baud AFSK modem on the radio's FM audio, the radio set to FM with DATA
   on the APRS frequency (144.390 MHz by default). Stations heard with type, distance, direction, comment and
   path (plain, compressed and Mic-E positions); messages with acks (sent up to 3 times); packets heard and

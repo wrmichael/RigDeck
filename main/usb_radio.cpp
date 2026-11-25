@@ -36,18 +36,24 @@ static App* s_app;
 #define SILABS_VID 0x10C4
 #define ICOM_VID 0x0C26
 #define STM_VID 0x0483                 // QRP Labs QMX / QMX+ (0483:A34C)
+#define WCH_VID 0x1A86                 // WCH CH340 / CH341 serial chips: FX-4CR (1A86:7523), many CAT and CI-V cables
+#define CH34X_REQ_OUT 0x40             // vendor, host-to-device, recipient device
+#define CH34X_REQ_WRITE_REG 0x9A
+#define CH34X_REQ_SERIAL_INIT 0xA1
+#define CH34X_REQ_MODEM_CTRL 0xA4      // value = inverted bits: 0x20 DTR, 0x40 RTS (lines are active low)
 #define CP210X_REQ_OUT 0x41            // vendor, host-to-device, recipient interface
 #define CP210X_IFC_ENABLE 0x00
 #define CP210X_SET_LINE_CTL 0x03
 #define CP210X_SET_MHS 0x07
 #define CP210X_SET_BAUDRATE 0x1E
 
-enum PortKind { PK_CP210X, PK_CDC };
+enum PortKind { PK_CP210X, PK_CDC, PK_CH34X };
 // Which radios can be behind each kind of port (bit per RadioProto).
 static const struct { uint16_t vid; PortKind kind; uint8_t ifaces; uint8_t protos; } kPortTypes[] = {
     {SILABS_VID, PK_CP210X, 2, (1 << RP_CIV) | (1 << RP_YAESU) | (1 << RP_KENWOOD)},
     {ICOM_VID, PK_CDC, 8, 1 << RP_CIV},
     {STM_VID, PK_CDC, 8, 1 << RP_QMX},
+    {WCH_VID, PK_CH34X, 1, (1 << RP_CIV) | (1 << RP_YAESU) | (1 << RP_KENWOOD)},
 };
 
 static cdc_acm_dev_hdl_t s_cdc = nullptr;
@@ -97,6 +103,23 @@ static bool cp210xSetup(cdc_acm_dev_hdl_t h, uint8_t iface, uint32_t baud) {
     return true;
 }
 
+// CH340 / CH341: serial init, then the baud divisor (registers 0x12/0x13) and 8N1 (registers 0x18/0x25), as the
+// Linux ch341 driver does; DTR and RTS low.
+static bool ch34xSetup(cdc_acm_dev_hdl_t h, uint32_t baud) {
+    if (baud < 300) baud = 300;
+    uint32_t factor = 1532620800u / baud;
+    uint16_t divisor = 3;
+    while (factor > 0xFFF0 && divisor) { factor >>= 3; divisor--; }
+    if (factor > 0xFFF0) return false;
+    factor = 0x10000 - factor;
+    uint16_t a = (uint16_t)((factor & 0xFF00) | divisor | 0x80);
+    if (cdc_acm_host_send_custom_request(h, CH34X_REQ_OUT, CH34X_REQ_SERIAL_INIT, 0, 0, 0, nullptr) != ESP_OK) return false;
+    if (cdc_acm_host_send_custom_request(h, CH34X_REQ_OUT, CH34X_REQ_WRITE_REG, 0x1312, a, 0, nullptr) != ESP_OK) return false;
+    if (cdc_acm_host_send_custom_request(h, CH34X_REQ_OUT, CH34X_REQ_WRITE_REG, 0x2518, 0x00C3, 0, nullptr) != ESP_OK) return false;
+    cdc_acm_host_send_custom_request(h, CH34X_REQ_OUT, CH34X_REQ_MODEM_CTRL, 0xFF, 0, 0, nullptr);
+    return true;
+}
+
 // PTT on a serial port's RTS or DTR line (Settings > PTT), e.g. a Digirig: RTS keys the radio.
 static void setPttLine(bool on) {
     const int m = s_app->radio.pttMethod.load();
@@ -106,6 +129,8 @@ static void setPttLine(bool on) {
         esp_err_t e;
         if (s_civKind == PK_CP210X)       // SET_MHS: bit 0 DTR, bit 1 RTS, bits 8/9 = write those two
             e = cdc_acm_host_send_custom_request(s_cdc, CP210X_REQ_OUT, CP210X_SET_MHS, (uint16_t)(0x0300 | (dtr ? 1 : 0) | (rts ? 2 : 0)), s_civIface, 0, nullptr);
+        else if (s_civKind == PK_CH34X)
+            e = cdc_acm_host_send_custom_request(s_cdc, CH34X_REQ_OUT, CH34X_REQ_MODEM_CTRL, (uint16_t)(~((dtr ? 0x20 : 0) | (rts ? 0x40 : 0)) & 0xFF), 0, 0, nullptr);
         else
             e = cdc_acm_host_set_control_line_state(s_cdc, dtr, rts);
         if (e != ESP_OK) ESP_LOGW(TAG, "PTT line could not be set (%s)", esp_err_to_name(e));
@@ -130,6 +155,8 @@ static cdc_acm_dev_hdl_t openPort(uint16_t vid, PortKind kind, uint8_t dev, uint
     if (cdc_acm_host_open(&oc, &h) != ESP_OK) return nullptr;
     if (kind == PK_CP210X) {
         if (!cp210xSetup(h, iface, baud)) { cdc_acm_host_close(h); return nullptr; }
+    } else if (kind == PK_CH34X) {
+        if (!ch34xSetup(h, baud)) { cdc_acm_host_close(h); return nullptr; }
     } else {
         // A USB-native port has no real baud rate, but set the line state anyway. Errors are not
         // fatal: some devices do not implement these requests.
@@ -149,6 +176,7 @@ static cdc_acm_dev_hdl_t openPort(uint16_t vid, PortKind kind, uint8_t dev, uint
 //  IC-705:  port "B" of the same device, from the radio's built-in GPS.
 static void openGpsPort(const uint8_t* addrs, int n) {
     if (s_app->radio.proto != RP_CIV) return;                    // only the Icoms pass GPS data to USB
+    if (s_civKind == PK_CH34X) return;                           // a CI-V cable: no GPS port
     if (s_civKind == PK_CP210X) {
         for (int i = 0; i < n && !s_gps; i++) {
             if (addrs[i] == s_civDev) continue;
@@ -184,10 +212,10 @@ static int buildProbes(uint8_t protos, Probe* out) {
         for (uint8_t a : kAddrs) if (a != configured) out[n++] = {RP_CIV, a, baud};
     }
     // Text CAT over a CP210x: the configured rate first, then the usual ones (FTDX10 / FT-991A /
-    // K2 default 4800, TS-2000 9600, FTX-1 38400). A USB-native port has no rate: one try.
-    uint32_t bauds[5] = {(uint32_t)s_app->cfg.catBaud, 4800, 9600, 19200, 38400};
+    // K2 default 4800, TS-2000 9600, FTX-1 38400, FX-4CR 115200). A USB-native port has no rate: one try.
+    uint32_t bauds[6] = {(uint32_t)s_app->cfg.catBaud, 4800, 9600, 19200, 38400, 115200};
     int nb = 1;
-    for (int i = 1; i < 5; i++) if (bauds[i] != bauds[0]) bauds[nb++] = bauds[i];
+    for (int i = 1; i < 6; i++) if (bauds[i] != bauds[0]) bauds[nb++] = bauds[i];
     if ((protos & (1 << RP_YAESU)) && (type == 0 || type == 2)) for (int i = 0; i < nb; i++) out[n++] = {RP_YAESU, 0, bauds[i]};
     if ((protos & (1 << RP_KENWOOD)) && (type == 0 || type == 4)) for (int i = 0; i < nb; i++) out[n++] = {RP_KENWOOD, 0, bauds[i]};
     if ((protos & (1 << RP_QMX)) && (type == 0 || type == 3)) out[n++] = {RP_QMX, 0, 115200};
@@ -311,6 +339,7 @@ static void serialTask(void*) {
                     for (int k = 0; k < np && s_cdc == h && !s_app->usbSerial; k++) {
                         const Probe& pr = probes[k];
                         if (k > 0 && pr.baud != probes[k - 1].baud && pt.kind == PK_CP210X) cp210xSetup(h, iface, pr.baud);
+                        if (k > 0 && pr.baud != probes[k - 1].baud && pt.kind == PK_CH34X) ch34xSetup(h, pr.baud);
                         radio.setProto(pr.proto);
                         radio.addr = pr.addr ? pr.addr : (uint8_t)s_app->cfg.civAddr;
                         radio.lastRxMono = -100000;

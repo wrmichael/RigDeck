@@ -218,7 +218,8 @@ Radios and interfaces:
 | FTX-1 | one USB cable | should work, untested |
 | IC-7300, IC-7610, IC-9700, IC-905 | one USB cable (CI-V + sound card) | should work, untested |
 | FTDX10, FT-991A, FT-710, FTDX101 | one USB cable (CAT at the radio's rate + sound card) | should work, untested |
-| TS-2000, TS-480, TS-590, K2, K3 | Digirig with the radio's CAT cable (or a CP2102 USB-RS232 cable + sound card on a hub) | should work, untested |
+| TS-2000, TS-480, TS-590, K2, K3 | Digirig with the radio's CAT cable (or a CP2102 / CH340 USB-RS232 cable + sound card on a hub) | should work, untested |
+| FX-4CR | one USB cable (CH340 serial + USB audio); set the radio's CAT to TS-590S, 115200 | should work, untested |
 | Elecraft KX2, KX3 | Digirig with the Elecraft (ACC1, 3.5 mm) CAT cable; audio to the mic and phones jacks; PTT "CAT command" | should work, untested |
 | SignaLink USB (any radio) | Radio "No CAT": the SignaLink keys the radio on its own | tested on the air (K2) |
 | Digirig without a CAT cable | Radio "No CAT", PTT "Serial RTS" | should work, untested |
@@ -235,8 +236,8 @@ Radios and interfaces:
   rate is the radio's RS232 menu setting (38400 by default, which RigDeck tries).
 - **PTT** (Settings > Radio): CAT command (default), the serial port's **RTS** (Digirig) or **DTR**
   line, or **VOX**. RTS / DTR work with CAT on the same port too.
-- Only Silicon Labs CP210x USB-serial chips (as in Digirig and most radios) are driven; FTDI,
-  Prolific and CH340 cables are not yet.
+- Silicon Labs CP210x (Digirig, most radios) and WCH CH340 / CH341 USB-serial chips are driven; FTDI
+  and Prolific cables are not yet. CH340 support is new and untested on hardware.
 - The board has one USB-A port: two USB devices (a SignaLink and a separate CAT cable) need a
   powered USB hub. A Digirig is one device (it has a hub inside).
 
