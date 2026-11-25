@@ -83,6 +83,14 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
     <figure style="margin:0"><img src="img/web-phone.png" width="390" height="720" alt="RigDeck web control page on a phone" loading="lazy" style="display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:8px"><figcaption style="color:var(--dim);font-size:15px;margin-top:6px">On a phone.</figcaption></figure>
   </div>
 
+  <h3 style="margin:22px 0 8px">CW trainer <span style="font-size:13px;color:var(--dim);font-weight:400">(Beta)</span></h3>
+  <div class="shots">
+    <figure class="wide"><img src="img/cwt-characters.png" width="1072" height="480" alt="CW trainer Characters page with speed, spacing and tone, the last character copied with its time, and statistics for each character in play" loading="lazy"><figcaption>Character recognition: timed answers, slow and missed characters come up more often, the next one is added when you are ready.</figcaption></figure>
+    <figure><img src="img/cwt-qso.png" width="1072" height="408" alt="CW trainer QSO copy compared word by word" loading="lazy"><figcaption>QSO copy, compared word by word.</figcaption></figure>
+    <figure><img src="img/cwt-send.png" width="1072" height="476" alt="CW trainer sending practice with paddle pads and decoded text" loading="lazy"><figcaption>Sending practice: straight key or paddles, decoded as you send.</figcaption></figure>
+  </div>
+  <p style="color:var(--dim);font-size:15px">Morse plays in the browser, or through the radio's sidetone with break-in switched off. Sample progress shown.</p>
+
   <h2>Other ways to flash</h2>
   <p>The .bin above is a complete image that goes at address <code>0x0</code>. With esptool:</p>
   <p><code>esptool --chip esp32p4 write-flash 0x0 rigdeck.bin 0x7C0000 otadata.bin</code></p>
