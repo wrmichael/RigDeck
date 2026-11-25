@@ -382,7 +382,8 @@ table.imp th{color:var(--dim);font-weight:500}
       <label for="s_gpsModBaud">GPS module baud</label><select id="s_gpsModBaud"><option>4800</option><option>9600</option><option>38400</option><option>115200</option></select>
       <label for="s_gpsRxPin">Module TX to board GPIO</label><input id="s_gpsRxPin" inputmode="numeric">
       <label for="s_gpsPpsPin">Module PPS to board GPIO (-1 = not wired)</label><input id="s_gpsPpsPin" inputmode="numeric">
-      <label for="s_apSsid">Hotspot name</label><input id="s_apSsid" maxlength="32">
+      <label for="s_apSsid">Hotspot name</label><input id="s_apSsid" maxlength="32" title="More than one RigDeck? Give each its own hotspot name, or a phone may join the other unit.">
+      <p class="hint" style="grid-column:1/-1;margin:0">More than one RigDeck? Give each its own hotspot name (e.g. RigDeck-Shack, RigDeck-Mobile); with the same name a phone joins whichever it finds first.</p>
       <label for="s_apPass">Hotspot password</label><input id="s_apPass" type="password" placeholder="unchanged" autocomplete="new-password">
       <label for="s_staSsid">Home network name</label><input id="s_staSsid" maxlength="32" placeholder="optional, 2.4 GHz">
       <label for="s_staPass">Home network password</label><input id="s_staPass" type="password" placeholder="unchanged" autocomplete="new-password">

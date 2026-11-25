@@ -1125,7 +1125,7 @@ const SField kSet[] = {
     {"logProto", "Send log to", 4, SK_DROP, 0, "Nowhere (file only)\nTCP, ADIF text\nUDP, ADIF text\nUDP, WSJT-X format", "0|1|2|3", nullptr},
     {"logHost", "Logger address", 4, SK_TEXT, 40, nullptr, nullptr, "192.168.4.2"},
     {"logPort", "Logger port", 4, SK_NUM, 5, nullptr, nullptr, "2237"},
-    {"apSsid", "Hotspot name", 5, SK_TEXT, 32, nullptr, nullptr, ""},
+    {"apSsid", "Hotspot name", 5, SK_TEXT, 32, nullptr, nullptr, "own name per unit, e.g. RigDeck-Mobile"},
     {"apPass", "Hotspot password", 5, SK_PASS, 63, nullptr, nullptr, "unchanged"},
     {"staSsid", "Home network name", 5, SK_TEXT, 32, nullptr, nullptr, "optional, 2.4 GHz"},
     {"staPass", "Home network password", 5, SK_PASS, 63, nullptr, nullptr, "unchanged"},

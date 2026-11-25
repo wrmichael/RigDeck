@@ -6,6 +6,7 @@
 - APRS screen: **Get detailed map** / **Update map** button. RigDeck downloads the detailed map from the RigDeck
   site itself when it is on a home network with internet, and shows the progress under the map. The web page's
   button still works for a hotspot-only unit (the browser downloads it).
+- Hotspot name: a note on the web page, touch screen and guide to give each unit its own hotspot name.
 - Console log: why the board started (power on, software restart, crash ...) and each step of handing a new map
   to the touch screen.
 
