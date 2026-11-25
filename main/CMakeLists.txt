@@ -4,7 +4,7 @@ if(IDF_TARGET STREQUAL "esp32p4")
     # (a dependency in idf_component.yml, so its headers are already available here).
     list(APPEND srcs "wifi_chip.cpp")
     # microSD card for the log (the Waveshare BSP mounts it)
-    list(APPEND srcs "sdcard.c" "sdlog.cpp")
+    list(APPEND srcs "sdcard.c" "sdlog.cpp" "mapfile.cpp")
 endif()
 if(CONFIG_IC7100_DISPLAY)
     # On-device touch interface (LVGL) for the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B.

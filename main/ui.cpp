@@ -17,6 +17,7 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <mutex>
 #include "mapdata.h"
 #include "clock.h"
 
@@ -1529,10 +1530,14 @@ void rebuildTable() {
 int shownBright = -1;
 
 // ---- APRS screen: map of heard stations (outlines from Natural Earth, built in), station list, messages ----
-lv_obj_t *scrAprs, *aCanvas, *aTabs, *aStaTable, *aMsgBox, *aMsgList, *aTo, *aText, *aKb, *aDetail, *aStatus, *aTitle, *aTxLbl, *aTxBtn, *aZoomLbl;
+lv_obj_t *aMapNote = nullptr, *scrAprs, *aCanvas, *aTabs, *aStaTable, *aMsgBox, *aMsgList, *aTo, *aText, *aKb, *aDetail, *aStatus, *aTitle, *aTxLbl, *aTxBtn, *aZoomLbl;
 lv_obj_t* aPane[3];
 lv_obj_t* aCallLbl[40];
 uint16_t* aBuf = nullptr;
+std::mutex aMapMtx;                                  // detailed map handed over by mapfile.cpp
+uint8_t *aMapPend = nullptr, *aMapExt = nullptr;
+size_t aMapPendLen = 0, aMapExtLen = 0;
+bool aMapPendSet = false;
 const int A_MAP_X = 0, A_MAP_Y = 112, A_MAP_W = 660, A_MAP_H = H - 112;
 const int kZoomKm[] = {25, 50, 100, 200, 400, 800, 1600};
 int aZoom = 3, aTab = 0;
@@ -1577,7 +1582,7 @@ void aDrawMap() {
     double km = kZoomKm[aZoom];
     double pxPerKm = (A_MAP_H / 2.0) / km, kx = 111.32 * cos(clat * M_PI / 180) * pxPerKm, ky = 110.57 * pxPerKm;
     int cx = A_MAP_W / 2, cy = A_MAP_H / 2;
-    uint16_t bg = c565(0x0a1218), cCountry = c565(0x6b7f8c), cState = c565(0x3b4c58), cLake = c565(0x3a6f94), cGrid = c565(0x16222b);
+    uint16_t bg = c565(0x0a1218), cCountry = c565(0x6b7f8c), cState = c565(0x3b4c58), cLake = c565(0x3a6f94), cCounty = c565(0x1f2a32), cRoad = c565(0x7a6040), cRoad2 = c565(0x4d4436), cGrid = c565(0x16222b);
     for (int i = 0; i < A_MAP_W * A_MAP_H; i++) aBuf[i] = bg;
     double dLat = (A_MAP_H / 2.0) / ky, dLon = (A_MAP_W / 2.0) / kx;
     // range rings every quarter of the zoom
@@ -1595,22 +1600,31 @@ void aDrawMap() {
         x = cx + (int)lround(d * kx);
         y = cy - (int)lround((la - clat) * ky);
     };
-    int la0 = (int)((clat - dLat) * 100) - 1, la1 = (int)((clat + dLat) * 100) + 1;
-    int lo0 = (int)((clon - dLon) * 100) - 1, lo1 = (int)((clon + dLon) * 100) + 1;
-    for (int pass = 0; pass < 3; pass++)                                     // states, then lakes, then countries on top
-        mapdata::forEach(g_mapData, g_mapDataLen, la0, lo0, la1, lo1, [&](int cls, const int16_t* la, const int16_t* lo, int n) {
-            int want = pass == 0 ? mapdata::MC_STATE : pass == 1 ? mapdata::MC_LAKE : mapdata::MC_COUNTRY;
-            if (cls != want) return;
-            uint16_t c = cls == mapdata::MC_STATE ? cState : cls == mapdata::MC_LAKE ? cLake : cCountry;
+    int la0 = (int)((clat - dLat) * 1000) - 10, la1 = (int)((clat + dLat) * 1000) + 10;
+    int lo0 = (int)((clon - dLon) * 1000) - 10, lo1 = (int)((clon + dLon) * 1000) + 10;
+    for (int pass = 0; pass < 6; pass++)
+        {
+        // counties, roads, states, then lakes, then countries on top; counties and roads only from the detailed map
+        static const int order[] = {mapdata::MC_COUNTY, mapdata::MC_ROAD2, mapdata::MC_ROAD, mapdata::MC_STATE, mapdata::MC_LAKE, mapdata::MC_COUNTRY};
+        const uint8_t* md = aMapExt ? aMapExt : g_mapData;
+        size_t ml = aMapExt ? aMapExtLen : g_mapDataLen;
+        int cls = order[pass];
+        if (cls == mapdata::MC_COUNTY && km > 200) continue;
+        if (cls == mapdata::MC_ROAD2 && km > 200) continue;
+        if (cls == mapdata::MC_ROAD && km > 800) continue;
+        uint16_t c = cls == mapdata::MC_STATE ? cState : cls == mapdata::MC_LAKE ? cLake : cls == mapdata::MC_COUNTY ? cCounty
+                   : cls == mapdata::MC_ROAD ? cRoad : cls == mapdata::MC_ROAD2 ? cRoad2 : cCountry;
+        mapdata::forEach(md, ml, la0, lo0, la1, lo1, [&](int, const int32_t* la, const int32_t* lo, int n) {
             int px, py;
-            toXY(la[0] / 100.0, lo[0] / 100.0, px, py);
+            toXY(la[0] / 1000.0, lo[0] / 1000.0, px, py);
             for (int i = 1; i < n; i++) {
                 int x, y;
-                toXY(la[i] / 100.0, lo[i] / 100.0, x, y);
+                toXY(la[i] / 1000.0, lo[i] / 1000.0, x, y);
                 aLine(px, py, x, y, c);
                 px = x; py = y;
             }
-        });
+        }, 1u << cls);
+    }
     // stations
     aDots.clear();
     int nl = 0;
@@ -1698,6 +1712,16 @@ void aFillLists() {
 }
 
 void aRefresh() {
+    {
+        std::lock_guard<std::mutex> lk(aMapMtx);
+        if (aMapPendSet) {
+            free(aMapExt);
+            aMapExt = aMapPend; aMapExtLen = aMapPendLen;
+            aMapPend = nullptr; aMapPendSet = false;
+            aShownSeq = 0xffffffff;
+            if (aMapNote) setText(aMapNote, aMapExt ? "Rings: quarters of the range. Detailed map: Natural Earth 1:10m." : "Rings: quarters of the range. Outlines: Natural Earth.");
+        }
+    }
     if (lv_screen_active() != scrAprs) return;
     App::AprsView st = g_app->aprsView(false);
     char b[200];
@@ -1837,7 +1861,7 @@ void buildAprsScreen() {
     lv_obj_remove_event_cb(b, onAprsZoom);
     lv_obj_add_event_cb(b, onAprsZoom, LV_EVENT_CLICKED, (void*)(intptr_t)1);
     aZoomLbl = label(aPane[0], A_MAP_W - 92, 116, f16, DIM, "");
-    label(aPane[0], 8, A_MAP_H - 24, f16, DIM, "Rings: quarters of the range. Outlines: Natural Earth.");
+    aMapNote = label(aPane[0], 8, A_MAP_H - 24, f16, DIM, aMapExt ? "Rings: quarters of the range. Detailed map: Natural Earth 1:10m." : "Rings: quarters of the range. Outlines: Natural Earth.");
 
     // stations pane
     aPane[1] = box(scrAprs, 0, A_MAP_Y, A_MAP_W, A_MAP_H, BG);
@@ -2095,6 +2119,14 @@ void buildLut() {                                    // black, blue, cyan, yello
 }
 
 }  // namespace
+
+void ui_set_map(uint8_t* data, size_t len) {
+    std::lock_guard<std::mutex> lk(aMapMtx);
+    free(aMapPend);                                   // one not yet taken over is replaced
+    aMapPend = data;
+    aMapPendLen = data ? len : 0;
+    aMapPendSet = true;
+}
 
 void ui_bind(App* app) { g_app = app; }
 void (*ui_brightness_fn)(int percent) = nullptr;

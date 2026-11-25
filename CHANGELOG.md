@@ -4,6 +4,10 @@
 - **APRS on the touch screen:** APRS is now on the mode row. It opens an APRS screen with a map of the stations
   heard (country, state/province and Great Lakes outlines from Natural Earth, built in; range 25-1600 km), a
   station list, messages with an on-screen keyboard, station details, Enable TX / HALT TX / Beacon now.
+- **Detailed APRS map:** Settings, APRS, "Get detailed map from GitHub": the browser downloads the map from the
+  RigDeck site (Natural Earth 1:10m with US counties and highways, about 3.5 MB) and RigDeck stores it on the
+  microSD card as RigDeck/map.rdm; "Remove detailed map" goes back to the built-in outlines. Counties and
+  secondary roads show at 200 km range and closer, highways at 800 km and closer.
 - APRS packets heard and sent are written to the microSD card, one file a day: RigDeck/aprs_YYYYMMDD.txt.
 - APRS: pressing Beacon now again replaces the waiting position report instead of queueing another; a message's
   30-second retry wait starts when it has actually gone out.

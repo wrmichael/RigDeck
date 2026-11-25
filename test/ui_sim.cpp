@@ -519,6 +519,20 @@ int main() {
     tap(660 - 36, 112 + 86);                          // zoom out
     run(1);
     savePpm("test/out/ui/33_aprs_zoom.ppm");
+    if (FILE* mf = fopen("docs/map/rigdeck-map.rdm", "rb")) {   // the detailed map, as mapfile.cpp hands it over
+        fseek(mf, 0, SEEK_END);
+        long n = ftell(mf);
+        fseek(mf, 0, SEEK_SET);
+        uint8_t* m = (uint8_t*)malloc((size_t)n);
+        CHECK(m && fread(m, 1, (size_t)n, mf) == (size_t)n);
+        fclose(mf);
+        ui_set_map(m, (size_t)n);
+        for (int i = 0; i < 2; i++) { tap(660 - 36, 112 + 32); run(0.3); }   // zoom in to 100 km
+        run(1);
+        savePpm("test/out/ui/34_aprs_detail.ppm");
+        ui_set_map(nullptr, 0);                       // removed again: built-in outlines
+        run(0.5);
+    }
     tap(60, 32);                                      // Back
     run(0.5);
 

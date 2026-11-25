@@ -18,6 +18,7 @@
 #if CONFIG_IDF_TARGET_ESP32P4
 #include "sdcard.h"
 #include "sdlog.h"
+#include "mapfile.h"
 #endif
 
 static const char* TAG = "main";
@@ -199,6 +200,7 @@ extern "C" void app_main(void) {
     web_start(s_app);
 #if CONFIG_IDF_TARGET_ESP32P4
     wifichip_start(s_app);
+    mapfile_start(s_app, !logDir.empty());
 #endif
     usbradio_start(s_app);
     gps_module_start(s_app);
