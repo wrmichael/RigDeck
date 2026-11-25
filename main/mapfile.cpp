@@ -59,8 +59,10 @@ static void use(uint8_t* buf, size_t len, const std::string& desc) {
     s_desc = desc;
     s_size = len;
 #if CONFIG_IC7100_DISPLAY
+    ESP_LOGI(TAG, "handing %u bytes to the touch screen", (unsigned)len);
     ui_set_map(buf, len);                             // the touch screen takes the buffer over
 #else
+    ESP_LOGW(TAG, "built without the touch screen: map not used");
     free(buf);
 #endif
 }

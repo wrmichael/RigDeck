@@ -2127,6 +2127,7 @@ void ui_set_map(uint8_t* data, size_t len) {
     aMapPend = data;
     aMapPendLen = data ? len : 0;
     aMapPendSet = true;
+    if (g_app) g_app->logLine(data ? "APRS map: detailed map waiting for the touch screen" : "APRS map: built-in outlines waiting for the touch screen");
 }
 
 void ui_bind(App* app) { g_app = app; }
