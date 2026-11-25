@@ -1,3 +1,4 @@
+#include <cctype>
 #include <dirent.h>
 // Desktop preview of the on-device touch interface: runs the real application core with a
 // simulated radio and band, renders the LVGL screen into memory and writes screenshots (PPM).
@@ -168,9 +169,14 @@ int main() {
     radio.app = &app;
     app.radio.write = [](const uint8_t* d, size_t n) { radio.rx(d, n); return true; };
     app.begin("test/out/ui");
+    if (FILE* vf = fopen("version.txt", "r")) {        // the splash shows the release number
+        char v[32] = {};
+        if (fgets(v, sizeof v, vf)) { app.fwVersion = v; while (!app.fwVersion.empty() && isspace((unsigned char)app.fwVersion.back())) app.fwVersion.pop_back(); }
+        fclose(vf);
+    }
     app.usbSerial = true;
     app.usbAudio = true;
-    app.setNetInfo("AP \"IC7100-FT8\" 192.168.4.1");
+    app.setNetInfo("AP \"RigDeck\" 192.168.4.1");
     app.command("set", {{"call", "AC9HP"}, {"grid", "EM69"}});
     clk::setUtcMs(T0 + 1000, "browser");
 

@@ -33,6 +33,7 @@ code{font:16px var(--mono);background:var(--pan2);padding:2px 6px;border-radius:
 a{color:var(--amb)}
 footer{margin-top:40px;color:var(--dim);font-size:16px}
 .chan{display:flex;flex-direction:column;gap:6px;margin:10px 0 4px}.chan label{cursor:pointer}.chan small{opacity:.7;margin-left:4px}
+.shots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.shots figure{margin:0}.shots img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:#000}.shots figcaption{color:var(--dim);font-size:15px;margin-top:6px}.shots .wide{grid-column:1/-1}.web{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,1fr);gap:16px;align-items:start}@media(max-width:640px){.shots,.web{grid-template-columns:minmax(0,1fr)}}
 esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:not(:defined) [slot=not-allowed]{display:none}
 </style>
 </head>
@@ -66,6 +67,20 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
   </div>
 
   <p id="wcnote" style="display:none">Wi-Fi drops? Update the board's Wi-Fi chip too: download the Wi-Fi chip firmware above, then on the RigDeck web page open Settings, <b>Wi-Fi chip</b>, and press Update (do not flash this file with the installer).</p>
+
+  <h2>Screens</h2>
+  <p>RigDeck 1.0.0 on the 7-inch touch screen and in a browser, shown with sample stations.</p>
+  <div class="shots">
+    <figure class="wide"><img src="img/screen-qso.png" width="1024" height="600" alt="RigDeck main screen in Auto CQ: waterfall, band activity list, a contact in progress with K8TST, TX and mode buttons, band buttons along the bottom"><figcaption>Main screen: waterfall, band activity and a contact in progress in Auto CQ.</figcaption></figure>
+    <figure><img src="img/screen-start.png" width="1024" height="600" alt="Start screen with the station callsign AC9HP in gold and RigDeck by AC9HP" loading="lazy"><figcaption>Start screen with your callsign in gold.</figcaption></figure>
+    <figure><img src="img/screen-radio.png" width="1024" height="600" alt="Radio control screen with tuning steps, bands, modes, filters and sliders for AF gain, RF gain, squelch and RF power" loading="lazy"><figcaption>Radio control: tuning, bands, modes, filters and levels.</figcaption></figure>
+    <figure><img src="img/screen-logbook.png" width="1024" height="600" alt="Logbook screen listing contacts with time, call, grid, band, mode and reports" loading="lazy"><figcaption>Logbook: edit, delete, send to your logger.</figcaption></figure>
+    <figure><img src="img/screen-settings.png" width="1024" height="600" alt="Settings screen, Station tab with callsign, grid and POTA reference fields" loading="lazy"><figcaption>Settings on the touch screen.</figcaption></figure>
+  </div>
+  <div class="web" style="margin-top:16px">
+    <figure style="margin:0"><img src="img/web-desktop.png" width="1280" height="860" alt="RigDeck web control page in a desktop browser: frequency, waterfall, band activity, transmit and QSO panels" loading="lazy" style="display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:8px"><figcaption style="color:var(--dim);font-size:15px;margin-top:6px">The web control page in a desktop browser.</figcaption></figure>
+    <figure style="margin:0"><img src="img/web-phone.png" width="390" height="720" alt="RigDeck web control page on a phone" loading="lazy" style="display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:8px"><figcaption style="color:var(--dim);font-size:15px;margin-top:6px">On a phone.</figcaption></figure>
+  </div>
 
   <h2>Other ways to flash</h2>
   <p>The .bin above is a complete image that goes at address <code>0x0</code>. With esptool:</p>

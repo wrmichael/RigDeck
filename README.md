@@ -2,6 +2,10 @@
 
 **An FT8 station, logger and control head in one small touch-screen box.**
 
+![RigDeck main screen: waterfall, band activity and a contact in progress in Auto CQ](docs/img/screen-qso.png)
+
+More screens, including the web control page, are on the [flasher page](https://wrmichael.github.io/RigDeck/).
+
 RigDeck is firmware for the Waveshare ESP32-P4 7-inch touch board. Plug it into your radio's USB
 port with one cable and it:
 
