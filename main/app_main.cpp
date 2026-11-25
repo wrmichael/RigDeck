@@ -141,6 +141,7 @@ static void controlTask(void*) {
         }
         if (s_app.rebootReq) {
             for (int i = 0; i < 60; i++) { s_app.tick(); vTaskDelay(pdMS_TO_TICKS(10)); }   // let PTT-off go out
+            usbradio_stop_for_restart();
             esp_restart();
         }
         vTaskDelay(pdMS_TO_TICKS(10));

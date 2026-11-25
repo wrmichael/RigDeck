@@ -2045,7 +2045,7 @@ void App::uiState(UiState& u) {
     u.lvlDb = pk > 0 ? (int)lroundf(20 * log10f(pk / 32768.0f)) : -99;
     u.decId = nextId_; u.decodeMs = decodeMs_;
     u.logN = logCount_; u.logAll = archiveCount_; u.netOk = netOk_; u.netFail = netFail_; u.unsent = unsent_;
-    u.status = memFail ? "Not enough RAM for the decoder" : status_;
+    { std::string up = usbProblemText(); u.status = memFail ? "Not enough RAM for the decoder" : !up.empty() ? up : status_; }
     u.net = netInfo_; u.call = cfg.call; u.myGrid = cfg.grid;
     u.logSd = logOnSd_; u.sdIn = logOnSd_; u.station = station_; u.sdInfo = sdInfo;
     u.intTotal = intTotal_; u.intUsed = intUsed_; u.sdTotal = sdTotal_; u.sdUsed = sdUsed_; u.left = left_;
@@ -2241,7 +2241,8 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
         first = false;
     }
     o += "]}";
-    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) + ",\"conlog\":" + jbool(consoleLogOn()) +
+    std::string usbP = usbProblemText();
+    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : !usbP.empty() ? usbP : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) + ",\"conlog\":" + jbool(consoleLogOn()) +
          ",\"sta\":{\"state\":" + jstr(sta_.state) + ",\"ssid\":" + jstr(sta_.ssid) + ",\"ip\":" + jstr(sta_.ip) +
          ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}" +
          ",\"inet\":" + jnum(cfg.deadman ? inet_.load() : -2) +

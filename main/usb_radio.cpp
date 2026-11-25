@@ -223,6 +223,20 @@ static int buildProbes(uint8_t protos, Probe* out) {
     return n;
 }
 
+// Before a planned restart (update, Restart button): close the serial port and switch the USB port off, so the
+// radio sees the host go away cleanly instead of in the middle of an audio transfer.
+void usbradio_stop_for_restart() {
+    xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
+    cdc_acm_dev_hdl_t c = s_cdc, g = s_gps;
+    s_cdc = nullptr; s_gps = nullptr;
+    xSemaphoreGive(s_cdcMtx);
+    if (g) cdc_acm_host_close(g);
+    if (c) cdc_acm_host_close(c);
+    usb_host_lib_set_root_port_power(false);
+    ESP_LOGI(TAG, "USB port switched off for the restart");
+    vTaskDelay(pdMS_TO_TICKS(400));
+}
+
 static void serialTask(void*) {
     int gpsFails = 0;
     int64_t gpsNextUs = 0, gpsOpenedUs = 0, gpsFixAt = 0;
@@ -326,23 +340,29 @@ static void serialTask(void*) {
         gpsNextUs = 0;
         gpsFixAt = 0;
         if (usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) != ESP_OK) continue;
-        // A device that failed to start (seen once with a QMX+ at power-up: a short device descriptor) stays dead
-        // until it is unplugged. Switch the USB port off and on so it starts again; at most 3 times per start-up.
+        // A device that failed to start (a QMX+ after a RigDeck restart answers with a short device descriptor):
+        // switch the port off and on once; if it still fails, tell the operator. On the QMX+ only switching the
+        // radio off and on brings it back (unplugging the cable or restarting RigDeck does not).
         {
             extern std::atomic<int> g_usbEnumErrors;
             static int seen = 0, cycles = 0;
             static int64_t errAt = 0;
             int e = g_usbEnumErrors.load();
             if (e != seen) { seen = e; errAt = esp_timer_get_time(); }
-            if (errAt && esp_timer_get_time() - errAt > 3000000 && !s_app->usbSerial && !s_app->usbAudio && cycles < 3) {
-                cycles++;
+            if (errAt && esp_timer_get_time() - errAt > 3000000 && !s_app->usbSerial && !s_app->usbAudio) {
                 errAt = 0;
-                ESP_LOGW(TAG, "a USB device did not start properly: switching the USB port off and on (%d of 3)", cycles);
-                usb_host_lib_set_root_port_power(false);
-                vTaskDelay(pdMS_TO_TICKS(1000));
-                usb_host_lib_set_root_port_power(true);
-                continue;
+                if (cycles < 1) {
+                    cycles++;
+                    ESP_LOGW(TAG, "a USB device did not start properly: switching the USB port off and on once");
+                    usb_host_lib_set_root_port_power(false);
+                    vTaskDelay(pdMS_TO_TICKS(1000));
+                    usb_host_lib_set_root_port_power(true);
+                    continue;
+                }
+                ESP_LOGW(TAG, "the device on USB still does not start: switch the radio off and on");
+                s_app->usbProblem("The radio on USB is not answering properly: switch the radio off and on");
             }
+            if (s_app->usbSerial || s_app->usbAudio) { cycles = 0; s_app->usbProblem(""); }
         }
         Radio& radio = s_app->radio;
         for (int i = 0; i < n && !s_app->usbSerial; i++) {

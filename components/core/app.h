@@ -125,6 +125,9 @@ public:
     std::string otaUpd_;
     void (*logFn)(const char* line) = nullptr;      // platform log (serial monitor on the ESP32)
     void logLine(const std::string& s);
+    // A device on the USB port that does not start: shown on the screen and the web page until a radio connects.
+    void usbProblem(const std::string& s) { std::lock_guard<std::mutex> lk(usbProbMtx_); usbProb_ = s; }
+    std::string usbProblemText() { std::lock_guard<std::mutex> lk(usbProbMtx_); if (usbSerial) usbProb_.clear(); return usbProb_; }
     bool (*haveRam)(size_t bytes) = nullptr;         // platform check before the big decoder allocations
     std::atomic<bool> memFail{false};
     // Storage: the platform reports size and use of the internal store (sd=false) or the card.
@@ -147,6 +150,8 @@ public:
 
 private:
     std::string seqDnw_, seqPrio_ = "\x01";       // what the sequencer's lists were built from
+    std::mutex usbProbMtx_;
+    std::string usbProb_;
     int trainBk_ = -1;                              // CW trainer: the radio's break-in before it was turned off
     int64_t slotLen() const { return mode_.load() == DM_FT4 ? 7500 : 15000; }
     void ftxRx(const float* s, size_t n);

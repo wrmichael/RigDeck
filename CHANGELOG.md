@@ -1,5 +1,11 @@
 # Changes
 
+## 1.1.3-beta
+- Before a planned restart (update, Restart button) RigDeck closes the radio's serial port and switches its USB
+  port off, so the radio sees the host leave cleanly.
+- A USB device that does not start (QMX+ after a RigDeck restart) gets one USB port off/on; if it still fails, the
+  screen and web page say "The radio on USB is not answering properly: switch the radio off and on".
+
 ## 1.1.2-beta
 - Console log downloads are named RIGNAME-CALLSIGN-YYYYMMDD-HHMM-console.txt (the files on the card keep their
   names); before, the board's own file name won over the page's.
