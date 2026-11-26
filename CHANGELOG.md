@@ -1,5 +1,11 @@
 # Changes
 
+## 1.1.13-beta
+- **Fewer internet requests, less memory pressure**: the check for new RigDeck releases ran about every 2 minutes
+  instead of every 6 hours, and the K0DOG game check about every 8 minutes instead of daily (a long wait
+  overflowed the timer arithmetic). Each check is an https request that briefly takes the board's scarcest memory;
+  on IC705A that memory's low point crept from 113 kB to 77 kB over 4 hours.
+
 ## 1.1.12-beta
 - **Waveshare ESP32-P4-NANO** (no screen) as a second board: the same RigDeck without the touch screen, for
   16 MB of flash, operated from the web page and the All stations page. The flasher page has a board choice; each

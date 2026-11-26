@@ -35,7 +35,9 @@ static void task(void*) {
                 waitMin = 6 * 60;
             } else ESP_LOGW(TAG, "RigDeck site not reached: %s", e1.c_str());
         }
-        vTaskDelay(pdMS_TO_TICKS(waitMin * 60000));
+        // One minute at a time: pdMS_TO_TICKS(6 h) overflows FreeRTOS's 32-bit tick arithmetic (ms x 1000 Hz) and
+        // came out as about 2 minutes, so the site was asked every 2 minutes instead of every 6 hours.
+        for (int m = 0; m < waitMin; m++) vTaskDelay(pdMS_TO_TICKS(60000));
     }
 }
 

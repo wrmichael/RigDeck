@@ -110,7 +110,9 @@ static void syncTask(void*) {
                 } else ESP_LOGW(TAG, "RigDeck site not reached: %s", err.c_str());
             }
         } else s_app->k0dogReady = false;
-        vTaskDelay(pdMS_TO_TICKS(waitMin * 60000));
+        // One minute at a time: pdMS_TO_TICKS(1 day) overflows FreeRTOS's 32-bit tick arithmetic (ms x 1000 Hz) and
+        // came out as about 8 minutes, so the site was asked every 8 minutes instead of once a day.
+        for (int m = 0; m < waitMin; m++) vTaskDelay(pdMS_TO_TICKS(60000));
     }
 }
 
