@@ -449,7 +449,8 @@ async function send(){
   $("card").style.setProperty("--fx",(sr.left+sr.width/2-(cr.left+cr.width/2))+"px");$("card").style.setProperty("--fy",(sr.top+sr.height/2-(cr.top+cr.height/2))+"px");
   $("card").classList.add("fly");whoosh();await sleep(900);clank();
   // sometimes a station answers with its own card
-  if(Math.random()<.45)pending.push({call:Q.call,name:Q.name,qth:Q.qth,band:Q.band,rst:Q.their,date:$("fDate").textContent,due:Date.now()+6000+rnd(12000)});
+  if(sent%10===0)pending.push({club:true,call:"K0DOG",note:`TNX FER ${sent} QSL CARDS · 73`,band:"",rst:"",date:$("fDate").textContent,due:Date.now()+4000});
+  else if(Math.random()<.45)pending.push({call:Q.call,name:Q.name,qth:Q.qth,band:Q.band,rst:Q.their,date:$("fDate").textContent,due:Date.now()+6000+rnd(12000)});
   await sleep(500);
   if(Math.random()<.12){newHuman();drawScene();msg("Shift change: a new operator sits down.");await sleep(900);}
   newQso();
@@ -461,6 +462,10 @@ function stats(){$("sSent").textContent=sent;$("sPts").textContent=pts;$("sStrea
 const SCENES=["mountains","lighthouse","tower","sunset","city","forest","beach","desert","aurora","farm"];
 function qslSVG(c){
   const W=600,H=380,h=c.hue||0;
+  if(c.club) return `<svg viewBox="0 0 ${W} ${H}" xmlns="${NS}"><image href="k0dog.jpg" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice"/>
+  <rect x="150" y="296" width="300" height="62" rx="8" fill="#fffaf0" opacity=".92"/>
+  <text x="300" y="320" text-anchor="middle" font-family="sans-serif" font-size="15" fill="#1d2a33">Club card for <tspan font-weight="700">${esc(c.to||myCall)}</tspan> · ${esc(c.date)}</text>
+  <text x="300" y="344" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="700" fill="#a3241a">${esc(c.note||"TNX FER 10 QSL CARDS · 73")}</text></svg>`;
   const sky=`hsl(${(200+h)%360},70%,${c.scene==="aurora"||c.scene==="city"?18:72}%)`;
   let art="";
   const g=(s)=>art+=s;
@@ -497,7 +502,7 @@ async function receive(p){
   const card=Object.assign({},p,{to:myCall,scene:pick(SCENES),hue:rnd(360),paw:Math.random()<.4?"cat":"dog",pet:pick(["Whiskers","Mittens","Luna","Shadow","Tiger","Rex","Buddy","Duke","Pepper","Ginger","Smokey","Lucky"]),at:Date.now()});
   delete card.due;
   if(S.mail){S.mail.setAttribute("opacity",1);S.mail.style.animation="drop .7s forwards";}clank();bark("happy");
-  msg(`📬 Mail! ${card.call} sent a QSL card back. It's in your album.`,"good");say("Mail! A Q S L card from "+card.call.split("").join(" "),"dog");
+  msg(card.club?"📬 Mail from the K0DOG club! Their QSL card is in your album.":`📬 Mail! ${card.call} sent a QSL card back. It's in your album.`,"good");say("Mail! A Q S L card from "+card.call.split("").join(" "),"dog");
   await saveCard(card);
   setTimeout(()=>{if(S.mail){S.mail.setAttribute("opacity",0);S.mail.style.animation="";}},2600);
   showBig(card);

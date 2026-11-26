@@ -8,6 +8,8 @@
   streaks, sounds (barks, stamp, mail slot) and optional voice. Stations sometimes send their own QSL back,
   signed by a cat or dog paw; they go in an album on the microSD card (/api/album; without a card the last 24
   in memory). Calls from your log appear on the air. Also playable from the site (docs/k0dog.html).
+  Start screen: the K0DOG club card (Dog Day Radio Amateur Radio Club); every 10th card sent, the club sends
+  its own QSL card for the album.
 
 ## 1.1.6-beta
 - **Update available** notice (light blue box) on the touch screen and the web page, with the running and the new

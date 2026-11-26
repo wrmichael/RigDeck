@@ -17,6 +17,9 @@
 extern const uint8_t k0dog_gz_start[] asm("_binary_k0dog_html_gz_start");
 extern const uint8_t k0dog_gz_end[] asm("_binary_k0dog_html_gz_end");
 
+extern const uint8_t k0dog_jpg_start[] asm("_binary_k0dog_jpg_start");
+extern const uint8_t k0dog_jpg_end[] asm("_binary_k0dog_jpg_end");
+
 static const char* TAG = "k0dog";
 static const size_t kRam = 24, kMaxShow = 200, kMaxCard = 1500;
 static std::mutex s_mtx;
@@ -35,6 +38,13 @@ static esp_err_t hPage(httpd_req_t* req) {
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     return httpd_resp_send(req, (const char*)k0dog_gz_start, k0dog_gz_end - k0dog_gz_start);
+}
+
+// The K0DOG club card (Dog Day Radio Amateur Radio Club): splash screen and the club's QSL in the album.
+static esp_err_t hJpg(httpd_req_t* req) {
+    httpd_resp_set_type(req, "image/jpeg");
+    httpd_resp_set_hdr(req, "Cache-Control", "max-age=86400");
+    return httpd_resp_send(req, (const char*)k0dog_jpg_start, k0dog_jpg_end - k0dog_jpg_start);
 }
 
 static esp_err_t hAlbumGet(httpd_req_t* req) {
@@ -101,4 +111,6 @@ void k0dog_register(httpd_handle_t srv) {
     httpd_register_uri_handler(srv, &a);
     httpd_register_uri_handler(srv, &b);
     httpd_register_uri_handler(srv, &c);
+    static const httpd_uri_t d = {"/k0dog.jpg", HTTP_GET, hJpg, nullptr};
+    httpd_register_uri_handler(srv, &d);
 }
