@@ -24,7 +24,15 @@ label{color:var(--dim);display:flex;gap:6px;align-items:center}
 .body{position:relative;flex:1;min-height:0;overflow:hidden;background:#000}
 .body iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:var(--bg)}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--dim);flex:none}
-.dot.up{background:var(--ok)}.dot.down{background:var(--bad)}
+.dot.up{background:var(--ok)}.dot.down{background:var(--bad)}.dot.warn{background:var(--amb)}.dot.old{background:#7fbf9f}
+#stat{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+#stat:empty{display:none}
+.chip{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:16px;border:1px solid var(--line);background:var(--pan2);cursor:pointer;font-size:14px;white-space:nowrap}
+.chip b{color:var(--txt)}.chip .bd{color:var(--dim);font-size:12px}
+.chip.up{border-color:#2f8f66;background:#123326}.chip.warn{border-color:#a07a22;background:#33290f}.chip.down{border-color:#a03c3c;background:#3a1d1d}
+.chip .tx{color:#fff;background:var(--bad);border-radius:4px;padding:0 4px;font-size:11px;font-weight:700}
+#sum{color:var(--dim);font-size:13px}
+.bar .ver{color:var(--dim);font-size:12px;white-space:nowrap}
 #empty,#warn{padding:30px;max-width:760px;margin:0 auto;color:var(--dim)}
 #warn{color:var(--txt);background:#3a1d1d;border:1px solid var(--bad);border-radius:8px;margin:12px auto}
 dialog{background:var(--pan);color:var(--txt);border:1px solid var(--line);border-radius:10px;max-width:560px;width:calc(100% - 32px)}
@@ -47,6 +55,7 @@ textarea{width:100%;min-height:90px;font:13px ui-monospace,Consolas,monospace;co
   <label>Columns <select id="cols"><option value="0">Auto</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
   <label>Size <select id="zoom"><option value="1">100 %</option><option value="0.85">85 %</option><option value="0.75">75 %</option><option value="0.67">67 %</option><option value="0.5">50 %</option></select></label>
   <button id="bReload" title="Reload every station">⟳ All</button>
+  <div id="stat" title="Green: running, radio connected and clock set. Amber: answering, but something needs a look (hover for what). Red: not answering."></div>
 </header>
 <div id="warn" hidden></div>
 <div id="empty" hidden>
@@ -89,7 +98,7 @@ function build(){
   $("empty").hidden=st.length>0;
   st.forEach((s,i)=>{
     const t=document.createElement("div");t.className="tile";t.dataset.i=i;
-    t.innerHTML=`<div class="bar"><span class="dot" title="checking"></span><span class="nm">${esc(s.name||s.addr)}</span><span class="ad">${s.name?esc(s.addr):""}</span>
+    t.innerHTML=`<div class="bar"><span class="dot" title="checking"></span><span class="nm">${esc(s.name||s.addr)}</span><span class="ad">${s.name?esc(s.addr):""} <span class="ver"></span></span>
       <button data-a="left" title="Move left">◀</button><button data-a="right" title="Move right">▶</button>
       <button data-a="reload" title="Reload">⟳</button><button data-a="max" title="Fill the window (Esc to go back)">⤢</button>
       <a href="${esc(url(s))}" target="_blank" rel="noopener"><button title="Open in its own tab">↗</button></a></div>
@@ -120,72 +129,47 @@ function act(i,a){
   else if(a==="left"&&i>0){[st[i-1],st[i]]=[st[i],st[i-1]];save();build();}
   else if(a==="right"&&i<st.length-1){[st[i+1],st[i]]=[st[i],st[i+1]];save();build();}
 }
-// Up/down light: the board answers /api/state (no-cors: we only learn that it answered).
-async function probe(){
-  document.querySelectorAll(".tile").forEach(async t=>{
-    const s=st[+t.dataset.i],d=t.querySelector(".dot");if(!s)return;
-    const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),4000);
-    try{await fetch(url(s)+"api/state",{mode:"no-cors",cache:"no-store",signal:ac.signal});d.className="dot up";d.title="answering";}
-    catch(e){d.className="dot down";d.title="not answering";}
-    clearTimeout(tm);
-  });
+// Status: /api/health (open to other pages, from 1.1.10) gives version and the status lights; an older RigDeck
+// only answers /api/state without details (no-cors: we learn only that it answered).
+const H={};                                            // index -> {lvl, why, ver, band, tx}
+async function probeOne(i){
+  const s=st[i];if(!s)return;
+  const get=async(path,opt)=>{const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),4000);
+    try{return await fetch(url(s)+path,Object.assign({cache:"no-store",signal:ac.signal},opt));}finally{clearTimeout(tm);}};
+  let h;
+  try{const j=await (await get("api/health")).json();
+    h={lvl:j.ok?"up":"warn",why:j.ok?"all OK":j.why,ver:j.ver,band:j.band,tx:j.txon};}
+  catch(e){
+    try{await get("api/state",{mode:"no-cors"});h={lvl:"old",why:"answering (update it to see its status here)",ver:"",band:"",tx:false};}
+    catch(e2){h={lvl:"down",why:"not answering",ver:"",band:"",tx:false};}
+  }
+  H[i]=h;show(i);
 }
-function listUi(){
-  const l=$("lst");l.innerHTML="";
-  st.forEach((s,i)=>{const li=document.createElement("li");
-    li.innerHTML=`<span><b>${esc(s.name||s.addr)}</b> ${s.name?'<span class="hint">'+esc(s.addr)+'</span>':""}</span><button data-r="${i}">Remove</button>`;
-    li.querySelector("button").onclick=()=>{st.splice(i,1);save();build();listUi();};l.appendChild(li);});
-  $("txt").value=st.map(s=>s.addr+(s.name?" "+s.name:"")).join("\n");
-  $("nOk").disabled=st.length>=MAX;$("nMsg").textContent=st.length>=MAX?"10 stations is the most this page shows.":"";
+function show(i){
+  const s=st[i],h=H[i]||{lvl:"",why:"checking"},t=document.querySelector(`.tile[data-i="${i}"]`);
+  if(t){const d=t.querySelector(".dot");d.className="dot "+h.lvl;d.title=h.why;
+    t.querySelector(".ver").textContent=h.ver?"· "+h.ver:"";}
+  let c=document.querySelector(`.chip[data-i="${i}"]`);
+  if(!c){c=document.createElement("span");c.dataset.i=i;$("stat").insertBefore(c,$("sum"));
+    c.onclick=()=>{const tl=document.querySelector(`.tile[data-i="${i}"]`);if(tl)tl.scrollIntoView({behavior:"smooth",block:"nearest"});};
+    c.ondblclick=()=>act(i,"max");}
+  c.className="chip "+(h.lvl==="old"?"up":h.lvl);
+  c.title=(s.name||s.addr)+": "+h.why+(h.ver?" ("+h.ver+")":"")+". Click to find it, double-click to fill the window.";
+  c.innerHTML=`<span class="dot ${h.lvl}"></span><b>${esc(s.name||s.addr)}</b>${h.band?`<span class="bd">${esc(h.band)}</span>`:""}${h.tx?'<span class="tx">TX</span>':""}`;
+  const v=Object.values(H),n=st.length,ok=v.filter(x=>x.lvl==="up"||x.lvl==="old").length,bad=v.filter(x=>x.lvl==="down").length;
+  $("sum").textContent=v.length<n?"checking …":ok===n?"all "+n+" OK":`${ok} of ${n} OK`+(bad?`, ${bad} not answering`:"");
 }
-function addOne(addr,name){
-  const a=clean(addr);if(!a){$("nMsg").textContent="That does not look like an address (e.g. 192.168.68.95).";return false;}
-  if(st.some(s=>s.addr===a)){$("nMsg").textContent=a+" is already in the list.";return false;}
-  if(st.length>=MAX)return false;
-  st.push({addr:a,name:(name||"").trim().slice(0,32)});save();build();listUi();return true;
+function probe(){
+  const sb=$("stat");sb.innerHTML='<span id="sum" class="hint"></span>';
+  for(const k in H)delete H[k];
+  st.forEach((s,i)=>{show(i);probeOne(i);});
+  layout();
 }
-$("bAdd").onclick=$("bList").onclick=()=>{listUi();$("dlg").showModal();$("nAddr").focus();};
-$("dClose").onclick=()=>$("dlg").close();
-$("nOk").onclick=()=>{if(addOne($("nAddr").value,$("nName").value)){$("nAddr").value="";$("nName").value="";$("nAddr").focus();}};
-$("nAddr").onkeydown=$("nName").onkeydown=e=>{if(e.key==="Enter")$("nOk").click();};
-$("tApply").onclick=()=>{
-  const out=[];for(const line of $("txt").value.split(/\n/)){const m=line.trim().match(/^(\S+)\s*(.*)$/);if(!m)continue;const a=clean(m[1]);if(a&&!out.some(s=>s.addr===a)&&out.length<MAX)out.push({addr:a,name:m[2].slice(0,32)});}
-  st=out;save();build();listUi();
-};
-$("tLink").onclick=async()=>{
-  const u=location.origin+location.pathname+"?s="+st.map(s=>encodeURIComponent(s.addr+(s.name?"~"+s.name:""))).join(",");
-  try{await navigator.clipboard.writeText(u);$("nMsg").textContent="Link copied.";}catch(e){$("txt").value=u;$("nMsg").textContent="Copy the link from the box.";}
-};
-$("cols").onchange=()=>{view.cols=+$("cols").value;save();layout();};
-$("zoom").onchange=()=>{view.zoom=+$("zoom").value;save();layout();};
-$("bReload").onclick=()=>{document.querySelectorAll("iframe").forEach(f=>f.src=f.src);probe();};
-// Find stations: a RigDeck lists itself and the RigDecks it heard on the home network (/api/peers).
-async function peersFrom(base){
-  const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),4000);
-  try{const r=await fetch(base+"/api/peers",{cache:"no-store",signal:ac.signal});clearTimeout(tm);return r.ok?await r.json():null;}catch(e){clearTimeout(tm);return null;}
-}
-async function find(auto){
-  const f=$("found");f.innerHTML='<p class="hint">Looking …</p>';
-  const bases=[];if(location.protocol==="http:")bases.push("");
-  st.forEach(s=>bases.push("http://"+s.addr));
-  const seen=new Map();
-  for(const b of bases){const j=await peersFrom(b);if(!j)continue;
-    for(const p of [j.me,...(j.peers||[])])if(p&&p.ip&&!seen.has(p.ip))seen.set(p.ip,p);
-    if(seen.size&&b==="")break;}
-  const fresh=[...seen.values()].filter(p=>!st.some(s=>s.addr===p.ip));
-  if(auto){fresh.slice(0,MAX-st.length).forEach(p=>st.push({addr:p.ip,name:(p.name||p.call||"").slice(0,32)}));if(fresh.length){save();build();}f.innerHTML="";return;}
-  if(!seen.size){f.innerHTML=`<p class="hint">${bases.length?"No RigDeck answered. They find each other only on the home network (not the hotspot), from version 1.1.6.":"Open this page from a RigDeck (http://its address/multi), or add one station by hand first: the others are found through it."}</p>`;return;}
-  if(!fresh.length){f.innerHTML='<p class="hint">All the RigDecks found are already in the list.</p>';return;}
-  f.innerHTML='<p><b>Found:</b></p><ul class="lst" id="fl"></ul><div class="row"><button class="pri" id="fAll">Add all</button></div>';
-  fresh.forEach(p=>{const li=document.createElement("li");
-    li.innerHTML=`<span><b>${esc(p.name||p.call||p.ip)}</b> <span class="hint">${esc(p.ip)}${p.call?" · "+esc(p.call):""}${p.ver?" · "+esc(p.ver):""}</span></span><button>Add</button>`;
-    li.querySelector("button").onclick=()=>{if(addOne(p.ip,p.name||p.call||""))li.remove();};$("fl").appendChild(li);});
-  $("fAll").onclick=()=>{fresh.forEach(p=>{if(st.length<MAX&&!st.some(s=>s.addr===p.ip))st.push({addr:p.ip,name:(p.name||p.call||"").slice(0,32)});});save();build();listUi();f.innerHTML="";};
-}
+function reprobe(){st.forEach((s,i)=>probeOne(i));}
 $("bFind").onclick=()=>{listUi();$("dlg").showModal();find(false);};
 addEventListener("resize",layout);
 addEventListener("keydown",e=>{if(e.key==="Escape"&&view.max>=0&&!$("dlg").open){view.max=-1;layout();}});
-setInterval(probe,30000);
+setInterval(reprobe,10000);
 
 load();
 $("cols").value=String(view.cols||0);$("zoom").value=String(view.zoom||1);

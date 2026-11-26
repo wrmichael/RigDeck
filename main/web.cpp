@@ -95,6 +95,16 @@ static esp_err_t hMulti(httpd_req_t* req) {
     return httpd_resp_send(req, multi_html_start, multi_html_end - multi_html_start);
 }
 
+// GET /api/health: small status for the all-stations page, readable from any page (it may be another RigDeck's
+// or a file on a computer). Nothing in it changes anything or is private.
+static esp_err_t hHealth(httpd_req_t* req) {
+    std::string js = s_app->healthJson();
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    return httpd_resp_send(req, js.data(), js.size());
+}
+
 static esp_err_t hState(httpd_req_t* req) {
     WebBusy wb("state");
     std::map<std::string, std::string> a;
@@ -173,6 +183,7 @@ void web_start(App& app) {
         {"/", HTTP_GET, hIndex, nullptr},
         {"/multi", HTTP_GET, hMulti, nullptr},
         {"/api/state", HTTP_GET, hState, nullptr},
+        {"/api/health", HTTP_GET, hHealth, nullptr},
         {"/api/spec", HTTP_GET, hSpec, nullptr},
         {"/api/cmd", HTTP_POST, hCmd, nullptr},
         {"/log.adi", HTTP_GET, hLog, nullptr},

@@ -1,6 +1,10 @@
 # Changes
 
 ## 1.1.10-beta
+- **All stations page: status row.** One light per station at the top, checked every 10 seconds: green (radio
+  connected, clock set), amber (answering, something to look at; hover for what), red (not answering), with the
+  band and TX. Each station's title bar shows its firmware version. New /api/health on the board (open to other
+  pages, read-only).
 - The crash report is repeated once the clock is set, so it is also in the dated console log (lines from before
   the clock is known go to the undated console file).
 

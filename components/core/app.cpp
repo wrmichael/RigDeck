@@ -2512,6 +2512,23 @@ void App::activity() {
     lastUiMono_ = clk::monoMs();
 }
 
+std::string App::healthJson() {
+    std::lock_guard<std::mutex> lk(mtx_);
+    bool ser = usbSerial, aud = usbAudio, civ = radio.connected(), ck = clk::valid(), wd = watchdogTripped_;
+    std::string why;
+    auto add = [&](bool bad, const char* t) { if (bad) why += (why.empty() ? "" : ", ") + std::string(t); };
+    add(!ser, "no USB serial");
+    add(!civ, "radio not answering");
+    add(!aud, "no USB audio");
+    add(!ck, "clock not set");
+    add(wd, "TX watchdog stopped TX");
+    uint64_t f = radio.freq.load();
+    return std::string("{\"ver\":") + jstr(fwVersion) + ",\"name\":" + jstr(cfg.rigName) + ",\"call\":" + jstr(cfg.call) +
+           ",\"ok\":" + jbool(why.empty()) + ",\"why\":" + jstr(why) + ",\"ser\":" + jbool(ser) + ",\"civ\":" + jbool(civ) +
+           ",\"aud\":" + jbool(aud) + ",\"clk\":" + jbool(ck) + ",\"wd\":" + jbool(wd) + ",\"txon\":" + jbool(txState_ == ST_TX) +
+           ",\"txen\":" + jbool(seq.txEnabled) + ",\"freq\":" + jnum((long long)f) + ",\"band\":" + jstr(bandName(f)) + "}";
+}
+
 std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg) {
     std::lock_guard<std::mutex> lk(mtx_);                          // polling is not operator activity (TX watchdog)
     int64_t now = clk::utcMs(), L = slotLen();

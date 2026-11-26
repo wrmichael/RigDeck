@@ -56,6 +56,9 @@ public:
 
     // --- web API ------------------------------------------------------------------------------
     std::string stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg);
+    // Small status for the all-stations page (/api/health, open to other pages): version, name, the four status
+    // lights, TX, watchdog, and "ok" when all is well; "why" names what is not.
+    std::string healthJson();
     void activity();
     bool txOnNow() const { return txOn_; }             // for the internal-RAM low-point tracer
     bool decodingNow() const { return decoding_; }                       // operator touched the screen: restarts the TX watchdog
