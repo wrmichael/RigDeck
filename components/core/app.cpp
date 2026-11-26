@@ -855,8 +855,11 @@ void App::alcEndTx() {
     if (!r.empty()) { std::sort(r.begin(), r.end()); q75 = r[(r.size() * 3) / 4]; }
     if (logFn) {
         char b[200];
-        snprintf(b, sizeof b, "TX end %s: audio %.1f %% (max %d %%, auto %s), ALC max %d, upper quartile %d /255 over %d readings, Po max %d/255",
-                 alcBand_.c_str(), txLevelNow(), cfg.txLevel, cfg.autoAlc ? "on" : "off", alcMax_, q75, alcReads_, poMax_);
+        if (radio.proto.load() == RP_QMX)          // full-scale audio on purpose; the QMX reports no ALC or power
+            snprintf(b, sizeof b, "TX end %s: audio full scale (QMX: power is set on the radio)", alcBand_.c_str());
+        else
+            snprintf(b, sizeof b, "TX end %s: audio %.1f %% (max %d %%, auto %s), ALC max %d, upper quartile %d /255 over %d readings, Po max %d/255",
+                     alcBand_.c_str(), txLevelNow(), cfg.txLevel, alcAdjusts() ? "on" : "off", alcMax_, q75, alcReads_, poMax_);
         logFn(b);
     }
     if (!alcAdjusts() || alcBand_.empty() || !genStarted_ || r.size() < 5) return;
