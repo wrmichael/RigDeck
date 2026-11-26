@@ -266,11 +266,12 @@ struct port_obj {
             uint32_t disable_requested: 1;
             uint32_t conn_dev_ena: 1;               // Used to indicate the port is connected to a device that has been reset
             uint32_t periodic_scheduling_enabled: 1;
-            uint32_t fsls_only: 1;                  // RigDeck patch: run a high-speed root port at full speed
-            uint32_t reserved25: 25;
+            uint32_t reserved26: 26;
         };
         uint32_t val;
     } flags;
+    bool fsls_only;                                 // RigDeck patch: run a high-speed root port at full speed.
+                                                    // Kept out of flags: hcd_port_recover() requires flags.val == 0
     int periph_idx;                                 // Peripheral index of this port. Used for initialization check
     // FIFO related
     usb_dwc_hal_fifo_config_t fifo_config;          // FIFO config to be applied at HAL level
@@ -1400,7 +1401,7 @@ static esp_err_t _port_cmd_reset(port_t *port)
 
     // Place the bus into the reset state. If the port was previously enabled, a disabled event will occur after this
 #ifndef USB_DWC_HAL_INIT_HAS_CONFIG
-    if (port->flags.fsls_only && port->hal->constant_config.hsphy_type) {
+    if (port->fsls_only && port->hal->constant_config.hsphy_type) {
         usb_dwc_ll_hcfg_set_fsls_supp_only(port->hal->dev);        // RigDeck patch, see hcd_port_init
     }
 #endif
@@ -1643,7 +1644,7 @@ esp_err_t hcd_port_init(int port_number, const hcd_port_config_t *port_config, h
     // RigDeck patch: this ESP-IDF's HAL has no FS/LS-only flag, so the port sets the core's FSLSSupp bit itself
     // before every bus reset (what newer HALs do in usb_dwc_hal_port_toggle_reset).
     usb_dwc_hal_init(port_obj->hal, port_number);
-    port_obj->flags.fsls_only = port_config->fsls_only ? 1 : 0;
+    port_obj->fsls_only = port_config->fsls_only;
 #endif
     hal_inited = true;
     port_obj->hal->channels.hdls = calloc(port_obj->hal->constant_config.chan_num_total, sizeof(usb_dwc_hal_chan_t *));
@@ -1832,9 +1833,7 @@ esp_err_t hcd_port_recover(hcd_port_handle_t port_hdl)
     usb_dwc_hal_core_soft_reset(port->hal);
     port->state = HCD_PORT_STATE_NOT_POWERED;
     port->last_event = HCD_PORT_EVENT_NONE;
-    const uint32_t keep_fsls_only = port->flags.fsls_only;    // RigDeck patch: survives recovery
     port->flags.val = 0;
-    port->flags.fsls_only = keep_fsls_only;
 
     // Clear the frame list. We set the frame list register and enable periodic scheduling after a successful reset
     memset(port->frame_list, 0, FRAME_LIST_LEN * sizeof(uint32_t));
