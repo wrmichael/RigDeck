@@ -6,8 +6,10 @@
   "PSE QSL" with its paw and sends it out the mail slot. Random dogs (mostly Shih Tzu and Maltese), random OM/YL
   operator, radio display with band, frequency and S-meter, four levels (Puppy to Contest), sniff hints,
   streaks, sounds (barks, stamp, mail slot) and optional voice. Stations sometimes send their own QSL back,
-  signed by a cat or dog paw; they go in an album on the microSD card (/api/album; without a card the last 24
-  in memory). Calls from your log appear on the air. Also playable from the site (docs/k0dog.html).
+  signed by a cat or dog paw; they go in an album on the microSD card (/api/album). Calls from your log appear
+  on the air. The game is not in the firmware: RigDeck downloads it from the site (docs/k0dog/) to the microSD
+  card on the home network and serves it from there; no card, no K0DOG button. Also playable from the site
+  (docs/k0dog.html).
   Start screen: the K0DOG club card (Dog Day Radio Amateur Radio Club); every 10th card sent, the club sends
   its own QSL card for the album.
 

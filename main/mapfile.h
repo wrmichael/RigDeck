@@ -10,3 +10,6 @@ void mapfile_register(httpd_handle_t srv);
 std::string web_get(const std::string& url, const std::function<bool(const char*, int, int64_t)>& sink);
 // Every 6 hours on a home network: which releases the RigDeck site has (App::setReleases, "update available").
 void updcheck_start(App& app);
+// K0DOG game: downloaded to the microSD card and served from there (k0dog.cpp).
+void k0dog_start(App& app);
+void k0dog_register(httpd_handle_t srv);

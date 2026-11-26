@@ -253,7 +253,7 @@ table.imp th{color:var(--dim);font-weight:500}
 
 <section id="tab-cwt" class="hide">
   <div class="pan" style="margin-bottom:12px">
-    <h3 style="display:flex;align-items:center;gap:10px">CW trainer <span style="flex:1"></span><a href="/k0dog" target="_blank" rel="noopener" title="K0DOG: help the dog fill out QSL cards (opens a new tab)"><button type="button" id="ct_k0dog" style="font-family:'Audiowide RD',system-ui,sans-serif;font-size:20px;color:#f6b93b;letter-spacing:1px;padding:6px 16px">K0DOG</button></a></h3>
+    <h3 style="display:flex;align-items:center;gap:10px">CW trainer <span style="flex:1"></span><a id="ct_k0dogA" hidden href="/k0dog" target="_blank" rel="noopener" title="K0DOG: help the dog fill out QSL cards (opens a new tab)"><button type="button" id="ct_k0dog" style="font-family:'Audiowide RD',system-ui,sans-serif;font-size:20px;color:#f6b93b;letter-spacing:1px;padding:6px 16px">K0DOG</button></a></h3>
     <div class="row cwtset">
       <label>Speed <input id="ct_wpm" type="number" min="5" max="50" value="20" style="width:64px"> wpm</label>
       <label>Spacing as <input id="ct_eff" type="number" min="3" max="50" value="20" style="width:64px"> wpm</label>
@@ -570,6 +570,7 @@ function render(){
     el.textContent=t.state==="off"?"Home network: not set up":t.state==="connected"?`Home network: connected to "${t.ssid}", address ${t.ip}${t.rssi?`, signal ${t.rssi} dBm (${q})`:""}`:`Home network: ${t.state}${t.reason?" - "+t.reason:""}`;
     el.style.color=t.state==="connected"?"var(--rx)":t.state==="retrying"?"var(--tx)":"";}
   if(S.ota){$("otaInfo").textContent="Installed: RigDeck "+S.ver+" (flash slot "+S.ota.slot+")";if(S.ota.upd&&!otaBusy)$("otaMsg").textContent=S.ota.upd;}
+  $("ct_k0dogA").hidden=!S.k0dog;           // the K0DOG game is downloaded to the microSD card
   if(S.betan!==undefined&&document.activeElement!==$("dvBetaN")) $("dvBetaN").checked=!!S.betan;
   updCheck();
   if(S.wchip){$("wcVer").textContent="Firmware: "+(S.wchip.ver||"checking…");if(S.wchip.upd&&!wcBusy)$("wcMsg").textContent=S.wchip.upd;}

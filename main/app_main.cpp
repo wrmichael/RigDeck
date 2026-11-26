@@ -211,6 +211,7 @@ extern "C" void app_main(void) {
     wifichip_start(s_app);
     mapfile_start(s_app, !logDir.empty());
     updcheck_start(s_app);
+    k0dog_start(s_app);
 #endif
     usbradio_start(s_app);
     gps_module_start(s_app);

@@ -512,7 +512,7 @@ function showBig(c){const o=$("bigCard");o.innerHTML=qslSVG(c)+`<div style="posi
 // ---------------- album: on the RigDeck's microSD card, else in this browser ----------------
 const onBoard=location.protocol==="http:"&&!/^(localhost|127\.)/.test(location.hostname)||location.search.includes("board");
 async function loadAlbum(){
-  if(onBoard){try{const r=await fetch("/api/album",{cache:"no-store"});if(r.ok){const j=await r.json();album=j.cards||[];albumWhere=j.sd?"kept on the RigDeck's microSD card":`kept in the RigDeck's memory (no microSD card: only the last ${j.max} cards, lost at restart)`;stats();return;}}catch(e){}}
+  if(onBoard){try{const r=await fetch("/api/album",{cache:"no-store"});if(r.ok){const j=await r.json();album=j.cards||[];albumWhere=j.sd?"kept on the RigDeck's microSD card":"no microSD card: not kept";stats();return;}}catch(e){}}
   album=LS.get("album",[]);albumWhere="kept in this browser";stats();
 }
 async function saveCard(c){
