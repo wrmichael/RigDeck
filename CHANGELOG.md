@@ -9,6 +9,8 @@
   full web page in a frame (nothing lost). Add stations by address and name; columns, size, order, fill-the-window,
   open in a tab, an answering light. The list is kept in the browser and can be copied or bookmarked. Also as
   docs/multi.html to save and open from a computer. Link in Settings, Device.
+  **Find stations:** RigDecks on the same home network find each other (a short UDP broadcast every 30 s,
+  port 47731, with address, callsign, version and RigDeck name; /api/peers), so the page fills its list itself.
 - New units name their hotspot RigDeck-XXXXXX (from the board's MAC address) instead of RigDeck, so two units
   never share a name. Units that already have settings keep their hotspot name.
 - APRS position from the radio's own GPS: Icoms with GPS (IC-705, IC-9700, IC-905) are asked for their position

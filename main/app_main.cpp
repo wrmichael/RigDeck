@@ -205,6 +205,7 @@ extern "C" void app_main(void) {
 
     net_start(s_app);
     web_start(s_app);
+    peers_start(s_app);
 #if CONFIG_IDF_TARGET_ESP32P4
     wifichip_start(s_app);
     mapfile_start(s_app, !logDir.empty());

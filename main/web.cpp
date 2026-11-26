@@ -18,6 +18,7 @@ void ota_register(httpd_handle_t srv);
 #include "sdlog.h"
 #include "mapfile.h"          // wifi_chip.cpp: firmware upload for the Wi-Fi chip
 #endif
+#include "peers_net.h"
 static App* s_app;
 extern const char index_html_start[] asm("_binary_index_html_start");
 extern const char index_html_end[] asm("_binary_index_html_end");
@@ -184,6 +185,7 @@ void web_start(App& app) {
         {"/apple-touch-icon-precomposed.png", HTTP_GET, hIcon, nullptr},
     };
     for (auto& u : uris) httpd_register_uri_handler(srv, &u);
+    peers_register(srv);
 #if CONFIG_IDF_TARGET_ESP32P4
     wifichip_register(srv);
     ota_register(srv);

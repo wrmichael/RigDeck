@@ -42,6 +42,7 @@ textarea{width:100%;min-height:90px;font:13px ui-monospace,Consolas,monospace;co
 <header id="hd">
   <h1>RigDeck stations</h1>
   <button class="pri" id="bAdd">+ Add station</button>
+  <button id="bFind" title="Ask the RigDecks which stations they hear on the home network">Find stations</button>
   <button id="bList">Stations…</button>
   <label>Columns <select id="cols"><option value="0">Auto</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
   <label>Size <select id="zoom"><option value="1">100 %</option><option value="0.85">85 %</option><option value="0.75">75 %</option><option value="0.67">67 %</option><option value="0.5">50 %</option></select></label>
@@ -49,7 +50,7 @@ textarea{width:100%;min-height:90px;font:13px ui-monospace,Consolas,monospace;co
 </header>
 <div id="warn" hidden></div>
 <div id="empty" hidden>
-  <p><b>No stations yet.</b> Press <b>+ Add station</b> and enter each RigDeck's address, for example <code>192.168.68.95</code> (Settings → Wi-Fi on each unit shows it). Up to 10.</p>
+  <p><b>No stations yet.</b> Press <b>Find stations</b>: RigDecks on the same home network find each other (from version 1.1.6). Or press <b>+ Add station</b> and enter each RigDeck's address, for example <code>192.168.68.95</code> (Settings → Wi-Fi on each unit shows it). Up to 10.</p>
   <p class="hint">Each station is its own RigDeck web page in a frame, with every button working as usual. The list is kept in this browser. To use it on another computer, copy it from <b>Stations…</b>, or bookmark this page with <code>?s=</code> and the addresses separated by commas.</p>
 </div>
 <div id="grid"></div>
@@ -59,6 +60,7 @@ textarea{width:100%;min-height:90px;font:13px ui-monospace,Consolas,monospace;co
   <div class="row"><input id="nAddr" placeholder="Address, e.g. 192.168.68.95" style="flex:2;min-width:180px"><input id="nName" placeholder="Name (optional)" style="flex:1;min-width:110px"><button class="pri" id="nOk">Add</button></div>
   <p class="hint" id="nMsg"></p>
   <ul class="lst" id="lst"></ul>
+  <div id="found"></div>
   <p class="hint">Copy or paste the whole list (one station per line: address, then a name if you like):</p>
   <textarea id="txt"></textarea>
   <div class="row"><button id="tApply">Use this list</button><button id="tLink">Copy a bookmark link</button><span style="flex:1"></span><button id="dClose">Close</button></div>
@@ -157,6 +159,30 @@ $("tLink").onclick=async()=>{
 $("cols").onchange=()=>{view.cols=+$("cols").value;save();layout();};
 $("zoom").onchange=()=>{view.zoom=+$("zoom").value;save();layout();};
 $("bReload").onclick=()=>{document.querySelectorAll("iframe").forEach(f=>f.src=f.src);probe();};
+// Find stations: a RigDeck lists itself and the RigDecks it heard on the home network (/api/peers).
+async function peersFrom(base){
+  const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),4000);
+  try{const r=await fetch(base+"/api/peers",{cache:"no-store",signal:ac.signal});clearTimeout(tm);return r.ok?await r.json():null;}catch(e){clearTimeout(tm);return null;}
+}
+async function find(auto){
+  const f=$("found");f.innerHTML='<p class="hint">Looking …</p>';
+  const bases=[];if(location.protocol==="http:")bases.push("");
+  st.forEach(s=>bases.push("http://"+s.addr));
+  const seen=new Map();
+  for(const b of bases){const j=await peersFrom(b);if(!j)continue;
+    for(const p of [j.me,...(j.peers||[])])if(p&&p.ip&&!seen.has(p.ip))seen.set(p.ip,p);
+    if(seen.size&&b==="")break;}
+  const fresh=[...seen.values()].filter(p=>!st.some(s=>s.addr===p.ip));
+  if(auto){fresh.slice(0,MAX-st.length).forEach(p=>st.push({addr:p.ip,name:(p.name||p.call||"").slice(0,32)}));if(fresh.length){save();build();}f.innerHTML="";return;}
+  if(!seen.size){f.innerHTML=`<p class="hint">${bases.length?"No RigDeck answered. They find each other only on the home network (not the hotspot), from version 1.1.6.":"Open this page from a RigDeck (http://its address/multi), or add one station by hand first: the others are found through it."}</p>`;return;}
+  if(!fresh.length){f.innerHTML='<p class="hint">All the RigDecks found are already in the list.</p>';return;}
+  f.innerHTML='<p><b>Found:</b></p><ul class="lst" id="fl"></ul><div class="row"><button class="pri" id="fAll">Add all</button></div>';
+  fresh.forEach(p=>{const li=document.createElement("li");
+    li.innerHTML=`<span><b>${esc(p.name||p.call||p.ip)}</b> <span class="hint">${esc(p.ip)}${p.call?" · "+esc(p.call):""}${p.ver?" · "+esc(p.ver):""}</span></span><button>Add</button>`;
+    li.querySelector("button").onclick=()=>{if(addOne(p.ip,p.name||p.call||""))li.remove();};$("fl").appendChild(li);});
+  $("fAll").onclick=()=>{fresh.forEach(p=>{if(st.length<MAX&&!st.some(s=>s.addr===p.ip))st.push({addr:p.ip,name:(p.name||p.call||"").slice(0,32)});});save();build();listUi();f.innerHTML="";};
+}
+$("bFind").onclick=()=>{listUi();$("dlg").showModal();find(false);};
 addEventListener("resize",layout);
 addEventListener("keydown",e=>{if(e.key==="Escape"&&view.max>=0&&!$("dlg").open){view.max=-1;layout();}});
 setInterval(probe,30000);
@@ -168,6 +194,7 @@ if(location.protocol==="https:"){
   $("warn").innerHTML="Browsers do not show the RigDeck pages (plain http) inside a page loaded over https. Open this page from one of your RigDecks instead: <b>http://&lt;its address&gt;/multi</b>, or save this file to your computer (right-click, Save as) and open it from there.";
 }
 build();
+if(!st.length&&location.protocol==="http:")find(true);   // first visit from a RigDeck: fill the list by itself
 </script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 // Unit tests: CI-V framing, ADIF, WSJT-X datagram, settings, message parsing, sequencer logic.
 #include "version.h"
+#include "peers.h"
 #include "civ.h"
 #include "adif.h"
 #include "settings.h"
@@ -17,6 +18,23 @@ static int64_t fakeMono = 1000;
 static int64_t mono() { return fakeMono; }
 
 int main() {
+    {   // stations finding each other on the home network
+        std::string a = peers::announce("192.168.68.95", "AC9HP", "1.1.6-beta", "Mobile 705");
+        CHECK(a == "RIGDECK1 192.168.68.95 AC9HP 1.1.6-beta Mobile 705");
+        peers::Peer p;
+        CHECK(peers::parse(a, p) && p.ip == "192.168.68.95" && p.call == "AC9HP" && p.ver == "1.1.6-beta" && p.name == "Mobile 705");
+        CHECK(peers::parse(peers::announce("10.0.0.7", "", "", ""), p) && p.call.empty() && p.name.empty());
+        CHECK(peers::parse(peers::announce("10.0.0.7", "W9AIM", "1.1.6", "<script>x\"y"), p) && p.name == "scriptxy");
+        CHECK(!peers::parse("RIGDECK1 ?", p) && peers::isQuery("RIGDECK1 ?") && !peers::parse("RIGDECK1 300.1.1.1 A B C", p));
+        CHECK(!peers::parse("hello", p) && !peers::parse("RIGDECK1 10.0.0.1", p));
+        std::vector<peers::Peer> L;
+        peers::Peer x; x.ip = "10.0.0.9"; peers::heard(L, x, 1000);
+        x.ip = "10.0.0.2"; peers::heard(L, x, 2000);
+        x.ip = "10.0.0.9"; x.name = "Shack"; peers::heard(L, x, 3000);
+        CHECK(L.size() == 2 && L[0].ip == "10.0.0.2" && L[1].name == "Shack" && L[1].seenMono == 3000);
+        peers::expire(L, 3000 + 1500, 2000);
+        CHECK(L.size() == 1 && L[0].ip == "10.0.0.9");
+    }
     {   // release numbers and the update notice
         using ver::parse; using ver::cmp;
         CHECK(parse("1.1.6").ok && !parse("1.1.6").beta && parse("1.1.6-beta").beta && !parse("dev").ok && !parse("1.2-rc1").ok);
