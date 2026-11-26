@@ -1141,7 +1141,7 @@ const SField kSet[] = {
 };
 constexpr int kSetN = sizeof kSet / sizeof kSet[0];
 lv_obj_t *scrSettings, *sTabs, *sKb, *sStatus, *sWifi, *sWidget[kSetN], *sMacroLbl[kSetN];
-lv_obj_t *sBright, *sBrightL, *sContrast, *sContrastL, *sStor, *sConsole;
+lv_obj_t *sBright, *sBrightL, *sContrast, *sContrastL, *sStor, *sConsole, *sBetaN;
 std::map<std::string, std::string> sLoaded;
 const int SET_HEAD = 64, SET_KB = 270;
 
@@ -1293,6 +1293,10 @@ void onConsoleLog(lv_event_t*) {
     bool on = lv_obj_has_state(sConsole, LV_STATE_CHECKED);
     cmd("set", {{"consoleLog", on ? "1" : "0"}});
 }
+void onBetaNotice(lv_event_t*) {
+    bool on = lv_obj_has_state(sBetaN, LV_STATE_CHECKED);
+    cmd("set", {{"betaNotice", on ? "1" : "0"}});
+}
 void onSdFormat(lv_event_t*) {
     confirm("Format microSD card", "Erase EVERYTHING on the microSD card and format it (FAT32, whole card)? This station's "
             "log is kept: it waits in the board's memory and goes back on the card. Other stations' logs and kept "
@@ -1310,6 +1314,7 @@ void onOpenSettings(lv_event_t*) {
     setText(sBrightL, std::to_string(g_app->cfg.bright) + " %");
     lv_slider_set_value(sContrast, g_app->cfg.contrast, LV_ANIM_OFF);
     if (g_app->consoleLogOn()) lv_obj_add_state(sConsole, LV_STATE_CHECKED); else lv_obj_remove_state(sConsole, LV_STATE_CHECKED);
+    if (g_app->betaNoticeOn()) lv_obj_add_state(sBetaN, LV_STATE_CHECKED); else lv_obj_remove_state(sBetaN, LV_STATE_CHECKED);
     setText(sContrastL, std::to_string(g_app->cfg.contrast) + " %");
     settingsKbHide();
     lv_screen_load(scrSettings);
@@ -1478,6 +1483,13 @@ void buildSettingsScreen() {
         lv_obj_set_style_bg_color(sConsole, C(AMB), LV_PART_INDICATOR | LV_STATE_CHECKED);
         lv_obj_add_event_cb(sConsole, onConsoleLog, LV_EVENT_VALUE_CHANGED, nullptr);
         label(pg, 86, 434, f20, TXT, "Console log (troubleshooting) to the card, kept 7 days");
+        sBetaN = lv_switch_create(pg);
+        lv_obj_set_pos(sBetaN, 0, 476);
+        lv_obj_set_size(sBetaN, 70, 36);
+        lv_obj_set_style_bg_color(sBetaN, C(LINE), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(sBetaN, C(AMB), LV_PART_INDICATOR | LV_STATE_CHECKED);
+        lv_obj_add_event_cb(sBetaN, onBetaNotice, LV_EVENT_VALUE_CHANGED, nullptr);
+        label(pg, 86, 482, f20, TXT, "Beta release notice (new Betas too, not only Stable)");
     }
 
     sKb = lv_keyboard_create(scrSettings);
@@ -1942,6 +1954,51 @@ void buildAprsScreen() {
     aSelectTab(0);
 }
 
+// "Update available" notice (baby blue, on top of every screen) when the board has seen a newer release.
+lv_obj_t *updBox = nullptr, *updLbl = nullptr;
+std::string updShown;
+void onUpdOk(lv_event_t*) {
+    if (!updShown.empty()) cmd("set", {{"updSeen", updShown}});
+    if (updBox) lv_obj_add_flag(updBox, LV_OBJ_FLAG_HIDDEN);
+}
+void updNotice(const App::UiState& s) {
+    if (s.updVer.empty()) {
+        if (updBox && !lv_obj_has_flag(updBox, LV_OBJ_FLAG_HIDDEN)) lv_obj_add_flag(updBox, LV_OBJ_FLAG_HIDDEN);
+        updShown.clear();
+        return;
+    }
+    if (s.updVer == updShown) return;
+    updShown = s.updVer;
+    if (!updBox) {
+        updBox = lv_obj_create(lv_layer_top());
+        lv_obj_remove_style_all(updBox);
+        lv_obj_set_size(updBox, 640, 132);
+        lv_obj_align(updBox, LV_ALIGN_TOP_MID, 0, 70);
+        lv_obj_set_style_bg_color(updBox, C(0xBFE6FF), 0);
+        lv_obj_set_style_bg_opa(updBox, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(updBox, 12, 0);
+        lv_obj_set_style_border_color(updBox, C(0x5AB4F0), 0);
+        lv_obj_set_style_border_width(updBox, 3, 0);
+        lv_obj_set_style_shadow_width(updBox, 24, 0);
+        lv_obj_set_style_shadow_color(updBox, C(0x000000), 0);
+        lv_obj_set_style_shadow_opa(updBox, LV_OPA_50, 0);
+        lv_obj_remove_flag(updBox, LV_OBJ_FLAG_SCROLLABLE);
+        updLbl = lv_label_create(updBox);
+        lv_obj_set_style_text_font(updLbl, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(updLbl, C(0x0d1317), 0);
+        lv_obj_set_width(updLbl, 470);
+        lv_label_set_long_mode(updLbl, LV_LABEL_LONG_MODE_WRAP);
+        lv_obj_set_pos(updLbl, 18, 14);
+        lv_obj_t* b = button(updBox, 640 - 130, 132 - 66, 110, 50, "OK", onUpdOk);
+        lv_obj_set_style_bg_color(b, C(0x1f5f8b), 0);
+    }
+    char t[240];
+    snprintf(t, sizeof t, "Update available: RigDeck %s (%s)\nYou have %s. Install it on the web page: Settings, Device, Install latest %s.",
+             s.updVer.c_str(), s.updCh == "beta" ? "Beta" : "Stable", g_app->fwVersion.c_str(), s.updCh == "beta" ? "Beta" : "Stable");
+    lv_label_set_text(updLbl, t);
+    lv_obj_remove_flag(updBox, LV_OBJ_FLAG_HIDDEN);
+}
+
 void refresh(lv_timer_t*) {
     if (g_app->cfg.bright != shownBright) {             // also when changed from the web page
         shownBright = g_app->cfg.bright;
@@ -2054,6 +2111,7 @@ void refresh(lv_timer_t*) {
     setText(lLogBtn, b);
     refreshRadioScreen(s);
     aRefresh();
+    updNotice(s);
     refreshLogger(s);
     refreshSettings(s);
     if (lv_screen_active() == scrLog) {

@@ -208,6 +208,7 @@ extern "C" void app_main(void) {
 #if CONFIG_IDF_TARGET_ESP32P4
     wifichip_start(s_app);
     mapfile_start(s_app, !logDir.empty());
+    updcheck_start(s_app);
 #endif
     usbradio_start(s_app);
     gps_module_start(s_app);

@@ -113,6 +113,8 @@ bool Settings::set(const std::string& k, const std::string& v) {
     if (k == "bright") return toInt(v, 5, 100, bright);
     if (k == "contrast") return toInt(v, 50, 150, contrast);
     if (k == "consoleLog") return toInt(v, -1, 1, consoleLog);
+    if (k == "betaNotice") return toInt(v, -1, 1, betaNotice);
+    if (k == "updSeen") { if (v.size() > 20) return false; for (char c : v) if (!isalnum((unsigned char)c) && c != '.' && c != '-') return false; updSeen = v; return true; }
     if (k == "confirmQso") return toInt(v, 0, 1, confirmQso);
     if (k == "deadman") return toInt(v, 0, 1, deadman);
     if (k == "dnw") {                                   // calls, or prefixes ending in *, at most 100 and 600 characters
@@ -190,7 +192,7 @@ std::string Settings::serialize(bool secrets) const {
     I("watchdogMin", watchdogMin); I("rfPower", rfPower); I("logProto", logProto); I("logPort", logPort);
     I("cwWpm", cwWpm); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);
     I("gpsModule", gpsModule); I("gpsModBaud", gpsModBaud); I("gpsRxPin", gpsRxPin); I("gpsPpsPin", gpsPpsPin);
-    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("confirmQso", confirmQso); I("deadman", deadman); S("dnw", dnw); I("prioOn", prioOn); S("prio", prio); I("dxKm", dxKm);
+    I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("betaNotice", betaNotice); S("updSeen", updSeen); I("confirmQso", confirmQso); I("deadman", deadman); S("dnw", dnw); I("prioOn", prioOn); S("prio", prio); I("dxKm", dxKm);
     S("aprsCall", aprsCall); s += "aprsFreq=" + std::to_string(aprsFreq) + "\n"; I("aprsBeaconMin", aprsBeaconMin); S("aprsSym", aprsSym); S("aprsComment", aprsComment);
     S("aprsPath", aprsPath); S("aprsLat", aprsLat); S("aprsLon", aprsLon); I("aprsLevel", aprsLevel); S("deadmanHost", deadmanHost); S("txLevels", txLevels);
     return s;

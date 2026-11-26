@@ -1,4 +1,5 @@
 #include "app.h"
+#include "version.h"
 #include <ctime>
 #include <thread>
 #include "clock.h"
@@ -161,6 +162,15 @@ static std::string fileCall(const std::string& call) {
 }
 
 std::string App::logFile(bool archive) { std::lock_guard<std::mutex> lk(mtx_); return archive ? archivePath() : logPath(); }
+void App::setReleases(const std::string& stable, const std::string& beta) {
+    std::lock_guard<std::mutex> lk(mtx_);
+    bool changed = stable != relStable_ || beta != relBeta_;
+    relStable_ = stable;
+    relBeta_ = beta;
+    std::string v, ch;
+    if (changed && ver::offer(fwVersion, stable, beta, betaNoticeOn(), v, ch))
+        logLine("update available: RigDeck " + v + " (" + ch + "), running " + fwVersion);
+}
 std::string App::station() { std::lock_guard<std::mutex> lk(mtx_); return station_; }
 
 static const char* const kLogKinds[] = {"log.adi", "archive.adi", "deleted.adi", "sent.txt"};
@@ -2122,6 +2132,7 @@ void App::uiState(UiState& u) {
     u.logN = logCount_; u.logAll = archiveCount_; u.netOk = netOk_; u.netFail = netFail_; u.unsent = unsent_;
     { std::string up = usbProblemText(); u.status = memFail ? "Not enough RAM for the decoder" : !up.empty() ? up : status_; }
     u.net = netInfo_; u.call = cfg.call; u.myGrid = cfg.grid; u.rigName = cfg.rigName;
+    if (ver::offer(fwVersion, relStable_, relBeta_, betaNoticeOn(), u.updVer, u.updCh) && u.updVer == cfg.updSeen) { u.updVer.clear(); u.updCh.clear(); }
     u.logSd = logOnSd_; u.sdIn = logOnSd_; u.station = station_; u.sdInfo = sdInfo;
     u.intTotal = intTotal_; u.intUsed = intUsed_; u.sdTotal = sdTotal_; u.sdUsed = sdUsed_; u.left = left_;
     u.bright = cfg.bright; u.contrast = cfg.contrast;
@@ -2317,7 +2328,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     }
     o += "]}";
     std::string usbP = usbProblemText();
-    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : !usbP.empty() ? usbP : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) + ",\"conlog\":" + jbool(consoleLogOn()) +
+    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : !usbP.empty() ? usbP : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) + ",\"conlog\":" + jbool(consoleLogOn()) + ",\"betan\":" + jbool(betaNoticeOn()) + ",\"rel\":{\"stable\":" + jstr(relStable_) + ",\"beta\":" + jstr(relBeta_) + "}" +
          ",\"sta\":{\"state\":" + jstr(sta_.state) + ",\"ssid\":" + jstr(sta_.ssid) + ",\"ip\":" + jstr(sta_.ip) +
          ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}" +
          ",\"inet\":" + jnum(cfg.deadman ? inet_.load() : -2) +

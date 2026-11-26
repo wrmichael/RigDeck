@@ -78,6 +78,8 @@ struct Settings {
     std::string deadmanHost = "1.1.1.1:53";   // what is checked for "internet" (host or IP, optional :port, TCP)                  // POTA mode: Auto CQ / hunt wait for "Next QSO" after each QSO
     int consoleLog = -1;                 // copy the console log to the microSD card (RigDeck/logs): 1 on, 0 off,
                                          // -1 = the build's default (on in Beta builds, off in Stable ones)
+    int betaNotice = -1;                 // "update available" notice for new Beta releases too: 1 on, 0 off, -1 build default
+    std::string updSeen;                 // release the touch screen's update notice was closed for
 
     bool set(const std::string& key, const std::string& value);   // false = unknown key / bad value
     std::string serialize(bool includeSecrets) const;             // key=value lines

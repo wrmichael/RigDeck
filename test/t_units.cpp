@@ -1,4 +1,5 @@
 // Unit tests: CI-V framing, ADIF, WSJT-X datagram, settings, message parsing, sequencer logic.
+#include "version.h"
 #include "civ.h"
 #include "adif.h"
 #include "settings.h"
@@ -16,6 +17,21 @@ static int64_t fakeMono = 1000;
 static int64_t mono() { return fakeMono; }
 
 int main() {
+    {   // release numbers and the update notice
+        using ver::parse; using ver::cmp;
+        CHECK(parse("1.1.6").ok && !parse("1.1.6").beta && parse("1.1.6-beta").beta && !parse("dev").ok && !parse("1.2-rc1").ok);
+        CHECK(cmp(parse("1.1.6"), parse("1.1.6-beta")) > 0 && cmp(parse("1.1.10"), parse("1.1.9")) > 0 && cmp(parse("1.2.0-beta"), parse("1.1.9")) > 0);
+        std::string v, ch;
+        CHECK(ver::offer("1.0.0", "1.1.0", "1.1.6-beta", false, v, ch) && v == "1.1.0" && ch == "stable");
+        CHECK(ver::offer("1.0.0", "1.1.0", "1.1.6-beta", true, v, ch) && v == "1.1.6-beta" && ch == "beta");
+        CHECK(!ver::offer("1.1.6-beta", "1.0.0", "1.1.6-beta", true, v, ch));        // up to date
+        CHECK(ver::offer("1.1.6-beta", "1.1.6", "1.1.6-beta", false, v, ch) && v == "1.1.6");  // Stable of the same number
+        CHECK(!ver::offer("1.1.6-beta", "1.0.0", "1.1.7-beta", false, v, ch));       // beta notice off
+        CHECK(ver::offer("1.1.6-beta", "", "1.1.7-beta", true, v, ch) && v == "1.1.7-beta");    // Stable not reachable
+        CHECK(!ver::offer("dev", "9.9.9", "9.9.9-beta", true, v, ch));
+        CHECK(ver::offer("1.1.7", "1.2.0", "1.1.9-beta", true, v, ch) && v == "1.2.0");        // the newer Stable wins
+    }
+
     clk::init(mono);
     // --- CI-V ---
     uint8_t b[5];

@@ -1,6 +1,10 @@
 # Changes
 
 ## 1.1.6-beta
+- **Update available** notice (light blue box) on the touch screen and the web page, with the running and the new
+  version; Install on the web page, OK on the screen (not shown again for that release). The board looks at the
+  RigDeck site every 6 hours on a home network; the page also looks itself. **Beta release notice** (Settings,
+  Device) adds new Betas; on by default in Beta builds, off in Stable.
 - **All stations in one window:** http://<any RigDeck>/multi shows up to 10 RigDecks side by side, each its own
   full web page in a frame (nothing lost). Add stations by address and name; columns, size, order, fill-the-window,
   open in a tab, an answering light. The list is kept in the browser and can be copied or bookmarked. Also as

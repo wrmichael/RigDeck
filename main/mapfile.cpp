@@ -102,7 +102,7 @@ static void fmsg(const std::string& m) {
 }
 
 // GET url; each piece of the body goes to sink (false = stop). Returns "" or why it failed.
-static std::string httpGet(const std::string& url, const std::function<bool(const char*, int, int64_t)>& sink) {
+std::string web_get(const std::string& url, const std::function<bool(const char*, int, int64_t)>& sink) {
     esp_http_client_config_t c = {};
     c.url = url.c_str();
     c.timeout_ms = 15000;
@@ -139,7 +139,7 @@ static std::string httpGet(const std::string& url, const std::function<bool(cons
 
 static void fetchRun() {
     std::string js;
-    std::string e = httpGet(std::string(kSite) + "map.json", [&](const char* p, int n, int64_t) {
+    std::string e = web_get(std::string(kSite) + "map.json", [&](const char* p, int n, int64_t) {
         js.append(p, n);
         return js.size() < 4096;
     });
@@ -162,7 +162,7 @@ static void fetchRun() {
     if (!f) { s_busy = false; fmsg("Map: could not write to the microSD card"); return; }
     size_t got = 0;
     int lastPct = -1;
-    e = httpGet(std::string(kSite) + file, [&](const char* p, int n, int64_t) {
+    e = web_get(std::string(kSite) + file, [&](const char* p, int n, int64_t) {
         if (got + n > want || !fileWrite(f, p, (size_t)n)) return false;
         got += (size_t)n;
         int pct = (int)(got * 100 / want);

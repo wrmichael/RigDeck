@@ -75,6 +75,7 @@ public:
     // Reading state does not count as "an operator is present"; command() does (TX watchdog).
     struct UiState {
         std::string rigName;                         // "RigDeck name" (Settings), shown on the screen
+        std::string updVer, updCh;                   // a newer release to offer ("" none, or closed for this one)
         int64_t utc = 0;
         bool clkOk = false, ser = false, aud = false, civ = false, ptt = false;
         bool txEn = false, txOn = false, tune = false, wd = false;
@@ -124,6 +125,9 @@ public:
     bool freshSettings = false;                    // no settings file at start-up: a new unit
     bool saveSettings() { std::lock_guard<std::mutex> lk(mtx_); return cfg.save(dir_ + "/settings.txt"); }
     bool betaBuild() const { return fwVersion.find("beta") != std::string::npos || fwVersion == "dev"; }
+    bool betaNoticeOn() const { return cfg.betaNotice < 0 ? betaBuild() : cfg.betaNotice != 0; }
+    // Releases on the RigDeck site, as the board last saw them (updcheck.cpp); "" = not known.
+    void setReleases(const std::string& stable, const std::string& beta);
     bool consoleLogOn() const { return cfg.consoleLog < 0 ? betaBuild() : cfg.consoleLog != 0; }
     std::string otaUpd_;
     void (*logFn)(const char* line) = nullptr;      // platform log (serial monitor on the ESP32)
@@ -177,6 +181,7 @@ private:
     void status(const std::string& s);
 
     std::string dir_;
+    std::string relStable_, relBeta_;              // releases on the RigDeck site (setReleases)
     std::mutex mtx_;                                // sequencer, decode list, log list, status text
     std::atomic<int> mode_{DM_FT8};
 

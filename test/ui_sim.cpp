@@ -547,6 +547,19 @@ int main() {
     tap(60, 32);                                      // Back
     run(0.5);
 
+    {   // "Update available" notice: a newer Beta seen on the RigDeck site, Beta notice on (build default in a Beta)
+        std::string keep = app.fwVersion;
+        app.fwVersion = "1.1.6-beta";
+        app.setReleases("1.1.5", "1.1.7-beta");
+        run(0.6);
+        savePpm("test/out/ui/36_update_notice.ppm");
+        { App::UiState u; app.uiState(u); CHECK(u.updVer == "1.1.7-beta"); }
+        tap(757, 161);                                // OK: not shown again for this release
+        run(0.6);
+        { App::UiState u; app.uiState(u); CHECK(app.cfg.updSeen == "1.1.7-beta" && u.updVer.empty()); }
+        app.fwVersion = keep;
+    }
+
     printf(fails ? "ui_sim: %d of %d FAILED\n" : "ui_sim: all %d checks passed\n", fails ? fails : checks, checks);
     return fails ? 1 : 0;
 }

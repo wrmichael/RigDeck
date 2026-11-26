@@ -7,6 +7,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>RigDeck</title>
 <style>
+#updBox[hidden]{display:none!important}
 :root{--bg:#0d1317;--pan:#151e25;--pan2:#1c2831;--line:#2a3944;--tx:#ff5b5b;--rx:#3fcf8e;--amb:#f6b93b;--txt:#dce5ea;--dim:#8498a5;--cq:#7fd0ff;--me:#ff9d9d;
 --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
 *{box-sizing:border-box}
@@ -108,6 +109,10 @@ table.imp th{color:var(--dim);font-weight:500}
 </style>
 </head>
 <body>
+<div id="updBox" hidden style="position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:50;background:#bfe6ff;color:#0d1317;border:3px solid #5ab4f0;border-radius:12px;padding:12px 16px;box-shadow:0 8px 28px #000a;max-width:min(560px,calc(100% - 24px));display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+  <span id="updTxt" style="flex:1;min-width:200px;font-size:16px;line-height:1.4"></span>
+  <span style="display:flex;gap:8px"><button id="updGo" style="background:#1f5f8b;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer">Install</button><button id="updLater" style="background:transparent;color:#0d1317;border:1px solid #1f5f8b;border-radius:8px;padding:8px 14px;cursor:pointer">Later</button></span>
+</div>
 <header>
   <div id="freq">--.---.--- <small></small></div>
   <div>
@@ -415,6 +420,7 @@ table.imp th{color:var(--dim);font-weight:500}
     <div class="row" style="margin-top:8px"><button id="eraseall" class="danger">Erase all contact logs (every station)</button> <button id="sdformat" class="danger">Format microSD card</button></div>
     <p class="hint">With a microSD card (FAT32) in at start-up the logs live on the card, in the RigDeck folder, one set of files per station callsign (e.g. AC9HP_log.adi, AC9HP_archive.adi). Contacts logged in the board's memory move onto the card at that start. On the card, deleted contacts are kept for good in AC9HP_deleted.adi and a cleared current log is kept as AC9HP_deleted_<i>date</i>_<i>time</i>.adi. Insert or remove the card with the power off.</p>
     <h4 style="margin:14px 0 4px">Console logs (for troubleshooting)</h4>
+    <label><input type="checkbox" id="dvBetaN"> Beta release notice: say "update available" for new Beta releases too, not only Stable ones. Unless you change it, this is on in Beta versions and off in Stable ones.</label>
     <label><input type="checkbox" id="dvConsole"> Copy the console log to the microSD card (RigDeck/logs/console_<i>date</i>_<i>time</i>.txt, a new file each start and each day, kept 7 days). Unless you change it, this is on in Beta versions and off in Stable ones.</label>
     <div id="dvLogs" class="hint"></div>
     <h4 style="margin:14px 0 4px">Settings file</h4>
@@ -564,6 +570,8 @@ function render(){
     el.textContent=t.state==="off"?"Home network: not set up":t.state==="connected"?`Home network: connected to "${t.ssid}", address ${t.ip}${t.rssi?`, signal ${t.rssi} dBm (${q})`:""}`:`Home network: ${t.state}${t.reason?" - "+t.reason:""}`;
     el.style.color=t.state==="connected"?"var(--rx)":t.state==="retrying"?"var(--tx)":"";}
   if(S.ota){$("otaInfo").textContent="Installed: RigDeck "+S.ver+" (flash slot "+S.ota.slot+")";if(S.ota.upd&&!otaBusy)$("otaMsg").textContent=S.ota.upd;}
+  if(S.betan!==undefined&&document.activeElement!==$("dvBetaN")) $("dvBetaN").checked=!!S.betan;
+  updCheck();
   if(S.wchip){$("wcVer").textContent="Firmware: "+(S.wchip.ver||"checking…");if(S.wchip.upd&&!wcBusy)$("wcMsg").textContent=S.wchip.upd;}
   if(S.msg&&S.msg!==render.lastMsg){render.lastMsg=S.msg;banner(S.msg);}
   if(tx.wd) banner("TX watchdog stopped automatic transmission. Press Enable TX to resume.");
@@ -732,6 +740,7 @@ $("freq").onclick=async()=>{
   await cmd("rmode",{m:code,fil:1});
   cmd("rdata",{v:md.endsWith("-D")?"1":"0"});
 };
+$("dvBetaN").onchange=()=>{cmd("set",{betaNotice:$("dvBetaN").checked?"1":"0"});updLast=0;setTimeout(updCheck,1200);};
 $("dvConsole").onchange=()=>{cmd("set",{consoleLog:$("dvConsole").checked?"1":"0"});setTimeout(loadConsoleLogs,1500);};
 // Answer priority list: s_prio holds "pota,-sota,dx,..." ('-' = rule off); the list edits it.
 const PRIO={pota:"POTA / WWFF (CQ POTA, CQ WWFF)",sota:"SOTA (CQ SOTA)",dx:"DX (farther than the distance below)",ses:"Special event (1x1 calls such as W9A)",weak:"Weakest signal",strong:"Strongest signal"};
@@ -1257,6 +1266,34 @@ async function otaNet(ch){
   }catch(e){m.textContent="Could not reach the RigDeck site from this browser ("+e.message+"). Is it online? Otherwise download the file on another device and use Install this file.";}
 }
 $("otaStable").onclick=()=>otaNet("stable");$("otaBeta").onclick=()=>otaNet("beta");
+// "Update available" (baby blue box): releases as the board saw them (S.rel), else as this browser sees them.
+let updLast=0,updRel={stable:"",beta:""};
+function vParse(s){const m=/^(\d+)\.(\d+)\.(\d+)(-beta)?$/.exec(s||"");return m?{n:[+m[1],+m[2],+m[3]],beta:!!m[4]}:null;}
+function vCmp(a,b){for(let i=0;i<3;i++)if(a.n[i]!==b.n[i])return a.n[i]<b.n[i]?-1:1;return a.beta===b.beta?0:(a.beta?-1:1);}
+function vOffer(run,st,be,betaOn){       // the same rule as the board's ver::offer
+  const r=vParse(run),s=vParse(st),b=vParse(be);if(!r)return null;
+  if(betaOn&&b&&vCmp(b,r)>0&&(!s||vCmp(b,s)>0))return {v:be,ch:"beta"};
+  if(s&&!s.beta&&vCmp(s,r)>0)return {v:st,ch:"stable"};
+  return null;
+}
+async function updCheck(){
+  if(!S||!S.ver||demo)return;
+  const now=Date.now();
+  if(now-updLast>6*3600e3&&!(S.rel&&(S.rel.stable||S.rel.beta))){
+    updLast=now;
+    const get=async u=>{try{return (await (await fetch(u,{cache:"no-store"})).json()).version||"";}catch(e){return "";}};
+    updRel={stable:await get(OTA_SITE+"stable/manifest.json"),beta:await get(OTA_SITE+"manifest.json")};
+  }
+  const rel=S.rel&&(S.rel.stable||S.rel.beta)?S.rel:updRel;
+  const o=vOffer(S.ver,rel.stable,rel.beta,!!S.betan),box=$("updBox");
+  let seen="";try{seen=localStorage.getItem("rd_updSeen")||"";}catch(e){}
+  if(!o||o.v===seen){box.hidden=true;return;}
+  const ch=o.ch==="beta"?"Beta":"Stable";
+  $("updTxt").innerHTML=`<b>Update available: RigDeck ${esc(o.v)}</b> (${ch})<br>You have ${esc(S.ver)}.`;
+  $("updGo").textContent="Install "+ch;$("updGo").onclick=()=>{box.hidden=true;const nb=document.querySelector('nav button[data-tab="set"]');if(nb)nb.click();otaNet(o.ch);};
+  $("updLater").onclick=()=>{box.hidden=true;try{localStorage.setItem("rd_updSeen",o.v);}catch(e){}};
+  box.hidden=false;
+}
 $("save").onclick=async()=>{
   const a={};
   document.querySelectorAll("#form input[id^=\"s_\"],#form select[id^=\"s_\"]").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=k==="aprsFreq"&&e.value?String(Math.round(parseFloat(e.value)*1e6)):e.value;});
