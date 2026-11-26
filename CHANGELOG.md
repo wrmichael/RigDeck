@@ -1,5 +1,14 @@
 # Changes
 
+## 1.1.7-beta
+- **K0DOG**, the QSL-card dog game, in the CW trainer (button in Audiowide, opens /k0dog): copy the call, RST and
+  band from a CW QSO between your operator and a station on the air, fill out the QSL card and the dog stamps it
+  "PSE QSL" with its paw and sends it out the mail slot. Random dogs (mostly Shih Tzu and Maltese), random OM/YL
+  operator, radio display with band, frequency and S-meter, four levels (Puppy to Contest), sniff hints,
+  streaks, sounds (barks, stamp, mail slot) and optional voice. Stations sometimes send their own QSL back,
+  signed by a cat or dog paw; they go in an album on the microSD card (/api/album; without a card the last 24
+  in memory). Calls from your log appear on the air. Also playable from the site (docs/k0dog.html).
+
 ## 1.1.6-beta
 - **Update available** notice (light blue box) on the touch screen and the web page, with the running and the new
   version; Install on the web page, OK on the screen (not shown again for that release). The board looks at the

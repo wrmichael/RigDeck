@@ -19,6 +19,7 @@ void ota_register(httpd_handle_t srv);
 #include "mapfile.h"          // wifi_chip.cpp: firmware upload for the Wi-Fi chip
 #endif
 #include "peers_net.h"
+void k0dog_register(httpd_handle_t srv);   // k0dog.cpp: the K0DOG game and its QSL album
 static App* s_app;
 extern const char index_html_start[] asm("_binary_index_html_start");
 extern const char index_html_end[] asm("_binary_index_html_end");
@@ -165,7 +166,7 @@ void web_start(App& app) {
     s_app = &app;
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 10240;
-    cfg.max_uri_handlers = 24;
+    cfg.max_uri_handlers = 32;
     cfg.recv_wait_timeout = 30;                      // a firmware upload pauses while the Wi-Fi chip erases
     cfg.lru_purge_enable = true;
     httpd_handle_t srv = nullptr;
@@ -186,6 +187,7 @@ void web_start(App& app) {
     };
     for (auto& u : uris) httpd_register_uri_handler(srv, &u);
     peers_register(srv);
+    k0dog_register(srv);
 #if CONFIG_IDF_TARGET_ESP32P4
     wifichip_register(srv);
     ota_register(srv);

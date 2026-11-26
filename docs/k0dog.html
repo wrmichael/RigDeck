@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>K0DOG</title>
+<style>
+@font-face{font-family:"Audiowide RD";src:url(data:font/ttf;base64,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) format("truetype");font-display:swap}
+:root{--bg:#10171c;--pan:#18232b;--line:#2c3c47;--amb:#f6b93b;--txt:#e6edf1;--dim:#8fa2ae;--ok:#3fcf8e;--bad:#ff6b6b;--card:#fffaf0;--ink:#1d2a33}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none}
+.aw{font-family:"Audiowide RD",system-ui,sans-serif;letter-spacing:.5px}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:#22313b;color:var(--txt);padding:8px 14px}
+button:hover{border-color:var(--amb)}
+button.pri{background:var(--amb);color:#231700;border-color:var(--amb);font-weight:700}
+button:disabled{opacity:.45;cursor:default}
+#top{position:absolute;left:0;right:0;top:0;height:52px;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--pan);border-bottom:1px solid var(--line);z-index:5}
+#top .logo{font-size:26px;color:var(--amb)}
+#top .sp{flex:1}
+#top .stat{color:var(--dim);font-size:14px;white-space:nowrap}
+#top .stat b{color:var(--txt)}
+#main{position:absolute;top:52px;left:0;right:0;bottom:0;display:flex}
+#sceneBox{flex:1.35;position:relative;min-width:0}
+#scene{position:absolute;inset:0;width:100%;height:100%}
+#side{flex:1;min-width:330px;max-width:520px;display:flex;flex-direction:column;gap:8px;padding:10px;background:#141e25;border-left:1px solid var(--line)}
+/* the QSL card being filled out */
+.qsl{position:relative;background:var(--card);color:var(--ink);border-radius:10px;padding:12px 14px;box-shadow:0 6px 22px #0008;border:3px solid #c9a227;transition:transform .9s cubic-bezier(.5,-.3,.6,1),opacity .9s}
+.qsl h2{margin:0;font-size:22px;color:#a3241a}
+.qsl .sub{font-size:12px;color:#57656e;margin-bottom:6px}
+.qsl label{display:block;font-size:12px;color:#57656e;margin-top:6px}
+.qsl input,.qsl select{width:100%;font:600 20px/1.2 ui-monospace,Consolas,monospace;padding:6px 8px;border:2px solid #b9c3c9;border-radius:6px;background:#fff;color:var(--ink);text-transform:uppercase;-webkit-user-select:text;user-select:text}
+.qsl input:focus,.qsl select:focus{outline:none;border-color:#c9a227}
+.qsl .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.qsl .row2{display:grid;grid-template-columns:1.3fr 1fr;gap:8px}
+.qsl .auto{font:600 15px ui-monospace,Consolas,monospace;padding:8px 2px}
+.qsl .ok{border-color:var(--ok)!important;background:#eafff4}
+.qsl .no{border-color:var(--bad)!important;background:#fff0f0}
+.qsl .fix{font-size:12px;color:#b3261e;min-height:14px}
+.qsl.fly{transform:translate(var(--fx),var(--fy)) scale(.12) rotate(-12deg);opacity:0}
+.stamp{position:absolute;right:16px;bottom:10px;width:120px;height:120px;pointer-events:none;opacity:0;transform:scale(2.4) rotate(-25deg);transition:opacity .15s,transform .25s cubic-bezier(.2,1.6,.4,1)}
+.stamp.on{opacity:.92;transform:scale(1) rotate(-14deg)}
+#btns{display:flex;gap:8px;flex-wrap:wrap}
+#btns button{flex:1}
+#msg{min-height:44px;padding:8px 10px;border-radius:8px;background:#1b2730;color:var(--txt);font-size:15px}
+#msg.good{background:#123a2a}#msg.bad{background:#3a1d1d}
+#copy{font:14px ui-monospace,Consolas,monospace;color:var(--dim);min-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* overlays */
+.ov{position:absolute;inset:0;background:#000b;display:flex;align-items:center;justify-content:center;z-index:20}
+.ov[hidden]{display:none}
+.panel{background:var(--pan);border:1px solid var(--line);border-radius:14px;padding:18px 20px;max-width:min(820px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto}
+#splash .panel{text-align:center;max-width:620px}
+#splash h1{font-size:64px;margin:4px 0;color:var(--amb)}
+#splash img{max-width:100%;max-height:44vh;border-radius:12px;display:block;margin:0 auto 6px}
+#splash .lv{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+#splash .lv button{min-width:120px}
+#splash .lv button.sel{border-color:var(--amb);background:#3a2e12}
+#albumGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:10px}
+#albumGrid svg{width:100%;height:auto;border-radius:8px;cursor:pointer;box-shadow:0 3px 10px #0007}
+#bigCard svg{width:min(720px,92vw);height:auto;border-radius:10px;box-shadow:0 10px 40px #000}
+.hint{color:var(--dim);font-size:13px}
+.flag{display:inline-block;padding:2px 8px;border-radius:20px;background:#22313b;font-size:12px;color:var(--dim)}
+@media(max-width:820px){#main{flex-direction:column}#side{max-width:none;min-width:0;border-left:0;border-top:1px solid var(--line)}#sceneBox{min-height:42vh}#top .stat.wide{display:none}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+.shake{animation:shake .4s}
+@keyframes wag{0%,100%{transform:rotate(-14deg)}50%{transform:rotate(18deg)}}
+@keyframes talk{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+@keyframes key{0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes drop{0%{transform:translate(0,0) rotate(0)}100%{transform:translate(-80px,150px) rotate(-18deg)}}
+</style>
+</head>
+<body>
+<div id="top">
+  <span class="logo aw">K0DOG</span>
+  <span class="flag" id="dogTag"></span>
+  <span class="sp"></span>
+  <span class="stat">Cards <b id="sSent">0</b></span>
+  <span class="stat">Points <b id="sPts">0</b></span>
+  <span class="stat wide">Streak <b id="sStreak">0</b></span>
+  <span class="stat wide">Best <b id="sBest">0</b></span>
+  <button id="bAlbum" title="Your QSL album (pauses the game)">📒 Album <b id="sAlb">0</b></button>
+  <button id="bSound" title="Sound effects and voice">🔊</button>
+  <button id="bMenu" title="Level and new dog">☰</button>
+</div>
+<div id="main">
+  <div id="sceneBox"><svg id="scene" viewBox="0 0 800 560" preserveAspectRatio="xMidYMid meet"></svg></div>
+  <div id="side">
+    <div class="qsl" id="card">
+      <h2 class="aw" id="cardFrom">K0DOG</h2>
+      <div class="sub">Confirming a 2-way <b>CW</b> QSO · filled out by <span id="cardDog">the dog</span></div>
+      <div class="row2">
+        <div><label for="fCall">To radio (call)</label><input id="fCall" maxlength="12" autocomplete="off" spellcheck="false" inputmode="text"><div class="fix" id="xCall"></div></div>
+        <div><label for="fName">Op name (bonus)</label><input id="fName" maxlength="12" autocomplete="off" spellcheck="false"><div class="fix" id="xName"></div></div>
+      </div>
+      <div class="grid">
+        <div><label for="fBand">Band</label><select id="fBand"><option value="">–</option></select><div class="fix" id="xBand"></div></div>
+        <div><label for="fRst">RST sent</label><input id="fRst" maxlength="3" inputmode="numeric" autocomplete="off"><div class="fix" id="xRst"></div></div>
+        <div><label>Mode</label><div class="auto">CW</div></div>
+      </div>
+      <div class="grid"><div><label>Date</label><div class="auto" id="fDate"></div></div><div><label>UTC</label><div class="auto" id="fUtc"></div></div><div><label>Via</label><div class="auto">Direct</div></div></div>
+      <svg class="stamp" id="stamp" viewBox="0 0 120 120"></svg>
+    </div>
+    <div id="btns">
+      <button id="bReplay" title="Hear the QSO again">🔁 Replay</button>
+      <button id="bHint" title="Sniff out one letter of the call (costs points)">👃 Sniff</button>
+      <button class="pri" id="bSend">🐾 SEND QSL</button>
+    </div>
+    <div id="copy"></div>
+    <div id="msg">Listen to the QSO and fill out the card.</div>
+  </div>
+</div>
+
+<div class="ov" id="splash">
+  <div class="panel">
+    <img id="splashImg" alt="K0DOG" hidden>
+    <h1 class="aw" id="splashTitle">K0DOG</h1>
+    <div>The QSL-card dog of the RigDeck CW trainer</div>
+    <p class="hint" style="margin:10px 0 0">Your human is on the air. Copy the other station's <b>call</b>, the <b>RST</b> your human sends and the <b>band</b> on the radio, then stamp the card with your paw and send it through the door. Copy the name too for bonus points. Some cards come back!</p>
+    <div class="lv" id="levels"></div>
+    <button class="pri" id="bStart" style="font-size:20px;padding:12px 34px">▶ Start</button>
+    <p class="hint" id="splashNote"></p>
+  </div>
+</div>
+<div class="ov" id="album" hidden>
+  <div class="panel" style="width:min(980px,calc(100% - 24px))">
+    <div style="display:flex;align-items:center;gap:10px"><h2 class="aw" style="margin:0;color:var(--amb);flex:1">QSL album</h2><span class="hint" id="albWhere"></span><button class="pri" id="albClose">▶ Back to the game</button></div>
+    <div id="albumGrid"></div>
+    <p class="hint" id="albEmpty">No cards yet. Keep sending: stations answer with their own QSL now and then.</p>
+  </div>
+</div>
+<div class="ov" id="bigCard" hidden></div>
+<div class="ov" id="menu" hidden>
+  <div class="panel" style="max-width:460px">
+    <h2 class="aw" style="margin-top:0;color:var(--amb)">Settings</h2>
+    <div class="lv" id="levels2" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    <p><label><input type="checkbox" id="optVoice"> Voice (the dog and your human talk)</label></p>
+    <p><label><input type="checkbox" id="optOurs" checked> Play your human's side of the QSO too</label></p>
+    <p><label>Tone <input type="number" id="optTone" min="400" max="900" step="10" value="650" style="width:80px;padding:4px"> Hz</label></p>
+    <div style="display:flex;gap:8px;margin-top:10px"><button id="mDog">🐶 New dog</button><span style="flex:1"></span><button class="pri" id="mClose">Close</button></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const NS="http://www.w3.org/2000/svg";
+const rnd=n=>Math.floor(Math.random()*n), pick=a=>a[rnd(a.length)];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const LS={get(k,d){try{const v=localStorage.getItem("k0dog_"+k);return v===null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem("k0dog_"+k,JSON.stringify(v));}catch(e){}}};
+
+// ---------------- levels ----------------
+const LEVELS={
+  pup:{name:"Puppy",wpm:18,eff:8,style:"short",desc:"slow spacing, short QSO"},
+  dog:{name:"Good dog",wpm:20,eff:14,style:"rag",desc:"a normal ragchew"},
+  top:{name:"Top dog",wpm:25,eff:22,style:"rag",desc:"faster, with QTH"},
+  race:{name:"Contest",wpm:28,eff:28,style:"contest",desc:"5NN TU, quick"}
+};
+let level=LS.get("level","pup");if(!LEVELS[level])level="pup";
+
+// ---------------- dogs ----------------
+const BREEDS=[
+  {id:"shihtzu",name:"Shih Tzu",w:30},{id:"maltese",name:"Maltese",w:25},{id:"beagle",name:"Beagle",w:6},
+  {id:"lab",name:"Labrador",w:6},{id:"dachs",name:"Dachshund",w:6},{id:"corgi",name:"Corgi",w:6},
+  {id:"poodle",name:"Poodle",w:5},{id:"husky",name:"Husky",w:5},{id:"pug",name:"Pug",w:6},{id:"collie",name:"Border Collie",w:5}];
+const DOGNAMES=["Mochi","Biscuit","Lulu","Teddy","Bella","Coco","Daisy","Max","Sparky","Pixel","Dit","Dah","Marconi","Ziggy","Peanut","Oscar","Rosie","Waffles","Benny","Kilo"];
+function pickBreed(){let t=BREEDS.reduce((a,b)=>a+b.w,0),r=Math.random()*t;for(const b of BREEDS){if((r-=b.w)<0)return b;}return BREEDS[0];}
+let dog=null;
+function newDog(){
+  const b=pickBreed();
+  const colors={shihtzu:pick([["#f4ead8","#b07a3e"],["#ffffff","#c98a4b"],["#efe4d2","#5a4a3a"]]),maltese:[["#ffffff","#f3eee6"]][0],
+    beagle:["#f3e7d3","#b5651d"],lab:pick([["#e8c27a","#d4a95a"],["#2b2b2b","#1a1a1a"],["#6b3f22","#55301a"]]),dachs:pick([["#a0522d","#7a3d20"],["#2a1d17","#a0522d"]]),
+    corgi:["#e08a3c","#ffffff"],poodle:pick([["#f2d2a9","#e2b886"],["#2b2b2b","#3a3a3a"],["#ffffff","#eeeeee"]]),husky:["#8d99a6","#ffffff"],pug:["#e6c79c","#2a2a2a"],collie:["#202020","#ffffff"]};
+  const [c1,c2]=colors[b.id];
+  dog={breed:b,name:pick(DOGNAMES),c1,c2,bow:pick(["#ff5fa2","#ff4d4d","#5fb3ff","#9b6bff","#ffd93b"])};
+  $("dogTag").textContent=dog.name+" the "+b.name;$("cardDog").textContent=dog.name+" the "+b.name;
+  drawScene();
+}
+
+// ---------------- scene (SVG) ----------------
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e;}
+let human=null, S={};
+function newHuman(){
+  const yl=Math.random()<0.5;
+  human={yl,skin:pick(["#f1c9a5","#e0ac80","#c68642","#8d5524","#ffdbb4"]),hair:pick(["#2b1b10","#6b3f22","#c9a227","#9a9a9a","#d9d9d9","#a0522d","#111"]),
+    shirt:pick(["#3b7dd8","#d84b3b","#3bb273","#8e5bd8","#e0a030","#2f4858"]),beard:!yl&&Math.random()<0.35,bald:!yl&&Math.random()<0.2,glasses:Math.random()<0.4,
+    name:yl?pick(["SUE","ANN","KIM","MARY","JEN","BETH","LIZ","AMY"]):pick(["BOB","JIM","TOM","BILL","DAVE","JOE","MIKE","RON"])};
+}
+function drawScene(){
+  const s=$("scene");s.innerHTML="";S={};
+  // room
+  el("rect",{x:0,y:0,width:800,height:560,fill:"#2f4552"},s);
+  el("rect",{x:0,y:400,width:800,height:160,fill:"#7a5a3c"},s);
+  for(let i=0;i<10;i++)el("rect",{x:i*80,y:400,width:2,height:160,fill:"#6a4c32"},s);
+  // window with antenna outside
+  el("rect",{x:40,y:40,width:200,height:140,fill:"#9fd3f5",stroke:"#e8e1d4","stroke-width":10,rx:4},s);
+  el("line",{x1:140,y1:40,x2:140,y2:180,stroke:"#e8e1d4","stroke-width":6},s);
+  el("line",{x1:180,y1:180,x2:200,y2:70,stroke:"#555","stroke-width":3},s);
+  for(let i=0;i<4;i++)el("line",{x1:170+i*3,y1:90+i*14,x2:230-i*3,y2:90+i*14,stroke:"#555","stroke-width":2},s);
+  el("circle",{cx:80,cy:80,r:16,fill:"#fff6a8"},s);
+  // QSL cards on the wall
+  const wallCards=[["#ffe3a3",270],["#bfe3ff",330],["#d8f5c4",390]];
+  wallCards.forEach(([c,x],i)=>{const g=el("g",{transform:`rotate(${[-6,4,-3][i]} ${x+25} 70)`},s);el("rect",{x,y:50,width:50,height:34,fill:c,stroke:"#fff","stroke-width":2},g);el("rect",{x:x+6,y:58,width:24,height:6,fill:"#a3241a"},g);});
+  // door with mail slot (right)
+  el("rect",{x:640,y:120,width:140,height:280,fill:"#8b5a2b",stroke:"#5e3c1c","stroke-width":6},s);
+  el("rect",{x:660,y:140,width:100,height:100,fill:"none",stroke:"#6f4722","stroke-width":4},s);
+  el("rect",{x:660,y:260,width:100,height:110,fill:"none",stroke:"#6f4722","stroke-width":4},s);
+  el("circle",{cx:656,cy:280,r:7,fill:"#d9b44a"},s);
+  S.slot=el("rect",{x:675,y:245,width:70,height:12,rx:3,fill:"#d9b44a",stroke:"#8a6d1e","stroke-width":2},s);
+  el("text",{x:710,y:236,"text-anchor":"middle","font-size":11,fill:"#f3d98a","font-family":"Audiowide RD, sans-serif"},s).textContent="QSL";
+  // desk
+  el("rect",{x:150,y:300,width:420,height:22,fill:"#5b3b22",rx:4},s);
+  el("rect",{x:170,y:322,width:16,height:100,fill:"#4a2f1b"},s);el("rect",{x:534,y:322,width:16,height:100,fill:"#4a2f1b"},s);
+  // radio
+  const r=el("g",{},s);
+  el("rect",{x:330,y:205,width:220,height:95,rx:8,fill:"#2a2f33",stroke:"#111","stroke-width":3},r);
+  el("rect",{x:342,y:215,width:150,height:58,rx:4,fill:"#0b2a1e",stroke:"#1f5c43"},r);
+  S.freq=el("text",{x:350,y:240,"font-size":21,fill:"#7dffb6","font-family":"ui-monospace,Consolas,monospace"},r);
+  S.bandMode=el("text",{x:350,y:262,"font-size":13,fill:"#7dffb6","font-family":"ui-monospace,Consolas,monospace"},r);
+  S.txrx=el("text",{x:458,y:262,"font-size":12,fill:"#7dffb6","font-family":"ui-monospace,Consolas,monospace","text-anchor":"middle"},r);
+  S.meter=[];for(let i=0;i<9;i++)S.meter.push(el("rect",{x:350+i*15,y:279,width:12,height:9,rx:1,fill:"#1d3b2f"},r));
+  el("text",{x:350,y:297,"font-size":8,fill:"#8fa2ae","font-family":"sans-serif"},r).textContent="S 1  3  5  7  9";
+  el("circle",{cx:520,cy:242,r:20,fill:"#444",stroke:"#111","stroke-width":2},r);el("circle",{cx:520,cy:242,r:5,fill:"#777"},r);
+  el("rect",{x:504,y:274,width:34,height:12,rx:3,fill:"#555"},r);
+  // the human at the desk
+  drawHuman(s);
+  // key
+  const k=el("g",{},s);el("rect",{x:250,y:288,width:60,height:12,rx:3,fill:"#333"},k);
+  S.keyLever=el("rect",{x:262,y:280,width:42,height:7,rx:3,fill:"#c0c0c0"},k);
+  // dog on the floor in front
+  drawDog(s);
+  // envelope that drops in through the slot
+  S.mail=el("g",{opacity:0},s);el("rect",{x:680,y:250,width:60,height:40,fill:"#fffaf0",stroke:"#c9a227","stroke-width":2},S.mail);
+  el("path",{d:"M680 250 L710 272 L740 250",fill:"none",stroke:"#c9a227","stroke-width":2},S.mail);
+  setRadio();
+}
+function drawHuman(s){
+  const h=human,g=el("g",{},s);S.human=g;
+  // chair
+  el("rect",{x:180,y:250,width:70,height:120,rx:12,fill:"#33424d"},g);el("rect",{x:205,y:370,width:12,height:40,fill:"#222"},g);
+  // body
+  el("path",{d:"M190 300 Q215 225 260 230 Q305 235 310 300 Z",fill:h.shirt},g);
+  // arm to key
+  S.arm=el("path",{d:"M290 260 Q300 285 282 284",fill:"none",stroke:h.shirt,"stroke-width":16,"stroke-linecap":"round"},g);
+  el("circle",{cx:280,cy:284,r:8,fill:h.skin},g);
+  // head
+  if(h.yl) el("path",{d:"M222 175 Q250 120 282 175 L288 235 Q250 250 216 235 Z",fill:h.hair},g);
+  el("circle",{cx:252,cy:190,r:30,fill:h.skin},g);
+  if(!h.bald){ if(h.yl) el("path",{d:"M222 186 Q228 150 252 152 Q280 150 284 186 Q270 168 252 170 Q232 168 222 186 Z",fill:h.hair},g);
+    else el("path",{d:"M223 184 Q224 156 252 156 Q281 156 281 184 Q268 170 252 172 Q236 170 223 184 Z",fill:h.hair},g); }
+  if(h.beard) el("path",{d:"M228 196 Q252 236 276 196 Q270 214 252 216 Q234 214 228 196 Z",fill:h.hair},g);
+  el("circle",{cx:262,cy:188,r:3,fill:"#222"},g);el("circle",{cx:276,cy:188,r:3,fill:"#222"},g);
+  if(h.glasses){el("circle",{cx:262,cy:188,r:8,fill:"none",stroke:"#222","stroke-width":2},g);el("circle",{cx:279,cy:188,r:8,fill:"none",stroke:"#222","stroke-width":2},g);}
+  S.mouth=el("ellipse",{cx:270,cy:205,rx:6,ry:3,fill:"#7a2e2e",style:"transform-origin:270px 205px;transform-box:fill-box"},g);
+  // headphones
+  el("path",{d:"M222 180 Q252 140 282 180",fill:"none",stroke:"#222","stroke-width":6},g);
+  el("rect",{x:216,y:178,width:12,height:22,rx:5,fill:"#222"},g);
+  // speech bubble
+  S.bubble=el("g",{opacity:0},s);el("rect",{x:200,y:95,width:150,height:40,rx:14,fill:"#fff"},S.bubble);
+  el("path",{d:"M240 135 L248 152 L258 135 Z",fill:"#fff"},S.bubble);
+  S.bubbleT=el("text",{x:275,y:121,"text-anchor":"middle","font-size":15,fill:"#222","font-family":"ui-monospace,Consolas,monospace"},S.bubble);
+}
+function fur(g,cx,cy,r,c,n){for(let i=0;i<n;i++){const a=i/n*Math.PI*2;el("circle",{cx:cx+Math.cos(a)*r*.75,cy:cy+Math.sin(a)*r*.75,r:r*.42,fill:c},g);}el("circle",{cx,cy,r:r*.8,fill:c},g);}
+function drawDog(s){
+  const d=dog,id=d.breed.id,g=el("g",{transform:"translate(455 395) scale(1.35)"},s);S.dog=g;
+  const fluffy=id==="shihtzu"||id==="maltese"||id==="poodle";
+  const long=id==="dachs", short=id==="corgi"||id==="dachs";
+  // tail
+  const tail=el("g",{style:"transform-origin:-55px 20px;animation:wag .5s infinite"},g);S.tail=tail;
+  if(id==="husky"||fluffy) el("path",{d:"M-55 20 Q-95 -10 -80 -40",fill:"none",stroke:d.c1,"stroke-width":fluffy?18:14,"stroke-linecap":"round"},tail);
+  else el("path",{d:"M-55 20 Q-85 0 -88 -25",fill:"none",stroke:id==="beagle"?"#ffffff":d.c1,"stroke-width":8,"stroke-linecap":"round"},tail);
+  // body
+  const bw=long?95:68, bh=short?34:42;
+  if(fluffy) fur(g,0,25,48,d.c1,9); else el("ellipse",{cx:0,cy:25,rx:bw,ry:bh,fill:d.c1},g);
+  if(id==="beagle") el("ellipse",{cx:-8,cy:8,rx:46,ry:22,fill:"#3a2a1d"},g);
+  if(id==="corgi"||id==="husky"||id==="collie") el("ellipse",{cx:18,cy:42,rx:40,ry:20,fill:d.c2},g);
+  // legs
+  const ly=short?52:62, lh=short?16:26;
+  [-40,-20,25,45].forEach(x=>el("rect",{x:x-(long?-0:0),y:ly-6,width:14,height:lh,rx:6,fill:fluffy?d.c1:(id==="collie"||id==="husky"?d.c2:d.c1)},g));
+  // the paw that stamps (front right), raised during stamping
+  S.paw=el("g",{style:"transform-origin:55px 60px;transition:transform .25s"},g);
+  el("rect",{x:48,y:ly-6,width:15,height:lh,rx:6,fill:fluffy?d.c1:d.c1},S.paw);
+  // head
+  const hx=62,hy=-22,hg=el("g",{style:"animation:bob 2.2s infinite"},g);S.head=hg;
+  // ears behind
+  if(id==="husky"||id==="corgi"){el("path",{d:`M${hx-26} ${hy-18} L${hx-18} ${hy-56} L${hx-4} ${hy-24} Z`,fill:d.c1},hg);el("path",{d:`M${hx+4} ${hy-24} L${hx+18} ${hy-56} L${hx+26} ${hy-18} Z`,fill:d.c1},hg);}
+  if(id==="collie"){el("path",{d:`M${hx-26} ${hy-16} L${hx-22} ${hy-44} L${hx-6} ${hy-26} Z`,fill:d.c1},hg);el("path",{d:`M${hx+6} ${hy-26} L${hx+22} ${hy-44} L${hx+26} ${hy-16} Z`,fill:d.c1},hg);}
+  if(fluffy) fur(hg,hx,hy,36,d.c1,10); else el("circle",{cx:hx,cy:hy,r:34,fill:d.c1},hg);
+  if(id==="shihtzu"&&d.c2) {el("ellipse",{cx:hx-16,cy:hy-6,rx:14,ry:12,fill:d.c2,opacity:.85},hg);el("ellipse",{cx:hx+16,cy:hy-6,rx:14,ry:12,fill:d.c2,opacity:.85},hg);}
+  if(id==="husky"||id==="collie") el("path",{d:`M${hx-6} ${hy-30} L${hx} ${hy+10} L${hx+6} ${hy-30} Z`,fill:d.c2},hg);
+  if(id==="pug") el("ellipse",{cx:hx,cy:hy+10,rx:20,ry:16,fill:"#2a2a2a"},hg);
+  // floppy ears
+  const earC=id==="beagle"?"#7a4a22":(id==="shihtzu"&&d.c2?d.c2:(id==="lab"||id==="dachs"?d.c2:d.c1));
+  if(fluffy){fur(hg,hx-34,hy+10,16,id==="shihtzu"?earC:d.c1,6);fur(hg,hx+34,hy+10,16,id==="shihtzu"?earC:d.c1,6);}
+  else if(id==="beagle"||id==="lab"||id==="dachs"){el("ellipse",{cx:hx-32,cy:hy+8,rx:11,ry:24,fill:earC},hg);el("ellipse",{cx:hx+32,cy:hy+8,rx:11,ry:24,fill:earC},hg);}
+  else if(id==="pug"){el("path",{d:`M${hx-30} ${hy-20} q-6 14 6 14z`,fill:"#2a2a2a"},hg);el("path",{d:`M${hx+30} ${hy-20} q6 14 -6 14z`,fill:"#2a2a2a"},hg);}
+  // eyes, nose, mouth, tongue
+  const eyeC=id==="husky"?"#4fa3ff":"#1a1a1a";
+  if(id==="pug"){el("circle",{cx:hx-12,cy:hy-4,r:8,fill:"#fff"},hg);el("circle",{cx:hx+12,cy:hy-4,r:8,fill:"#fff"},hg);}
+  el("circle",{cx:hx-12,cy:hy-4,r:5,fill:eyeC},hg);el("circle",{cx:hx+12,cy:hy-4,r:5,fill:eyeC},hg);
+  el("circle",{cx:hx-10,cy:hy-6,r:1.6,fill:"#fff"},hg);el("circle",{cx:hx+14,cy:hy-6,r:1.6,fill:"#fff"},hg);
+  const snout=id==="pug"||id==="shihtzu"?6:12;
+  if(!fluffy&&id!=="pug") el("ellipse",{cx:hx,cy:hy+12,rx:14,ry:10+snout/3,fill:id==="lab"&&d.c1==="#2b2b2b"?"#3a3a3a":(id==="beagle"||id==="husky"||id==="collie"?"#ffffff":d.c1)},hg);
+  el("ellipse",{cx:hx,cy:hy+6+snout/2,rx:6,ry:4.5,fill:"#111"},hg);
+  S.tongue=el("ellipse",{cx:hx,cy:hy+20+snout/2,rx:5,ry:7,fill:"#ff7a8a",opacity:0},hg);
+  el("path",{d:`M${hx-7} ${hy+13+snout/2} q7 6 14 0`,fill:"none",stroke:"#111","stroke-width":2},hg);
+  // top-knot bow (Shih Tzu, Maltese)
+  if(id==="shihtzu"||id==="maltese"){el("path",{d:`M${hx-14} ${hy-40} l14 8 l-14 8 z M${hx+14} ${hy-40} l-14 8 l14 8 z`,fill:d.bow},hg);el("circle",{cx:hx,cy:hy-32,r:4,fill:d.bow},hg);}
+  if(id==="poodle") fur(hg,hx,hy-34,14,d.c1,7);
+  // name tag
+  el("circle",{cx:hx,cy:hy+36,r:7,fill:"#d9b44a",stroke:"#8a6d1e"},hg);
+}
+function setRadio(){
+  if(!S.freq)return;
+  S.freq.textContent=Q?Q.freqTxt:"--.---.--";
+  S.bandMode.textContent=Q?(Q.band+"  CW"):"";
+  meter(0);txrx("");
+}
+function meter(sv){if(!S.meter)return;S.meter.forEach((m,i)=>m.setAttribute("fill",i<sv?(i<6?"#3fcf8e":(i<8?"#f6b93b":"#ff6b6b")):"#1d3b2f"));}
+function txrx(t){if(S.txrx){S.txrx.textContent=t;S.txrx.setAttribute("fill",t==="TX"?"#ff6b6b":"#7dffb6");}}
+function talking(on,text){
+  if(S.mouth)S.mouth.style.animation=on?"talk .25s infinite":"";
+  if(S.keyLever)S.keyLever.style.animation=on?"key .18s infinite":"";
+  if(S.bubble){S.bubble.setAttribute("opacity",on&&text?1:0);if(text)S.bubbleT.textContent=text;}
+}
+
+// ---------------- sound ----------------
+let AC=null, master=null, soundOn=LS.get("sound",true), voiceOn=LS.get("voice",false), oursOn=LS.get("ours",true), tone=LS.get("tone",650);
+function ac(){if(!AC){AC=new (window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=soundOn?.5:0;master.connect(AC.destination);}if(AC.state==="suspended"&&!paused)AC.resume();return AC;}
+const MORSE={A:".-",B:"-...",C:"-.-.",D:"-..",E:".",F:"..-.",G:"--.",H:"....",I:"..",J:".---",K:"-.-",L:".-..",M:"--",N:"-.",O:"---",P:".--.",Q:"--.-",R:".-.",S:"...",T:"-",U:"..-",V:"...-",W:".--",X:"-..-",Y:"-.--",Z:"--..",
+  "0":"-----","1":".----","2":"..---","3":"...--","4":"....-","5":".....","6":"-....","7":"--...","8":"---..","9":"----.","/":"-..-.","?":"..--..",".":".-.-.-",",":"--..--","=":"-...-"};
+// Schedules text as CW starting at t; returns the end time. Farnsworth: characters at wpm, gaps stretched to eff.
+function cw(text,t,f,wpm,eff,vol){
+  const a=ac(),dit=1.2/wpm,fs=eff<wpm?((60/eff)-(31*dit))/19:dit; // Farnsworth gap unit
+  const o=a.createOscillator(),g=a.createGain();o.frequency.value=f;o.type="sine";g.gain.value=0;o.connect(g);g.connect(master);
+  const v=vol||.6,r=.005;let tt=t;
+  for(const w of text.trim().split(/\s+/)){
+    for(const ch of w.toUpperCase()){const m=MORSE[ch];if(!m)continue;
+      for(const s of m){const d=s==="."?dit:3*dit;g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime(v,tt+r);g.gain.setValueAtTime(v,tt+d-r);g.gain.linearRampToValueAtTime(0,tt+d);tt+=d+dit;}
+      tt+=3*fs-dit;}
+    tt+=7*fs-3*fs;}
+  o.start(t);o.stop(tt+.05);return tt;
+}
+function noiseBurst(t,dur,f0,f1,q,vol){const a=ac(),n=a.createBufferSource(),b=a.createBuffer(1,Math.ceil(a.sampleRate*dur),a.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;n.buffer=b;
+  const bp=a.createBiquadFilter();bp.type="bandpass";bp.Q.value=q;bp.frequency.setValueAtTime(f0,t);bp.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  const g=a.createGain();g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);n.connect(bp);bp.connect(g);g.connect(master);n.start(t);}
+function bark(kind){if(!soundOn)return;const a=ac(),t=a.currentTime+.01,small=dog&&(dog.breed.id==="shihtzu"||dog.breed.id==="maltese"||dog.breed.id==="pug"),p=small?1.6:1;
+  const one=(tt,f)=>{const o=a.createOscillator(),g=a.createGain();o.type="sawtooth";o.frequency.setValueAtTime(f*p,tt);o.frequency.exponentialRampToValueAtTime(f*p*.55,tt+.12);g.gain.setValueAtTime(.0001,tt);g.gain.exponentialRampToValueAtTime(.35,tt+.015);g.gain.exponentialRampToValueAtTime(.001,tt+.14);
+    const lp=a.createBiquadFilter();lp.type="lowpass";lp.frequency.value=1800*p;o.connect(lp);lp.connect(g);g.connect(master);o.start(tt);o.stop(tt+.16);noiseBurst(tt,.1,1500*p,600*p,2,.15);};
+  if(kind==="sad"){const o=a.createOscillator(),g=a.createGain();o.type="triangle";o.frequency.setValueAtTime(900*p,t);o.frequency.exponentialRampToValueAtTime(500*p,t+.5);g.gain.setValueAtTime(.2,t);g.gain.exponentialRampToValueAtTime(.001,t+.55);o.connect(g);g.connect(master);o.start(t);o.stop(t+.6);return;}
+  one(t,420);if(kind==="happy"){one(t+.2,460);}}
+function thunk(){if(!soundOn)return;const a=ac(),t=a.currentTime+.01,o=a.createOscillator(),g=a.createGain();o.frequency.setValueAtTime(140,t);o.frequency.exponentialRampToValueAtTime(50,t+.15);g.gain.setValueAtTime(.7,t);g.gain.exponentialRampToValueAtTime(.001,t+.18);o.connect(g);g.connect(master);o.start(t);o.stop(t+.2);noiseBurst(t,.06,900,300,1,.3);}
+function clank(){if(!soundOn)return;const a=ac(),t=a.currentTime+.01;[1240,1870,2610].forEach((f,i)=>{const o=a.createOscillator(),g=a.createGain();o.frequency.value=f;g.gain.setValueAtTime(.18/(i+1),t);g.gain.exponentialRampToValueAtTime(.001,t+.5);o.connect(g);g.connect(master);o.start(t);o.stop(t+.55);});noiseBurst(t,.05,3000,1500,1,.2);}
+function whoosh(){if(soundOn)noiseBurst(ac().currentTime+.01,.5,400,3000,.8,.25);}
+function say(text,who){if(!voiceOn||!window.speechSynthesis)return;try{const u=new SpeechSynthesisUtterance(text);u.rate=1.05;u.pitch=who==="dog"?1.7:(human&&human.yl?1.25:.85);speechSynthesis.speak(u);}catch(e){}}
+
+// ---------------- calls, names, QTHs ----------------
+let logCalls=[], myCall="K0DOG";
+const PFX_US=["K","W","N","A"], DX=["G","F","DL","EA","I","JA","VK","ZL","VE","PY","LU","ON","PA","OH","SM","LA","OK","SP","HA","YO","UA","EI","CT","ZS"];
+const NAMES=["AL","BOB","JIM","TOM","SUE","ANN","KEN","JOE","DAN","PAT","RAY","LEE","EVA","IAN","GUS","HAL","MAX","ROY","ZOE","TED","VIC","LOU","NED","JAN"];
+const QTHS=["OHIO","TEXAS","MAINE","IOWA","UTAH","IDAHO","OREGON","KANSAS","NEVADA","ALASKA","HAWAII","IN","IL","MI","FL","NY","CA","CO","GA","TN","KY"];
+function L(n){let s="";for(let i=0;i<n;i++)s+=String.fromCharCode(65+rnd(26));return s;}
+function randomCall(){
+  if(logCalls.length&&Math.random()<.55)return pick(logCalls);
+  if(Math.random()<.22){const p=pick(DX);return p+rnd(10)+L(rnd(2)+2);}
+  let p=pick(PFX_US);if(p==="A")p="A"+"ABCDEFGHIJKL"[rnd(12)];         // US calls starting with A: AA-AL
+  const k=p.length>1?rnd(2)*2:rnd(4);
+  if(k===0)return p+rnd(10)+L(3);
+  if(k===1)return p+L(1)+rnd(10)+L(2);
+  if(k===2)return p+rnd(10)+L(2);
+  return p+L(1)+rnd(10)+L(3);
+}
+const BANDS=[["160m",1810,1840],["80m",3520,3580],["40m",7020,7060],["30m",10105,10125],["20m",14020,14070],["17m",18070,18095],["15m",21020,21070],["12m",24895,24915],["10m",28020,28070]];
+BANDS.forEach(b=>{const o=document.createElement("option");o.value=b[0];o.textContent=b[0];$("fBand").appendChild(o);});
+function cutRst(r){return r.replace(/9/g,"N").replace(/0/g,"T");}
+
+// ---------------- one QSO ----------------
+let Q=null, qsoToken=0, paused=false, sent=0, pts=0, streak=0, best=LS.get("best",0), album=[], albumWhere="browser", pending=[];
+function newQso(){
+  const b=pick(BANDS),f=b[1]+rnd(b[2]-b[1])+rnd(10)/10;
+  const s=4+rnd(6), rst=(Math.random()<.85?5:4)+""+s+(Math.random()<.9?9:8);
+  const hz=Math.round(f*1000),freqTxt=`${Math.floor(hz/1e6)}.${String(Math.floor(hz/1000)%1000).padStart(3,"0")}.${String(Math.floor(hz/10)%100).padStart(2,"0")}`;
+  Q={call:randomCall(),name:pick(NAMES),qth:pick(QTHS),band:b[0],freqTxt,rst,their:"5"+(4+rnd(6))+"9",s,tries:0,hints:0,started:Date.now()};
+  ["fCall","fName","fRst"].forEach(i=>{$(i).value="";$(i).className="";});$("fBand").value="";$("fBand").className="";
+  ["xCall","xName","xRst","xBand"].forEach(i=>$(i).textContent="");
+  const n=new Date();$("fDate").textContent=n.toISOString().slice(0,10);$("fUtc").textContent=n.toISOString().slice(11,16)+"Z";
+  $("cardFrom").textContent=myCall;$("stamp").classList.remove("on");$("card").classList.remove("fly");$("card").style.opacity="";
+  $("bSend").disabled=false;msg("A new QSO. Listen…");setRadio();
+  playQso();
+}
+function script(){
+  const c=Q.call,m=myCall,lv=LEVELS[level];
+  if(lv.style==="contest") return [["them",`CQ TEST ${c} ${c}`],["us",`${m}`],["them",`${m} ${cutRst(Q.their)} ${pick(["IN","OH","TX","5"])}`],["us",`TU ${cutRst(Q.rst)} IN`],["them",`TU ${c}`]];
+  if(lv.style==="short") return [["them",`CQ CQ DE ${c} ${c} K`],["us",`${c} DE ${m} K`],["them",`${m} DE ${c} GM UR ${Q.their} NAME ${Q.name} K`],["us",`R TNX ${Q.name} UR RST ${Q.rst} ${Q.rst} NAME ${human.name} 73 ${c} DE ${m} K`],["them",`TNX 73 SK`]];
+  return [["them",`CQ CQ CQ DE ${c} ${c} K`],["us",`${c} DE ${m} ${m} K`],["them",`${m} DE ${c} GE TNX FER CALL UR RST ${Q.their} ${Q.their} NAME ${Q.name} ${Q.name} QTH ${Q.qth} HW? ${m} DE ${c} K`],
+    ["us",`${c} DE ${m} R FB ${Q.name} UR RST ${Q.rst} ${Q.rst} NAME ${human.name} ${human.name} QTH ${pick(["IN","OH","IL","MI","KY"])} HW? ${c} DE ${m} K`],["them",`R TNX ${human.name} FB QSO 73 ES GL ${m} DE ${c} SK`]];
+}
+async function waitUntil(t,tok){while(tok===qsoToken){if(!paused&&AC&&AC.currentTime>=t)return true;await new Promise(r=>setTimeout(r,40));}return false;}
+async function playQso(){
+  const tok=++qsoToken;ac();
+  const lv=LEVELS[level];let t=AC.currentTime+.6;
+  for(const [who,txt] of script()){
+    if(who==="us"&&!oursOn){continue;}
+    const f=who==="them"?tone:tone-110, vol=who==="them"?.35+Q.s*.04:.45;
+    if(!(await waitUntil(t-.05,tok)))return;
+    if(who==="them"){meter(Q.s);txrx("RX");talking(false);}else{meter(0);txrx("TX");talking(true,txt.length>16?txt.slice(0,14)+"…":txt);}
+    const end=cw(txt,Math.max(t,AC.currentTime+.02),f,lv.wpm,lv.eff,vol);
+    $("copy").textContent=(who==="them"?"◀ ":"▶ ")+"♪ . - . .";
+    if(!(await waitUntil(end,tok)))return;
+    talking(false);meter(0);txrx("");
+    t=end+(who==="them"?.9:.7);
+  }
+  $("copy").textContent="QSO done. Replay it if you need to.";
+}
+function stopQso(){qsoToken++;if(AC){try{master.disconnect();}catch(e){}master=AC.createGain();master.gain.value=soundOn?.5:0;master.connect(AC.destination);}talking(false);meter(0);txrx("");}
+function msg(t,cls){$("msg").textContent=t;$("msg").className=cls||"";}
+
+// ---------------- sending the card ----------------
+function norm(s){return (s||"").toUpperCase().replace(/[^A-Z0-9/]/g,"");}
+function mark(inp,x,ok,right){$(inp).className=ok?"ok":"no";$(x).textContent=ok?"":"was "+right;}
+async function send(){
+  if(!Q||$("bSend").disabled)return;
+  const call=norm($("fCall").value);
+  if(!call){msg("Write the other station's call on the card first.","bad");$("fCall").focus();return;}
+  if(call!==norm(Q.call)){
+    Q.tries++;bark("sad");$("card").classList.remove("shake");void $("card").offsetWidth;$("card").classList.add("shake");$("fCall").className="no";
+    msg(Q.tries<3?"Hmm, that call doesn't sound right. Listen again (🔁) or sniff out a letter (👃).":`It was ${Q.call}. ${dog.name} fixes the card…`,"bad");
+    if(Q.tries<3)return;
+    $("fCall").value=Q.call;
+  }
+  $("bSend").disabled=true;stopQso();
+  let p=Q.tries?2:10;p=Math.max(1,p-Q.hints*3);$("fCall").className="ok";
+  const rstOk=norm($("fRst").value)===Q.rst, bandOk=$("fBand").value===Q.band, nameOk=norm($("fName").value)===Q.name;
+  mark("fRst","xRst",rstOk,Q.rst);mark("fBand","xBand",bandOk,Q.band);
+  if($("fName").value)mark("fName","xName",nameOk,Q.name);
+  if(!rstOk)$("fRst").value=Q.rst;if(!bandOk)$("fBand").value=Q.band;
+  p+=(rstOk?5:0)+(bandOk?5:0)+(nameOk?4:0);
+  const perfect=!Q.tries&&rstOk&&bandOk;
+  streak=perfect?streak+1:0;if(streak>=3)p+=streak;
+  pts+=p;sent++;if(pts>best){best=pts;LS.set("best",best);}
+  stats();
+  msg(perfect?`Woof! Perfect card: +${p}${streak>=3?" (streak "+streak+")":""}`:`Card sent: +${p}. ${!rstOk?"RST was "+Q.rst+". ":""}${!bandOk?"Band was "+Q.band+" (on the radio). ":""}`,perfect?"good":"");
+  // paw goes up, stamp comes down
+  if(S.paw)S.paw.style.transform="translateY(-34px) rotate(-30deg)";bark("happy");
+  await sleep(350);$("stamp").classList.add("on");thunk();if(S.paw)S.paw.style.transform="";
+  if(perfect)say(pick(["Woof! P S E Q S L!","Good copy!","Stamped and sent!"]),"dog");
+  await sleep(700);
+  // the card flies to the mail slot
+  const cr=$("card").getBoundingClientRect(),sr=S.slot.getBoundingClientRect();
+  $("card").style.setProperty("--fx",(sr.left+sr.width/2-(cr.left+cr.width/2))+"px");$("card").style.setProperty("--fy",(sr.top+sr.height/2-(cr.top+cr.height/2))+"px");
+  $("card").classList.add("fly");whoosh();await sleep(900);clank();
+  // sometimes a station answers with its own card
+  if(Math.random()<.45)pending.push({call:Q.call,name:Q.name,qth:Q.qth,band:Q.band,rst:Q.their,date:$("fDate").textContent,due:Date.now()+6000+rnd(12000)});
+  await sleep(500);
+  if(Math.random()<.12){newHuman();drawScene();msg("Shift change: a new operator sits down.");await sleep(900);}
+  newQso();
+}
+function sleep(ms){return new Promise(r=>{const t0=performance.now();const tick=()=>{if(paused){setTimeout(tick,60);return;}if(performance.now()-t0>=ms)r();else setTimeout(tick,30);};tick();});}
+function stats(){$("sSent").textContent=sent;$("sPts").textContent=pts;$("sStreak").textContent=streak;$("sBest").textContent=best;$("sAlb").textContent=album.length;LS.set("run",{sent,pts});}
+
+// ---------------- return QSL cards ----------------
+const SCENES=["mountains","lighthouse","tower","sunset","city","forest","beach","desert","aurora","farm"];
+function qslSVG(c){
+  const W=600,H=380,h=c.hue||0;
+  const sky=`hsl(${(200+h)%360},70%,${c.scene==="aurora"||c.scene==="city"?18:72}%)`;
+  let art="";
+  const g=(s)=>art+=s;
+  switch(c.scene){
+    case "mountains":g(`<path d="M0 300 L120 140 L210 250 L320 110 L460 260 L600 160 L600 380 L0 380Z" fill="hsl(${(120+h)%360},30%,35%)"/><path d="M290 150 L320 110 L350 150 L335 145 L320 160 L305 145Z" fill="#fff"/>`);break;
+    case "lighthouse":g(`<rect y="290" width="600" height="90" fill="hsl(205,70%,40%)"/><path d="M430 290 L450 120 L490 120 L510 290Z" fill="#fff"/><rect x="448" y="160" width="44" height="22" fill="#d33"/><rect x="455" y="225" width="40" height="22" fill="#d33"/><path d="M455 120 L470 100 L485 120Z" fill="#333"/><path d="M470 110 L200 70 L200 150Z" fill="#fff59a" opacity=".5"/>`);break;
+    case "tower":g(`<rect y="300" width="600" height="80" fill="hsl(${(100+h)%360},35%,40%)"/><path d="M300 300 L340 60 L380 300" fill="none" stroke="#555" stroke-width="6"/>${[100,150,200,250].map(y=>`<line x1="${300+(300-y)/6}" y1="${y}" x2="${380-(300-y)/6}" y2="${y}" stroke="#555" stroke-width="4"/>`).join("")}<path d="M290 70 L390 70 M300 55 L380 55 M310 40 L370 40" stroke="#333" stroke-width="5"/>`);break;
+    case "sunset":g(`<rect width="600" height="380" fill="hsl(${(20+h)%360},85%,60%)"/><circle cx="300" cy="280" r="90" fill="#ffd34d"/><rect y="290" width="600" height="90" fill="hsl(${(260+h)%360},40%,30%)"/>`);break;
+    case "city":g(`${[0,60,110,180,240,300,370,430,500,550].map((x,i)=>`<rect x="${x}" y="${150+((i*53)%120)}" width="${50+(i%3)*8}" height="300" fill="hsl(${(220+h)%360},25%,${18+i%3*6}%)"/>`).join("")}<circle cx="520" cy="70" r="26" fill="#f5f1c8"/>`);break;
+    case "forest":g(`<rect y="300" width="600" height="80" fill="hsl(${(90+h)%360},40%,30%)"/>${[40,110,190,260,340,420,500,560].map((x,i)=>`<path d="M${x} ${300} L${x+35} ${120+(i%3)*30} L${x+70} 300Z" fill="hsl(${(130+h)%360},45%,${22+i%3*6}%)"/>`).join("")}`);break;
+    case "beach":g(`<rect y="240" width="600" height="80" fill="hsl(195,75%,45%)"/><rect y="310" width="600" height="70" fill="#f2d79b"/><path d="M120 320 Q130 200 150 170" stroke="#7a4a22" stroke-width="10" fill="none"/><path d="M150 170 q-60 -10 -80 20 M150 170 q50 -20 80 10 M150 170 q-20 -40 -50 -50 M150 170 q30 -40 60 -40" stroke="hsl(120,50%,35%)" stroke-width="10" fill="none"/>`);break;
+    case "desert":g(`<rect width="600" height="380" fill="hsl(${(30+h)%360},70%,75%)"/><path d="M0 290 Q150 240 300 290 T600 280 L600 380 L0 380Z" fill="hsl(35,60%,55%)"/><path d="M420 290 L420 190 M420 230 L390 230 L390 205 M420 215 L450 215 L450 185" stroke="hsl(120,40%,30%)" stroke-width="16" stroke-linecap="round" fill="none"/>`);break;
+    case "aurora":g(`<path d="M0 120 Q150 60 300 120 T600 100 L600 180 Q450 140 300 190 T0 170Z" fill="hsl(${(140+h)%360},80%,55%)" opacity=".6"/><path d="M0 300 L600 300 L600 380 L0 380Z" fill="#0b1520"/>${[50,140,260,400,520].map(x=>`<circle cx="${x}" cy="${40+x%60}" r="2" fill="#fff"/>`).join("")}`);break;
+    default:g(`<rect y="280" width="600" height="100" fill="hsl(${(80+h)%360},45%,45%)"/><rect x="380" y="180" width="110" height="100" fill="#b33"/><path d="M370 185 L435 130 L500 185Z" fill="#7a2a2a"/><circle cx="120" cy="80" r="34" fill="#ffd34d"/>`);
+  }
+  const paw=c.paw==="cat"?pawPath(500,300,.55,"#5a3b8c"):pawPath(500,300,.6,"#7a3b1c");
+  return `<svg viewBox="0 0 ${W} ${H}" xmlns="${NS}"><rect width="${W}" height="${H}" fill="${sky}"/>${art}
+  <rect x="18" y="18" width="${W-36}" height="${H-36}" fill="none" stroke="#fff" stroke-width="4" rx="10" opacity=".8"/>
+  <text x="36" y="92" font-family="Audiowide RD, sans-serif" font-size="66" fill="#fff" stroke="#000" stroke-width="2.5" paint-order="stroke">${esc(c.call)}</text>
+  <rect x="34" y="214" width="380" height="124" rx="8" fill="#fffaf0" opacity=".94"/>
+  <text x="48" y="242" font-family="sans-serif" font-size="16" fill="#1d2a33">To radio <tspan font-weight="700">${esc(c.to||myCall)}</tspan> · ${esc(c.name||"")} ${c.qth?"· "+esc(c.qth):""}</text>
+  <text x="48" y="270" font-family="ui-monospace,Consolas,monospace" font-size="16" fill="#1d2a33">${esc(c.date)}  ${esc(c.band)}  CW  RST ${esc(c.rst)}</text>
+  <text x="48" y="300" font-family="sans-serif" font-size="18" font-weight="700" fill="#a3241a">TNX QSO · 73</text>
+  <text x="48" y="326" font-family="sans-serif" font-size="13" fill="#57656e">signed by ${esc(c.pet||"")}, the station ${c.paw==="cat"?"cat":"dog"}</text>
+  ${paw}</svg>`;
+}
+function pawPath(x,y,s,c){return `<g transform="translate(${x} ${y}) scale(${s})" fill="${c}" opacity=".85"><ellipse cx="0" cy="20" rx="34" ry="28"/><ellipse cx="-38" cy="-18" rx="13" ry="17"/><ellipse cx="-13" cy="-40" rx="13" ry="18"/><ellipse cx="14" cy="-40" rx="13" ry="18"/><ellipse cx="39" cy="-18" rx="13" ry="17"/></g>`;}
+function stampSVG(){return `<circle cx="60" cy="60" r="54" fill="none" stroke="#c62828" stroke-width="6"/><circle cx="60" cy="60" r="44" fill="none" stroke="#c62828" stroke-width="2"/>
+  <text x="60" y="38" text-anchor="middle" font-family="Audiowide RD, sans-serif" font-size="17" fill="#c62828">PSE QSL</text>
+  ${pawPath(60,80,.48,"#c62828")}`;}
+$("stamp").innerHTML=stampSVG();
+setInterval(()=>{if(paused||!pending.length)return;const i=pending.findIndex(p=>p.due<=Date.now());if(i<0)return;const p=pending.splice(i,1)[0];receive(p);},1000);
+async function receive(p){
+  const card=Object.assign({},p,{to:myCall,scene:pick(SCENES),hue:rnd(360),paw:Math.random()<.4?"cat":"dog",pet:pick(["Whiskers","Mittens","Luna","Shadow","Tiger","Rex","Buddy","Duke","Pepper","Ginger","Smokey","Lucky"]),at:Date.now()});
+  delete card.due;
+  if(S.mail){S.mail.setAttribute("opacity",1);S.mail.style.animation="drop .7s forwards";}clank();bark("happy");
+  msg(`📬 Mail! ${card.call} sent a QSL card back. It's in your album.`,"good");say("Mail! A Q S L card from "+card.call.split("").join(" "),"dog");
+  await saveCard(card);
+  setTimeout(()=>{if(S.mail){S.mail.setAttribute("opacity",0);S.mail.style.animation="";}},2600);
+  showBig(card);
+}
+function showBig(c){const o=$("bigCard");o.innerHTML=qslSVG(c)+`<div style="position:absolute;bottom:18px;left:0;right:0;text-align:center"><button class="pri">OK</button></div>`;o.hidden=false;pause(true);o.onclick=()=>{o.hidden=true;if($("album").hidden)pause(false);};}
+
+// ---------------- album: on the RigDeck's microSD card, else in this browser ----------------
+const onBoard=location.protocol==="http:"&&!/^(localhost|127\.)/.test(location.hostname)||location.search.includes("board");
+async function loadAlbum(){
+  if(onBoard){try{const r=await fetch("/api/album",{cache:"no-store"});if(r.ok){const j=await r.json();album=j.cards||[];albumWhere=j.sd?"kept on the RigDeck's microSD card":`kept in the RigDeck's memory (no microSD card: only the last ${j.max} cards, lost at restart)`;stats();return;}}catch(e){}}
+  album=LS.get("album",[]);albumWhere="kept in this browser";stats();
+}
+async function saveCard(c){
+  album.push(c);stats();
+  if(onBoard){try{const r=await fetch("/api/album",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(c)});if(r.ok)return;}catch(e){}}
+  album=album.slice(-60);LS.set("album",album);
+}
+function openAlbum(){
+  pause(true);const g=$("albumGrid");g.innerHTML="";
+  album.slice().reverse().forEach(c=>{const d=document.createElement("div");d.innerHTML=qslSVG(c);d.firstChild.onclick=()=>{const o=$("bigCard");o.innerHTML=qslSVG(c);o.hidden=false;o.onclick=()=>{o.hidden=true;};};g.appendChild(d);});
+  $("albEmpty").hidden=album.length>0;$("albWhere").textContent=albumWhere;$("album").hidden=false;
+}
+$("bAlbum").onclick=openAlbum;$("albClose").onclick=()=>{$("album").hidden=true;pause(false);};
+
+// ---------------- pause ----------------
+function pause(on){paused=on;if(AC){if(on)AC.suspend();else AC.resume();}if(on&&window.speechSynthesis)speechSynthesis.pause();else if(window.speechSynthesis)speechSynthesis.resume();}
+
+// ---------------- controls ----------------
+$("bSend").onclick=send;
+$("bReplay").onclick=()=>{if(!Q)return;stopQso();playQso();};
+$("bHint").onclick=()=>{if(!Q)return;const cur=norm($("fCall").value),c=norm(Q.call);let i=0;while(i<cur.length&&cur[i]===c[i])i++;if(i>=c.length)return;
+  $("fCall").value=c.slice(0,i+1);Q.hints++;bark();msg(`${dog.name} sniffs… the call starts with ${c.slice(0,i+1)}`);};
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&$("splash").hidden&&$("album").hidden&&$("bigCard").hidden){e.preventDefault();send();}
+  if(e.key==="Escape"){if(!$("bigCard").hidden){$("bigCard").hidden=true;if($("album").hidden)pause(false);}else if(!$("album").hidden){$("album").hidden=true;pause(false);}else if(!$("menu").hidden){$("menu").hidden=true;pause(false);}}});
+["fCall","fName","fRst"].forEach(i=>$(i).addEventListener("input",()=>{const e=$(i),p=e.selectionStart;e.value=e.value.toUpperCase();e.setSelectionRange(p,p);e.className="";}));
+$("bSound").onclick=()=>{soundOn=!soundOn;LS.set("sound",soundOn);$("bSound").textContent=soundOn?"🔊":"🔇";if(master)master.gain.value=soundOn?.5:0;};
+$("bSound").textContent=soundOn?"🔊":"🔇";
+function levelButtons(box){box.innerHTML="";for(const k in LEVELS){const b=document.createElement("button");b.innerHTML=`<b>${LEVELS[k].name}</b><br><span class="hint">${LEVELS[k].wpm} wpm · ${LEVELS[k].desc}</span>`;if(k===level)b.className="sel";
+  b.onclick=()=>{level=k;LS.set("level",k);levelButtons($("levels"));levelButtons($("levels2"));};box.appendChild(b);}}
+levelButtons($("levels"));levelButtons($("levels2"));
+$("bMenu").onclick=()=>{pause(true);$("optVoice").checked=voiceOn;$("optOurs").checked=oursOn;$("optTone").value=tone;$("menu").hidden=false;};
+$("mClose").onclick=()=>{voiceOn=$("optVoice").checked;oursOn=$("optOurs").checked;tone=Math.max(400,Math.min(900,+$("optTone").value||650));LS.set("voice",voiceOn);LS.set("ours",oursOn);LS.set("tone",tone);$("menu").hidden=true;pause(false);};
+$("mDog").onclick=()=>{newDog();say("Hi! I'm "+dog.name,"dog");};
+$("bStart").onclick=()=>{ac();$("splash").hidden=true;say(`Hi! I'm ${dog.name} the ${dog.breed.name}. Let's fill out Q S L cards!`,"dog");newQso();$("fCall").focus();};
+
+// ---------------- start ----------------
+(async()=>{
+  const img=$("splashImg");img.onload=()=>{img.hidden=false;$("splashTitle").hidden=true;};img.src="k0dog.jpg";
+  if(onBoard){
+    try{const j=await (await fetch("/api/state?cfg=1",{cache:"no-store"})).json();if(j.cfg&&j.cfg.call)myCall=String(j.cfg.call).toUpperCase();}catch(e){}
+    try{const r=await fetch("/api/cmd",{method:"POST",body:new URLSearchParams({c:"logread",file:"all",from:0,n:200})});const j=await r.json();
+      const set=new Set();(j.items||[]).forEach(it=>{const c=(it.f&&(it.f.CALL||it.f.call))||"";if(/^[A-Z0-9/]{3,12}$/i.test(c))set.add(c.toUpperCase());});logCalls=[...set].filter(c=>c!==myCall);}catch(e){}
+  }
+  $("splashNote").textContent=logCalls.length?`${logCalls.length} calls from your log will show up on the air.`:"";
+  newHuman();newDog();await loadAlbum();
+  stats();
+})();
+</script>
+</body>
+</html>
