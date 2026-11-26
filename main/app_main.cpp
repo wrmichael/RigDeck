@@ -31,6 +31,7 @@ static int64_t monoMs() { return esp_timer_get_time() / 1000; }
 
 // The chip keeps its own clock (system time) across restarts, and across power-off when the board's
 // backup cell holds the RTC domain up. Every sync is copied into it; at boot it is read back.
+static const char* kResetName = "?";                 // why this start happened (for the crash report)
 static void rtcSink(int64_t utcMs) {
     struct timeval tv = {(time_t)(utcMs / 1000), (suseconds_t)((utcMs % 1000) * 1000)};
     settimeofday(&tv, nullptr);
@@ -203,9 +204,20 @@ extern "C" void app_main(void) {
                                              "task watchdog", "other watchdog", "deep sleep", "brownout", "SDIO", "USB", "JTAG",
                                              "eFuse", "power glitch", "CPU lockup"};
         int r = (int)esp_reset_reason();
-        ESP_LOGI(TAG, "started after: %s (%d)", r >= 0 && r < (int)(sizeof kReset / sizeof kReset[0]) ? kReset[r] : "?", r);
+        kResetName = r >= 0 && r < (int)(sizeof kReset / sizeof kReset[0]) ? kReset[r] : "?";
+        ESP_LOGI(TAG, "started after: %s (%d)", kResetName, r);
         static char crash[420];
-        if (crashinfo_take(crash, sizeof crash)) ESP_LOGE(TAG, "last crash: %s", crash);
+        if (crashinfo_take(crash, sizeof crash)) {
+            ESP_LOGE(TAG, "last crash: %s", crash);
+            // Lines from before the clock is known go into the undated console file; say it again once the clock
+            // is set, so the dated console log (the one usually downloaded) has it too.
+            if (!clk::valid())
+                xTaskCreate([](void*) {
+                    for (int i = 0; i < 300 && !clk::valid(); i++) vTaskDelay(pdMS_TO_TICKS(1000));
+                    ESP_LOGE(TAG, "last crash (before this start, %s): %s", kResetName, crash);
+                    vTaskDelete(nullptr);
+                }, "crashlog", 3072, nullptr, 1, nullptr);
+        }
     }
 
     net_start(s_app);

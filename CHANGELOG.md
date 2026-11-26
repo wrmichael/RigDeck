@@ -1,5 +1,9 @@
 # Changes
 
+## 1.1.10-beta
+- The crash report is repeated once the clock is set, so it is also in the dated console log (lines from before
+  the clock is known go to the undated console file).
+
 ## 1.1.9-beta
 - **Crash report in the console log**: after a crash, the next start logs "last crash:" with what failed (the
   failed check with file and line, abort or exception address), so it shows in the console log downloaded from
