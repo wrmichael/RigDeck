@@ -221,7 +221,7 @@ Radios and interfaces:
 | Radio / interface | How it connects | Status |
 |---|---|---|
 | IC-7100, IC-705, QMX / QMX+ | one USB cable | tested on the air |
-| FTX-1 | one USB cable | CAT works; FT8 audio being tested |
+| FTX-1 | one USB cable | works (CAT, FT8 transmit, switching radios on the fly) |
 | IC-7300, IC-7610, IC-9700, IC-905 | one USB cable (CI-V + sound card) | should work, untested |
 | FTDX10, FT-991A, FT-710, FTDX101 | one USB cable (CAT at the radio's rate + sound card) | should work, untested |
 | TS-2000, TS-480, TS-590, K2, K3 | Digirig with the radio's CAT cable (or a CP2102 / CH340 USB-RS232 cable + sound card on a hub) | should work, untested |
