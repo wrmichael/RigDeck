@@ -2,6 +2,7 @@
 #include <atomic>
 // RigDeck - ESP-IDF entry point.
 #include "platform.h"
+#include "peers_net.h"
 #include "ui.h"
 #include "clock.h"
 #include "freertos/FreeRTOS.h"
