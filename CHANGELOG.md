@@ -8,6 +8,11 @@
   only with Enable TX on. Incoming connections are answered only with Enable TX on. Settings: packet call-SSID,
   packet frequency, incoming connections, KISS port. The demodulator now also passes the shortest control
   frames (17 bytes).
+- **Packet BBS** on the microSD card (Settings, APRS: Packet BBS on): a small mailbox on its own call-SSID
+  (default the packet call with -1), up to 3 users at once over AX.25 connected mode, with the classic commands
+  (L, LM, LB, R n, RM, S call, SB ALL, K n, I, J, B, ?). Personal mail and bulletins, kept one file per message
+  in RigDeck/bbs. It answers only in APRS mode with Enable TX on. The Packet tab shows the BBS: who is connected,
+  the messages, read, kill and post as the sysop.
 - **K0DOG**, the QSL-card dog game, in the CW trainer (button in Audiowide, opens /k0dog): copy the call, RST and
   band from a CW QSO between your operator and a station on the air, fill out the QSL card and the dog stamps it
   "PSE QSL" with its paw and sends it out the mail slot. Random dogs (mostly Shih Tzu and Maltese), random OM/YL

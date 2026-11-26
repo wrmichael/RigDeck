@@ -378,6 +378,14 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
   <li><b>Monitor</b>: every packet heard and sent, TNC style, APRS hidden if you tick the box.</li>
   <li><b>KISS TNC</b>: PC programs (Winlink Express, Pat, YAAC, APRSIS32, Linux AX.25 …) connect over the network to <b>TCP port 8001</b> at the RigDeck's address and use it as their TNC. What they send goes out only while <b>Enable TX</b> is on. Works on the hotspot and on the home network.</li>
   <li>Your packet call-SSID is your callsign unless you set one in Settings, APRS.</li>
+  <li><b>BBS</b> (needs a microSD card): turn on <b>Packet BBS</b> in Settings, APRS and your RigDeck becomes a small mailbox on its own call-SSID (your packet call with <b>-1</b>, e.g. AC9HP-1, unless you set another). It answers while the mode is APRS and <b>Enable TX</b> is on, up to 3 stations at once. Messages are kept on the card (RigDeck/bbs), one file each, and survive restarts.
+    <ul>
+      <li>Users type <b>?</b> for help, <b>L</b> (list), <b>LM</b> (their own), <b>LB</b> (bulletins), <b>R n</b> (read), <b>RM</b> (read new mail), <b>S call</b> (send; a Subject line, then the text, then <b>/EX</b> on a line by itself), <b>SB ALL</b> (bulletin), <b>K n</b> (kill their own), <b>I</b>, <b>J</b> (stations heard), <b>B</b> (bye).</li>
+      <li>Personal mail is shown only to the sender and the addressee; bulletins (to ALL, QST, CQ) to everyone.</li>
+      <li>On the Packet tab, the BBS box shows who is connected and every message; read, kill or post one yourself as the sysop.</li>
+      <li>Up to 500 messages: when it is full, the oldest bulletins and read mail make room.</li>
+    </ul>
+  </li>
 </ul>
 
 <h2 id="multi">All stations in one window <span class="pill">BETA</span></h2>

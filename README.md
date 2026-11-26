@@ -13,7 +13,7 @@ port with one cable and it:
 - works **FT8 / FT4** contacts on its own (Auto CQ, Auto hunt) or by hand, with a live waterfall;
 - runs **FT-CW**, FT8-style automatic contacts sent as high-speed Morse, and **PSK31**;
 - runs **packet radio** on 2 m FM: a connected-mode terminal for BBSs and nodes, a monitor, and a KISS TNC over
-  Wi-Fi for Winlink Express and other programs;
+  Wi-Fi for Winlink Express and other programs, and can be a small packet BBS (mailbox) on its microSD card;
 - runs **APRS** on 2 m FM: stations heard on a map (built in, or a detailed one with counties and highways
   fetched from GitHub onto the microSD card), messages and position beacons;
 - logs **SSB / CW** contacts by hand, with CW macros sent through the radio's keyer;

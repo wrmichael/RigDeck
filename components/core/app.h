@@ -21,6 +21,7 @@
 #include "cwx.h"
 #include "aprs.h"
 #include "ax25.h"
+#include "bbs.h"
 
 enum DigiMode { DM_FT8 = 0, DM_FT4 = 1, DM_PSK31 = 2, DM_CW = 3, DM_APRS = 4 };   // DM_CW = "FT-CW": FT8-style contacts in Morse (cwx.h)
 
@@ -264,6 +265,14 @@ private:
     void pktTerm(const std::string& s);
     void pktTick(int64_t mono);
     std::string pktJson(uint32_t monSince, uint32_t termSince);
+    // ---- packet BBS on the microSD card (RigDeck/bbs), on its own call-SSID
+    bbs::Bbs bbs_;
+    bool bbsLoaded_ = false;
+    std::map<std::string, int64_t> pktHeard_;          // call -> UTC ms, for the BBS's J command
+    std::string bbsMyCall() const;
+    bool bbsActive() const { return cfg.bbsOn && logOnSd_; }
+    void bbsTick(int64_t mono);
+    std::string bbsJson();
     double gpsLat_ = 0, gpsLon_ = 0;
     int64_t gpsPosMono_ = 0, radioGpsMono_ = 0;
     const char* volatile gpsSrc_ = "GPS";          // where the last position came from (a string constant: set from the USB threads)

@@ -68,6 +68,8 @@ struct Settings {
     long long pktFreq = 145010000;       // packet frequency the terminal tunes to (BBS, nodes)
     int pktAccept = 1;                   // take incoming connections (keyboard to keyboard)
     int kissPort = 8001;                 // KISS TNC on TCP for PC programs (0 = off)
+    int bbsOn = 0;                       // packet BBS (mailbox) on the microSD card, answering on bbsCall
+    std::string bbsCall;                 // BBS call-SSID (empty = the packet call with -1)
     long long aprsFreq = 144390000;      // North America; 144.800 in Europe
     int aprsBeaconMin = 10;              // position beacon interval while TX is enabled (0 = no beacons)
     std::string aprsSym = "/-";          // symbol table and code: /- house, /> car, /[ person, /k truck

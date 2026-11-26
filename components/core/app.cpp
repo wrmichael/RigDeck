@@ -1186,6 +1186,8 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
         ax25::Frame g;
         if (!ax25::decodeFcs(b.data(), b.size(), g)) continue;
         pktMon(ax25::monitor(g));
+        { std::string h = upperTrim(g.src); pktHeard_[h] = clk::utcMs(); if (pktHeard_.size() > 40) { auto o = pktHeard_.begin(); for (auto it = pktHeard_.begin(); it != pktHeard_.end(); ++it) if (it->second < o->second) o = it; pktHeard_.erase(o); } }
+        if (bbsActive()) { if (!bbsLoaded_) bbsTick(mono); bbs_.onFrame(g, mono); }
         if (kissClients.load() > 0) { std::lock_guard<std::mutex> lk(kissMtx_); if (kissRx_.size() < 50) kissRx_.emplace_back(b.begin(), b.end() - 2); }
         pkt_.onFrame(g, mono);
         aprs::Frame f;
@@ -1303,7 +1305,63 @@ void App::pktTick(int64_t mono) {                                    // mtx_ hel
         pktOut_.push_back(w);
         pktMon("TX " + ax25::monitor(g) + "  (KISS)");
     }
+    bbsTick(mono);
     while (pktOut_.size() > 40) pktOut_.erase(pktOut_.begin());
+}
+
+// The BBS answers on its own call-SSID (default: the packet call with -1), keeps messages on the microSD card,
+// and sends only while TX is enabled; with TX off nobody can connect (it does not answer at all).
+std::string App::bbsMyCall() const {
+    if (!cfg.bbsCall.empty()) return cfg.bbsCall;
+    std::string p = pktMyCall(), b = p.substr(0, p.find('-'));
+    return b + (p == b + "-1" ? "-2" : "-1");
+}
+void App::bbsTick(int64_t mono) {                                     // mtx_ held
+    if (!bbsActive() || bbsMyCall() == pktMyCall()) {
+        if (bbsLoaded_) logLine("BBS: off");
+        bbsLoaded_ = false;
+        bbs_.dir.clear();
+        return;
+    }
+    bbs_.call = bbsMyCall();
+    bbs_.sysop = upperTrim(cfg.call);
+    bbs_.maxUsers = seq.txEnabled ? 3 : 0;
+    if (!bbsLoaded_) {
+        bbs_.dir = logDir_ + "/bbs";
+        bbs_.utcMs = [] { return clk::utcMs(); };
+        bbs_.heard = [this] {
+            std::vector<std::pair<int64_t, std::string>> v;
+            for (const auto& h : pktHeard_) v.push_back({h.second, h.first});
+            std::sort(v.rbegin(), v.rend());
+            std::string o;
+            for (size_t i = 0; i < v.size() && i < 20; i++) {
+                time_t t = (time_t)(v[i].first / 1000);
+                struct tm tm;
+                gmtime_r(&t, &tm);
+                char b[40];
+                snprintf(b, sizeof b, "%-10s %02d:%02dZ\n", v[i].second.c_str(), tm.tm_hour, tm.tm_min);
+                o += b;
+            }
+            return o;
+        };
+        bbs_.load();
+        bbsLoaded_ = true;
+        logLine("BBS: " + bbs_.call + " on, " + std::to_string(bbs_.msgs().size()) + " messages in " + bbs_.dir);
+    }
+    bbs_.tick(mono);
+    for (auto& f : bbs_.takeOut()) {
+        if (!seq.txEnabled) continue;
+        pktOut_.push_back(ax25::encodeFcs(f));
+        pktMon("TX " + ax25::monitor(f) + "  (BBS)");
+    }
+    for (auto& l : bbs_.takeLog()) { pktMon("BBS: " + l); logLine("BBS: " + l); }
+}
+std::string App::bbsJson() {                                          // mtx_ held
+    std::string note = !cfg.bbsOn ? "off" : !logOnSd_ ? "needs a microSD card" : bbsMyCall() == pktMyCall() ? "BBS call must differ from the packet call" : "";
+    std::string o = std::string("{\"on\":") + jbool(bbsActive() && note.empty()) + ",\"call\":" + jstr(bbsMyCall()) + ",\"note\":" + jstr(note) + ",\"count\":" + jnum((long long)bbs_.msgs().size()) + ",\"users\":[";
+    bool first = true;
+    for (const auto& u : bbs_.users()) { o += std::string(first ? "" : ",") + jstr(u); first = false; }
+    return o + "]}";
 }
 void App::kissFromHost(const std::vector<uint8_t>& frame) {
     std::lock_guard<std::mutex> lk(kissMtx_);
@@ -1327,7 +1385,7 @@ std::string App::pktJson(uint32_t monSince, uint32_t termSince) {    // mtx_ hel
     o += "],\"termN\":" + jnum((long long)pktTermN_) + ",\"term\":[";
     first = true;
     for (const auto& m : pktTerm_) if (m.first > termSince) { o += std::string(first ? "" : ",") + "[" + jnum((long long)m.first) + "," + jstr(m.second) + "]"; first = false; }
-    return o + "]}";
+    return o + "],\"bbs\":" + bbsJson() + "}";
 }
 
 // Every APRS packet heard and sent, one line each, in a daily file next to the logs (microSD card or the board).
@@ -2001,6 +2059,33 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         pktOut_.push_back(ax25::encodeFcs(f));
         pktMon("TX " + ax25::monitor(f));
         pktTerm("s[UI to " + to + "] " + t + "\n");
+        return ok();
+    }
+    // ---- BBS sysop (web page): list, read, post, kill
+    if (c == "bbslist" || c == "bbsread" || c == "bbspost" || c == "bbskill") {
+        if (!bbsActive()) return err(cfg.bbsOn ? "The BBS needs a microSD card" : "The BBS is off (Settings, Packet)");
+        if (!bbsLoaded_) bbsTick(clk::monoMs());
+        if (!bbsLoaded_) return err("The BBS call must differ from the packet call");
+        if (c == "bbslist") {
+            std::string o = "{\"ok\":true,\"msgs\":[";
+            int k = 0;
+            for (auto it = bbs_.msgs().rbegin(); it != bbs_.msgs().rend() && k < 200; ++it, ++k) {
+                const bbs::Msg& m = it->second;
+                o += std::string(k ? "," : "") + "{\"n\":" + jnum(m.n) + ",\"from\":" + jstr(m.from) + ",\"to\":" + jstr(m.to) + ",\"subj\":" + jstr(m.subject) +
+                     ",\"date\":" + jstr(m.date) + ",\"read\":" + jbool(m.read) + ",\"size\":" + jnum((long long)m.body.size()) + "}";
+            }
+            return o + "]}";
+        }
+        int n = atoi(arg(a, "n").c_str());
+        if (c == "bbsread") {
+            auto it = bbs_.msgs().find(n);
+            if (it == bbs_.msgs().end()) return err("No message " + std::to_string(n));
+            return "{\"ok\":true,\"body\":" + jstr(it->second.body) + "}";
+        }
+        if (c == "bbskill") { if (!bbs_.kill(n)) return err("No message " + std::to_string(n)); logLine("BBS: sysop killed message " + std::to_string(n)); return ok(); }
+        std::string e;
+        if (!bbs_.post(upperTrim(cfg.call), arg(a, "to"), arg(a, "subj"), arg(a, "body"), e)) return err(e);
+        for (auto& l : bbs_.takeLog()) { pktMon("BBS: " + l); logLine("BBS: " + l); }
         return ok();
     }
     if (c == "pktdisc") { pkt_.disconnect(clk::monoMs()); pktTick(clk::monoMs()); return ok(); }
