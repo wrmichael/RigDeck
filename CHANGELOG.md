@@ -1,5 +1,10 @@
 # Changes
 
+## 1.1.9-beta
+- **Crash report in the console log**: after a crash, the next start logs "last crash:" with what failed (the
+  failed check with file and line, abort or exception address), so it shows in the console log downloaded from
+  the web page, not only on the USB console.
+
 ## 1.1.8-beta
 - **Smaller firmware**: the web pages are kept gzip-compressed in flash (index page 137 kB → 49 kB) and sent
   compressed; about 97 kB more room in the 3 MB slot used by USB installs.

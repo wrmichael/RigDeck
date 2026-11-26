@@ -2,6 +2,7 @@
 #include <atomic>
 // RigDeck - ESP-IDF entry point.
 #include "platform.h"
+#include "crashinfo.h"
 #include "peers_net.h"
 #include "kiss_net.h"
 #include "ui.h"
@@ -203,6 +204,8 @@ extern "C" void app_main(void) {
                                              "eFuse", "power glitch", "CPU lockup"};
         int r = (int)esp_reset_reason();
         ESP_LOGI(TAG, "started after: %s (%d)", r >= 0 && r < (int)(sizeof kReset / sizeof kReset[0]) ? kReset[r] : "?", r);
+        static char crash[420];
+        if (crashinfo_take(crash, sizeof crash)) ESP_LOGE(TAG, "last crash: %s", crash);
     }
 
     net_start(s_app);

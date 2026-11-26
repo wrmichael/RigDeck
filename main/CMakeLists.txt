@@ -1,4 +1,4 @@
-set(srcs "app_main.cpp" "usb_radio.cpp" "net.cpp" "web.cpp" "peers_net.cpp" "kiss_net.cpp" "gps_module.cpp" "ota.cpp" "memtrace.c" "logo_font.c" "lv_mem_psram.c")
+set(srcs "app_main.cpp" "usb_radio.cpp" "net.cpp" "web.cpp" "peers_net.cpp" "kiss_net.cpp" "gps_module.cpp" "ota.cpp" "memtrace.c" "crashinfo.c" "logo_font.c" "lv_mem_psram.c")
 if(IDF_TARGET STREQUAL "esp32p4")
     # Wi-Fi chip (ESP32-C6 co-processor) version and firmware update over ESP-Hosted
     # (a dependency in idf_component.yml, so its headers are already available here).
@@ -17,6 +17,9 @@ idf_component_register(
     PRIV_REQUIRES core fatfs sdmmc esp_driver_sdmmc esp_app_format esp_wifi esp_netif esp_event nvs_flash esp_http_server spiffs esp_timer lwip esp_driver_uart esp_driver_gpio esp_partition app_update mbedtls esp_http_client esp-tls
     EMBED_FILES "web/icon.png")
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error -Wno-format -Wno-missing-field-initializers)
+# Crash report kept across the restart (crashinfo.c)
+target_link_libraries(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=esp_panic_handler" "-Wl,--wrap=_esp_error_check_failed"
+    "-Wl,-u,__wrap_esp_panic_handler" "-Wl,-u,__wrap__esp_error_check_failed")
 
 # The web pages are kept in flash gzip-compressed (index.html 137 kB -> about 49 kB) and sent with
 # Content-Encoding: gzip; every browser unpacks them. They are compressed at build time from main/web.
