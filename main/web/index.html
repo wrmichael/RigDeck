@@ -417,8 +417,8 @@ table.imp th{color:var(--dim);font-weight:500}
       <label for="s_bbsOn">Packet BBS (mailbox on the microSD card)</label><select id="s_bbsOn"><option value="0">Off</option><option value="1">On (answers with Enable TX on)</option></select>
       <label for="s_bbsCall">BBS call-SSID (empty = packet call with -1)</label><input id="s_bbsCall" maxlength="9" style="text-transform:uppercase" placeholder="AC9HP-1">
       <div style="grid-column:1/-1"><b>Map on the touch screen:</b> <span id="mapInfo">…</span>
-        <div class="row" style="margin-top:4px"><button type="button" id="mapGet">Get detailed map from GitHub</button><button type="button" id="mapDel">Remove detailed map</button><span id="mapMsg" class="hint"></span></div>
-        <p class="hint" style="margin:4px 0 0">The detailed map adds US counties, highways and finer coasts and borders (Natural Earth 1:10m, about 3.5 MB). This browser downloads it from the RigDeck site, so it needs internet; RigDeck stores it on the microSD card. Without it the touch screen uses the outlines built into RigDeck.</p></div>
+        <div class="row" style="margin-top:4px"><button type="button" id="mapGet">Get the map from the RigDeck site</button><button type="button" id="mapFileBtn">Load a map file …</button><input type="file" id="mapFile" accept=".rdm" hidden><button type="button" id="mapDel">Remove map</button><span id="mapMsg" class="hint"></span></div>
+        <p class="hint" style="margin:4px 0 0">The APRS map (countries, states, lakes, US counties and highways; Natural Earth 1:10m, about 3.5 MB) is kept on the microSD card, once. Ways to get it there: the <b>Get map</b> button on the APRS screen when RigDeck is on a home network with internet; <b>Get the map from the RigDeck site</b> here, when this browser has internet; <b>Load a map file</b> with <a href="https://wrmichael.github.io/RigDeck/map/rigdeck-map.rdm" target="_blank" rel="noopener">rigdeck-map.rdm</a> downloaded earlier; or copy that file into the <code>RigDeck</code> folder on the card and restart. Without it the APRS screen shows rings and stations only.</p></div>
       <label for="s_radioType">Radio</label><select id="s_radioType"><option value="0">Find automatically</option><option value="1">Icom (CI-V): IC-7100, IC-705, IC-7300, IC-9700, IC-7610, IC-905</option><option value="2">Yaesu: FTX-1, FTDX10, FT-991A, FT-710, FTDX101</option><option value="3">QRP Labs QMX / QMX+</option><option value="4">Kenwood / Elecraft: TS-2000, TS-480, TS-590, K2, K3, KX2, KX3</option><option value="5">No CAT: SignaLink or other sound card</option></select>
       <label for="s_pttMethod">PTT</label><select id="s_pttMethod"><option value="0">CAT command</option><option value="1">Serial port RTS (Digirig)</option><option value="2">Serial port DTR</option><option value="3">VOX (the sound card keys the radio)</option></select>
       <label for="s_catBaud">CAT rate tried first (4800, 9600, 19200, 38400, 115200 are tried too)</label><select id="s_catBaud"><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select>
@@ -1107,18 +1107,18 @@ function aprsRender(a){
 }
 $("aprsSt").addEventListener("click",e=>{const tr=e.target.closest("tr[data-c]");if(tr){$("aprsTo").value=tr.dataset.c;$("aprsTxt").focus();}});
 $("aprsBeacon").onclick=()=>cmd("aprsbeacon");
-// Detailed APRS map: fetched from GitHub Pages by this browser, sent to the board in 32 kB pieces (CRC-32 each).
+// APRS map: fetched from GitHub Pages by this browser (or a file picked here), sent to the board in 32 kB pieces (CRC-32 each).
 var mapBusy=false;
 async function mapInfo(){
-  if(demo){$("mapInfo").textContent="built-in outlines (countries, states and provinces, Great Lakes).";return;}
+  if(demo){$("mapInfo").textContent="map (3.5 MB): RigDeck detailed map 2026-11-25: Natural Earth 1:10m (public domain) countries, states/provinces, lakes, US counties, highways";return;}
   try{const j=await (await fetch("/api/map",{cache:"no-store"})).json();
-    $("mapInfo").textContent=!j.card?"built-in outlines. A microSD card is needed for the detailed map.":j.have?`detailed map (${(j.size/1e6).toFixed(1)} MB): ${j.desc}`:"built-in outlines (countries, states and provinces, Great Lakes).";
-    $("mapDel").disabled=!j.have||mapBusy;$("mapGet").disabled=!j.card||mapBusy;
+    $("mapInfo").textContent=!j.card?"none. The map is kept on a microSD card; put one in.":j.have?`map (${(j.size/1e6).toFixed(1)} MB): ${j.desc}`:"none yet (rings and stations only). Get it once with one of the ways below.";
+    $("mapDel").disabled=!j.have||mapBusy;$("mapGet").disabled=$("mapFileBtn").disabled=!j.card||mapBusy;
   }catch(e){$("mapInfo").textContent="(this RigDeck version does not report its map)";}
 }
 $("mapGet").onclick=async()=>{
   const m=$("mapMsg");if(mapBusy)return;
-  mapBusy=true;$("mapGet").disabled=$("mapDel").disabled=true;
+  mapBusy=true;$("mapGet").disabled=$("mapDel").disabled=$("mapFileBtn").disabled=true;
   const end=t=>{m.textContent=t;mapBusy=false;mapInfo();};
   let data;
   try{
@@ -1130,6 +1130,18 @@ $("mapGet").onclick=async()=>{
     data=new Uint8Array(await r.arrayBuffer());
     if(data.length!==man.size)return end(`The download is incomplete (${data.length} of ${man.size} bytes). Try again.`);
   }catch(e){return end("Could not reach the RigDeck site from this browser ("+e.message+"). Is it online?");}
+  mapSendPieces(data);
+};
+$("mapFileBtn").onclick=()=>{if(!mapBusy)$("mapFile").click();};
+$("mapFile").onchange=async()=>{
+  const f=$("mapFile").files[0];$("mapFile").value="";if(!f||mapBusy)return;
+  mapBusy=true;$("mapGet").disabled=$("mapDel").disabled=$("mapFileBtn").disabled=true;
+  const data=new Uint8Array(await f.arrayBuffer());
+  if(String.fromCharCode(...data.subarray(0,4))!=="RDM2"){mapBusy=false;$("mapMsg").textContent="That is not a RigDeck map file (rigdeck-map.rdm).";return mapInfo();}
+  mapSendPieces(data);
+};
+async function mapSendPieces(data){
+  const m=$("mapMsg"),end=t=>{m.textContent=t;mapBusy=false;mapInfo();};
   const P=32768,total=data.length;
   for(let off=0;off<total;){
     const piece=data.subarray(off,Math.min(total,off+P)),crc=crc32(piece);let j=null;
@@ -1144,9 +1156,9 @@ $("mapGet").onclick=async()=>{
     m.textContent=off<total?`Sending to RigDeck ${Math.round(off*100/total)} %`:(j.msg||"Installed");
   }
   end(m.textContent);
-};
+}
 $("mapDel").onclick=async()=>{
-  if(!confirm("Remove the detailed map from the microSD card? The touch screen goes back to the built-in outlines."))return;
+  if(!confirm("Remove the map from the microSD card? The APRS screen then shows rings and stations only."))return;
   try{const j=await (await fetch("/api/map?del=1",{method:"POST"})).json();$("mapMsg").textContent=j.ok?j.msg:(j.err||"Not removed");}catch(e){$("mapMsg").textContent="Not removed: "+e.message;}
   mapInfo();
 };

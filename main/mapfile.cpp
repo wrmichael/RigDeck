@@ -1,6 +1,7 @@
-// Detailed APRS map on the microSD card (RigDeck/map.rdm, built by tools/make_map.py --detail and published on
-// the GitHub site). The web page downloads it from GitHub and sends it here in pieces; it is checked whole,
-// then kept in PSRAM for the touch screen. Without it the built-in outlines are used.
+// APRS map on the microSD card (RigDeck/map.rdm, built by tools/make_map.py and published on the GitHub site).
+// It gets there three ways: RigDeck downloads it itself (home network with internet), the web page downloads it
+// and sends it here in pieces, or the user copies the file onto the card. It is checked whole, then kept in PSRAM
+// for the touch screen. Without it the APRS screen shows rings and stations only.
 #include "sdkconfig.h"                              // CONFIG_IC7100_DISPLAY: hand the map to the touch screen
 #include "mapfile.h"
 #include "platform.h"
@@ -77,9 +78,14 @@ static void use(uint8_t* buf, size_t len, const std::string& desc) {
 static void loadTask(void*) {
     size_t len = 0;
     std::string desc, why;
+    // Copied onto the card by hand under the published name: take it as map.rdm.
+    static const char* kCopied = SDCARD_LOG_DIR "/rigdeck-map.rdm";
+    struct stat st;
+    if (stat(kPath, &st) != 0 && stat(kCopied, &st) == 0 && rename(kCopied, kPath) == 0)
+        if (s_app && s_app->logFn) s_app->logFn("APRS map: rigdeck-map.rdm on the card renamed to map.rdm");
     if (uint8_t* buf = loadFile(kPath, len, desc, why)) {
         use(buf, len, desc);
-        if (s_app && s_app->logFn) s_app->logFn(("APRS map: detailed map loaded (" + desc + ")").c_str());
+        if (s_app && s_app->logFn) s_app->logFn(("APRS map: map loaded (" + desc + ")").c_str());
     } else if (why != "no file") {
         ESP_LOGW(TAG, "%s not used: %s", kPath, why.c_str());
         if (s_app && s_app->logFn) s_app->logFn(("APRS map: map.rdm on the card not used (" + why + ")").c_str());
@@ -181,8 +187,8 @@ static void fetchRun() {
     s_busy = false;
     use(buf, len, desc);
     s_status = renamed ? "Detailed map installed: " + desc : "Map loaded, but it could not be saved on the card";
-    if (s_app && s_app->logFn) s_app->logFn(("APRS map: detailed map installed by the board (" + desc + ")").c_str());
-    fmsg(renamed ? "Map: detailed map installed" : "Map: loaded, but it could not be saved on the card");
+    if (s_app && s_app->logFn) s_app->logFn(("APRS map: map installed by the board (" + desc + ")").c_str());
+    fmsg(renamed ? "Map: installed" : "Map: loaded, but it could not be saved on the card");
 }
 
 static void fetchTask(void*) {
@@ -193,7 +199,7 @@ static void fetchTask(void*) {
 
 static bool fetchStart() {
     struct stat st;
-    if (stat(SDCARD_LOG_DIR, &st) != 0) { fmsg("Map: a microSD card is needed for the detailed map"); return false; }
+    if (stat(SDCARD_LOG_DIR, &st) != 0) { fmsg("Map: a microSD card is needed for the map"); return false; }
     if (!s_app || s_app->staStatus().state != "connected") {
         fmsg("Map: RigDeck needs a home network with internet for this (Settings, Wi-Fi)");
         return false;
@@ -261,7 +267,7 @@ static void upAbort() {
     s_upDone = s_upTotal = 0;
 }
 
-// GET /api/map: what is loaded. POST /api/map?del=1: remove the detailed map (back to the built-in outlines).
+// GET /api/map: what is loaded. POST /api/map?del=1: remove the map.
 static esp_err_t hInfo(httpd_req_t* req) {
     if (req->method == HTTP_POST) {
         uint32_t del = 0;
@@ -274,7 +280,7 @@ static esp_err_t hInfo(httpd_req_t* req) {
             ui_set_map(nullptr, 0);
 #endif
             s_busy = false;
-            return reply(req, true, "Detailed map removed; the built-in outlines are used");
+            return reply(req, true, "Map removed from the microSD card");
         }
         return reply(req, false, "bad request");
     }
@@ -294,7 +300,7 @@ static esp_err_t hChunk(httpd_req_t* req) {
     if (total < 16 || total > kMax) return reply(req, false, "That is not a RigDeck map file (wrong size)");
     if (n == 0 || n > kPiece || off + n > total) return reply(req, false, "bad piece size");
     struct stat st;
-    if (stat(SDCARD_LOG_DIR, &st) != 0) return reply(req, false, "No microSD card: the detailed map is kept on the card");
+    if (stat(SDCARD_LOG_DIR, &st) != 0) return reply(req, false, "No microSD card: the map is kept on the card");
     if (s_busy.exchange(true)) return reply(req, false, "A map upload is already running");
     struct Done { ~Done() { s_busy = false; } } done;
     if (s_up && esp_timer_get_time() - s_upUs > 60000000LL) upAbort();       // stale upload
@@ -328,7 +334,7 @@ static esp_err_t hChunk(httpd_req_t* req) {
     bool renamed = rename(kTmp, kPath) == 0;
     s_upDone = s_upTotal = 0;
     use(buf, len, desc);
-    if (s_app && s_app->logFn) s_app->logFn(("APRS map: detailed map installed (" + desc + ")").c_str());
+    if (s_app && s_app->logFn) s_app->logFn(("APRS map: map installed (" + desc + ")").c_str());
     return reply(req, renamed, renamed ? "Detailed map installed: " + desc : "Map loaded, but it could not be saved on the card");
 }
 

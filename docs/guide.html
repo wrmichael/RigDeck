@@ -311,13 +311,18 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
   <li>Packets heard and sent are listed under "Packets heard and sent" on the web page, and written to the microSD card day by day as RigDeck/aprs_YYYYMMDD.txt (one line per packet, UTC time, RX or TX).</li>
 </ul>
 <h3>APRS on the touch screen</h3>
-<p><img src="img/screen-aprs.png" alt="APRS map on the touch screen" style="max-width:100%"></p>
-<p><img src="img/screen-aprs-detail.png" alt="APRS map with the detailed map: counties and highways around Indianapolis" style="max-width:100%"></p>
+<p><img src="img/screen-aprs-detail.png" alt="APRS map on the touch screen: counties and highways around Indianapolis" style="max-width:100%"></p>
 <ul>
-  <li><b>Map:</b> stations heard with a position, around your own position (gold cross), on outlines of countries, US states, Canadian provinces and the Great Lakes (Natural Earth, built into RigDeck: no internet or card needed). <b>+</b> and <b>−</b> set the range from 25 to 1600 km; the rings mark quarters of it. Stations heard in the last 30 minutes are bright green. Tap a station for its details on the right.</li>
-  <li><b>Stations:</b> the same stations as a list with distance, direction, when heard and comment; tap one to select it.</li>
+  <li><b>Map:</b> stations heard with a position, around your own position (gold cross), on a map of countries, US states, Canadian provinces, lakes, US counties and highways (Natural Earth 1:10m). <b>+</b> and <b>−</b> set the range from 25 to 1600 km; the rings mark quarters of it. Counties and smaller roads appear at 200 km range and closer, highways at 800 km and closer. Stations heard in the last 30 minutes are bright green. Tap a station for its details.</li>
+<li><b>Stations:</b> the same stations as a list with distance, direction, when heard and comment; tap one to select it.</li>
   <li><b>Messages:</b> messages to and from you. Tap To and Message to type, then Send. <b>Message</b> in the details panel fills in the selected station.</li>
-  <li><b>Detailed map:</b> in Settings, APRS on the web page, <b>Get detailed map from GitHub</b> downloads a finer map with US counties and highways (Natural Earth 1:10m, about 3.5 MB) through your browser, so the browser needs internet, and RigDeck keeps it on the microSD card. Counties and smaller roads appear at 200 km range and closer, highways at 800 km and closer. <b>Remove detailed map</b> goes back to the built-in outlines. When RigDeck itself is on a home network with internet, the <b>Get detailed map</b> button on the APRS screen does the same without a browser (it shows the progress under the map). The map is kept per unit, on its own card.</li>
+  <li><b>Getting the map (once):</b> the map is about 3.5 MB, so it is not built into RigDeck: it is kept on the microSD card. Until it is there, the map shows rings and stations only. Any one of these puts it there:
+    <ul>
+      <li>On the APRS screen, tap <b>Get map</b> while RigDeck is on a home network with internet (Settings, Wi-Fi). Progress shows under the map.</li>
+      <li>On the web page, Settings, APRS: <b>Get the map from the RigDeck site</b>. The phone or computer showing the page downloads it, so it needs internet (for example a phone on mobile data while it is joined to RigDeck's hotspot).</li>
+      <li>Download <a href="map/rigdeck-map.rdm">rigdeck-map.rdm</a> once on any computer, then on the web page use <b>Load a map file</b>, or copy the file into the <code>RigDeck</code> folder on the microSD card and restart RigDeck.</li>
+    </ul>
+    <b>Remove map</b> deletes it from the card. A unit without a microSD card shows rings and stations only.</li>
   <li>The top bar has Enable TX, HALT TX and <b>Beacon now</b>, and shows whether the channel is busy, how many packets are waiting to go out and when the next beacon is due.</li>
 </ul>
 <div class="note">In the first on-air tests (IC-705, 2026-11-25) RigDeck decoded the local traffic and its beacons were repeated by digipeaters. Other radios may need the audio level or their FM data settings adjusted.</div>

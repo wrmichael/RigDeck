@@ -3,6 +3,11 @@
 ## 1.1.8-beta
 - **Smaller firmware**: the web pages are kept gzip-compressed in flash (index page 137 kB → 49 kB) and sent
   compressed; about 97 kB more room in the 3 MB slot used by USB installs.
+- **APRS map only on the microSD card**: the outline map built into the firmware is gone (about 196 kB more
+  room). The map (countries, states, lakes, US counties, highways; 3.5 MB) is fetched once onto the card: Get map
+  on the APRS screen (RigDeck on a home network with internet), Get the map from the RigDeck site on the web
+  page, Load a map file on the web page, or rigdeck-map.rdm copied into the RigDeck folder on the card. Until
+  then the APRS screen shows rings and stations only.
 - **Yaesu FTX-1 over USB**: the board could not reach the FTX-1's serial port and sound chip (full-speed chips
   behind the radio's high-speed USB hub). The radio USB port now runs at full speed (12 Mbit/s) with a patched copy
   of the USB host library (components/espressif__usb); setting usbFullSpeed=0 goes back to high speed.

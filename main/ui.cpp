@@ -21,8 +21,6 @@
 #include "mapdata.h"
 #include "clock.h"
 
-extern "C" const uint8_t g_mapData[];
-extern "C" const size_t g_mapDataLen;
 
 namespace {
 
@@ -1546,7 +1544,7 @@ lv_obj_t *aMapNote = nullptr, *aMapBtnLbl = nullptr, *scrAprs, *aCanvas, *aTabs,
 lv_obj_t* aPane[3];
 lv_obj_t* aCallLbl[40];
 uint16_t* aBuf = nullptr;
-std::mutex aMapMtx;                                  // detailed map handed over by mapfile.cpp
+std::mutex aMapMtx;                                  // map handed over by mapfile.cpp (from the microSD card)
 uint8_t *aMapPend = nullptr, *aMapExt = nullptr;
 size_t aMapPendLen = 0, aMapExtLen = 0;
 bool aMapPendSet = false;
@@ -1614,12 +1612,14 @@ void aDrawMap() {
     };
     int la0 = (int)((clat - dLat) * 1000) - 10, la1 = (int)((clat + dLat) * 1000) + 10;
     int lo0 = (int)((clon - dLon) * 1000) - 10, lo1 = (int)((clon + dLon) * 1000) + 10;
-    for (int pass = 0; pass < 6; pass++)
+    // The map lives on the microSD card (RigDeck/map.rdm): fetched over Wi-Fi or copied there. Without it only the
+    // rings and stations are drawn.
+    for (int pass = 0; aMapExt && pass < 6; pass++)
         {
-        // counties, roads, states, then lakes, then countries on top; counties and roads only from the detailed map
+        // counties, roads, states, then lakes, then countries on top; counties and roads only when zoomed in
         static const int order[] = {mapdata::MC_COUNTY, mapdata::MC_ROAD2, mapdata::MC_ROAD, mapdata::MC_STATE, mapdata::MC_LAKE, mapdata::MC_COUNTRY};
-        const uint8_t* md = aMapExt ? aMapExt : g_mapData;
-        size_t ml = aMapExt ? aMapExtLen : g_mapDataLen;
+        const uint8_t* md = aMapExt;
+        size_t ml = aMapExtLen;
         int cls = order[pass];
         if (cls == mapdata::MC_COUNTY && km > 200) continue;
         if (cls == mapdata::MC_ROAD2 && km > 200) continue;
@@ -1731,16 +1731,16 @@ void aRefresh() {
             aMapExt = aMapPend; aMapExtLen = aMapPendLen;
             aMapPend = nullptr; aMapPendSet = false;
             aShownSeq = 0xffffffff;
-            if (g_app) g_app->logLine(aMapExt ? "APRS map: touch screen now draws the detailed map" : "APRS map: touch screen back to the built-in outlines");
-            if (aMapNote) setText(aMapNote, aMapExt ? "Rings: quarters of the range. Detailed map: Natural Earth 1:10m." : "Rings: quarters of the range. Outlines: Natural Earth.");
+            if (g_app) g_app->logLine(aMapExt ? "APRS map: touch screen now draws the map" : "APRS map: no map (removed)");
+            if (aMapNote) setText(aMapNote, aMapExt ? "Rings: quarters of the range. Map: Natural Earth 1:10m." : "No map yet: tap Get map (needs Wi-Fi with internet), or copy rigdeck-map.rdm into the RigDeck folder on the card.");
         }
     }
     if (lv_screen_active() != scrAprs) return;
     {
         std::string ms = ui_map_status_fn ? ui_map_status_fn() : std::string();
-        setText(aMapNote, !ms.empty() ? ms : aMapExt ? "Rings: quarters of the range. Detailed map: Natural Earth 1:10m."
-                                                    : "Rings: quarters of the range. Outlines: Natural Earth.");
-        setText(aMapBtnLbl, aMapExt ? "Update map" : "Get detailed map");
+        setText(aMapNote, !ms.empty() ? ms : aMapExt ? "Rings: quarters of the range. Map: Natural Earth 1:10m."
+                                                    : "No map yet: tap Get map (needs Wi-Fi with internet), or copy rigdeck-map.rdm into the RigDeck folder on the card.");
+        setText(aMapBtnLbl, aMapExt ? "Update map" : "Get map");
     }
     App::AprsView st = g_app->aprsView(false);
     char b[200];
@@ -1832,8 +1832,8 @@ void onAprsKb(lv_event_t* e) {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_READY || code == LV_EVENT_CANCEL) lv_obj_add_flag(aKb, LV_OBJ_FLAG_HIDDEN);
 }
-void onAprsGetMap(lv_event_t*) {                 // the board downloads the detailed map from the RigDeck site
-    if (!ui_map_fetch_fn) { note("Get the detailed map on the web page: Settings, APRS"); return; }
+void onAprsGetMap(lv_event_t*) {                 // the board downloads the map from the RigDeck site
+    if (!ui_map_fetch_fn) { note("Get the map on the web page: Settings, APRS"); return; }
     ui_map_fetch_fn();
     aRefresh();
 }
@@ -1885,7 +1885,11 @@ void buildAprsScreen() {
     lv_obj_remove_event_cb(b, onAprsZoom);
     lv_obj_add_event_cb(b, onAprsZoom, LV_EVENT_CLICKED, (void*)(intptr_t)1);
     aZoomLbl = label(aPane[0], A_MAP_W - 92, 116, f16, DIM, "");
-    aMapNote = label(aPane[0], 8, A_MAP_H - 24, f16, DIM, aMapExt ? "Rings: quarters of the range. Detailed map: Natural Earth 1:10m." : "Rings: quarters of the range. Outlines: Natural Earth.");
+    aMapNote = label(aPane[0], 8, A_MAP_H - 46, f16, DIM, aMapExt ? "Rings: quarters of the range. Map: Natural Earth 1:10m." : "No map yet: tap Get map (needs Wi-Fi with internet), or copy rigdeck-map.rdm into the RigDeck folder on the card.");
+    lv_obj_set_width(aMapNote, A_MAP_W - 16);
+    lv_label_set_long_mode(aMapNote, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_height(aMapNote, 42);
+    lv_obj_set_style_text_align(aMapNote, LV_TEXT_ALIGN_LEFT, 0);
 
     // stations pane
     aPane[1] = box(scrAprs, 0, A_MAP_Y, A_MAP_W, A_MAP_H, BG);
@@ -1942,7 +1946,7 @@ void buildAprsScreen() {
     lv_obj_set_width(aDetail, W - A_MAP_W - 40);
     lv_label_set_long_mode(aDetail, LV_LABEL_LONG_MODE_WRAP);
     button(side, 12, H - 76 - 60, 150, 48, "Message", onAprsMsgTo);
-    lv_obj_t* mb = button(side, 170, H - 76 - 60, W - A_MAP_W - 16 - 182, 48, "Get detailed map", onAprsGetMap, &aMapBtnLbl);
+    lv_obj_t* mb = button(side, 170, H - 76 - 60, W - A_MAP_W - 16 - 182, 48, "Get map", onAprsGetMap, &aMapBtnLbl);
     lv_obj_set_style_text_font(aMapBtnLbl, f16, 0);
     (void)mb;
 
@@ -2215,7 +2219,7 @@ void ui_set_map(uint8_t* data, size_t len) {
     aMapPend = data;
     aMapPendLen = data ? len : 0;
     aMapPendSet = true;
-    if (g_app) g_app->logLine(data ? "APRS map: detailed map waiting for the touch screen" : "APRS map: built-in outlines waiting for the touch screen");
+    if (g_app) g_app->logLine(data ? "APRS map: map waiting for the touch screen" : "APRS map: map removed, waiting for the touch screen");
 }
 
 void ui_bind(App* app) { g_app = app; }

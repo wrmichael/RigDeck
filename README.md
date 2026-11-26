@@ -14,8 +14,8 @@ port with one cable and it:
 - runs **FT-CW**, FT8-style automatic contacts sent as high-speed Morse, and **PSK31**;
 - runs **packet radio** on 2 m FM: a connected-mode terminal for BBSs and nodes, a monitor, and a KISS TNC over
   Wi-Fi for Winlink Express and other programs, and can be a small packet BBS (mailbox) on its microSD card;
-- runs **APRS** on 2 m FM: stations heard on a map (built in, or a detailed one with counties and highways
-  fetched from GitHub onto the microSD card), messages and position beacons;
+- runs **APRS** on 2 m FM: stations heard on a map (countries, states, counties and highways, fetched
+  once onto the microSD card), messages and position beacons;
 - logs **SSB / CW** contacts by hand, with CW macros sent through the radio's keyer;
 - acts as a **control head**: band, frequency, mode, filters, levels and DSP from the touch screen;
 - keeps an **ADIF log** on the board (current log + archive, downloadable), and can send each contact to

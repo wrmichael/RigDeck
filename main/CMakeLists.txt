@@ -8,7 +8,7 @@ if(IDF_TARGET STREQUAL "esp32p4")
 endif()
 if(CONFIG_IC7100_DISPLAY)
     # On-device touch interface (LVGL) for the Waveshare ESP32-P4-WIFI6-Touch-LCD-7B.
-    list(APPEND srcs "ui.cpp" "display.c" "map_data.c")
+    list(APPEND srcs "ui.cpp" "display.c")
 endif()
 
 idf_component_register(
