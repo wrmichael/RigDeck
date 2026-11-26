@@ -158,6 +158,13 @@ void Radio::setFunc(uint8_t sub, uint8_t value) {
     send(0x16, {sub});
 }
 
+bool Radio::startTuner() {
+    if (proto.load() != RP_YAESU) return false;
+    sendText("AC002;");                                 // tuning start: the radio transmits and tunes by itself
+    sendText("AC;");
+    return true;
+}
+
 void Radio::setAtt(uint8_t bcdDb) {
     if (isText()) return tSetAtt(bcdDb != 0);
     send(0x11, {bcdDb});

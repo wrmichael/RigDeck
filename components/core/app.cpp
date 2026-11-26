@@ -1902,6 +1902,12 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         return ok();
     }
     if (c == "tune") {
+        if (arg(a, "v") == "1" && cfg.tuneRadio && radio.proto.load() == RP_YAESU) {   // the radio's tuner / ATAS
+            if (!usbSerial) return err("Radio not connected");
+            if (!radio.startTuner()) return err("This radio has no tuner command");
+            logLine("Tune: radio tuner started (AC002)");
+            return ok();
+        }
         if (arg(a, "v") == "1" && (!usbSerial || !usbAudio)) return err("Radio not connected");
         tuneReq_ = arg(a, "v") == "1";
         return ok();

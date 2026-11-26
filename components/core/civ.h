@@ -91,6 +91,7 @@ public:
     void setLevel(uint8_t sub, int percent);           // command 14: 01 AF 02 RF 03 SQL 06 NR 0A power 0B mic
     void setFunc(uint8_t sub, uint8_t value);          // command 16: 02 preamp 12 AGC 22 NB 40 NR 41 auto notch 44 comp 46 VOX
     void setAtt(uint8_t bcdDb);                        // command 11: 00 off, 12 or 20 = dB
+    bool startTuner();                                 // Yaesu: AC002 (the radio's tuner or ATAS tunes); false = not supported
     void vfo(uint8_t sub);                             // command 07: 00 A, 01 B, B0 exchange
     std::atomic<bool> extPoll{false};
     std::atomic<int> filter{-1}, att{-1};

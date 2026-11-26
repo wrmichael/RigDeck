@@ -122,13 +122,15 @@ Settings when you swap radios. Tested on the air.
 
 The FTX-1 connects with one USB-C cable. Inside it, as in the IC-7100, are a hub, a CP2105 dual
 serial bridge and an audio codec; the firmware probes the serial ports, recognises Yaesu CAT
-(`ID;` answered with four digits) and uses the first port (CAT-1). **Not yet tried on a real FTX-1.**
+(`ID;` answered with four digits) and uses the first port (CAT-1). CAT works on a real FTX-1 (1.1.7).
 
 - Radio menu: the **CAT-1 rate** must match "FTX-1 CAT-1 rate" in Settings (38400 by default).
 - FT8 etc. run in **DATA-U**, which the firmware selects. Set the radio's data-mode audio input to
   USB and the USB audio levels as in any WSJT-X guide for the FTX-1.
 - RF power: the field head runs 1-10 W, the optima (SPA-1) 5-100 W; the percentage in Settings
   is converted to watts for the head the radio reports.
+- Tune: with "Tune button (Yaesu)" set to the radio's tuner (Settings), Tune sends `AC002;` and the radio's
+  own tuner or ATAS tunes, instead of RigDeck sending a carrier.
 - Logger CW macros are sent with the radio's keyer (text written to keyer memory 1, then played,
   50 characters at most). Break-in is turned on if it is off, otherwise only sidetone is heard.
 - The radio screen covers frequency, modes (including C4FM as "DV"), DATA, AF/RF/squelch/mic/
@@ -219,7 +221,7 @@ Radios and interfaces:
 | Radio / interface | How it connects | Status |
 |---|---|---|
 | IC-7100, IC-705, QMX / QMX+ | one USB cable | tested on the air |
-| FTX-1 | one USB cable | should work, untested |
+| FTX-1 | one USB cable | CAT works; FT8 audio being tested |
 | IC-7300, IC-7610, IC-9700, IC-905 | one USB cable (CI-V + sound card) | should work, untested |
 | FTDX10, FT-991A, FT-710, FTDX101 | one USB cable (CAT at the radio's rate + sound card) | should work, untested |
 | TS-2000, TS-480, TS-590, K2, K3 | Digirig with the radio's CAT cable (or a CP2102 / CH340 USB-RS232 cable + sound card on a hub) | should work, untested |
