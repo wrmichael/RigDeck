@@ -203,7 +203,7 @@ void AfskDemod::bit(Slicer& s, int b, std::vector<std::vector<uint8_t>>& out) {
     }
     if (s.ones == 6) {                                            // a flag: 0111 1110
         // The flag's first 0 and six 1s were taken as data: a whole frame leaves 7 extra bits.
-        if (s.inFrame && s.nbits == 7 && s.bytes.size() >= 18) {
+        if (s.inFrame && s.nbits == 7 && s.bytes.size() >= 17) {
             uint16_t c = fcs(s.bytes.data(), s.bytes.size() - 2);
             if (c == (uint16_t)(s.bytes[s.bytes.size() - 2] | (s.bytes[s.bytes.size() - 1] << 8))) {
                 bool dup = false;

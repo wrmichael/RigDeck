@@ -20,6 +20,7 @@
 #include "nmea.h"
 #include "cwx.h"
 #include "aprs.h"
+#include "ax25.h"
 
 enum DigiMode { DM_FT8 = 0, DM_FT4 = 1, DM_PSK31 = 2, DM_CW = 3, DM_APRS = 4 };   // DM_CW = "FT-CW": FT8-style contacts in Morse (cwx.h)
 
@@ -122,7 +123,11 @@ public:
     std::atomic<bool> ntpSynced{false};
     std::string fwVersion = "dev";                  // set by the platform (version.txt on the ESP32)
     // Beta builds carry "-beta" in their version (version.txt); Stable builds a plain number.
-    std::atomic<bool> k0dogReady{false};          // the K0DOG game is on the microSD card (k0dog.cpp)
+    std::atomic<bool> k0dogReady{false};
+    // KISS TNC over TCP (kiss_net.cpp): frames from PC programs, frames heard for them, clients connected.
+    void kissFromHost(const std::vector<uint8_t>& frame);
+    void kissTake(std::vector<std::vector<uint8_t>>& out);
+    std::atomic<int> kissClients{0};          // the K0DOG game is on the microSD card (k0dog.cpp)
     bool freshSettings = false;                    // no settings file at start-up: a new unit
     bool saveSettings() { std::lock_guard<std::mutex> lk(mtx_); return cfg.save(dir_ + "/settings.txt"); }
     bool betaBuild() const { return fwVersion.find("beta") != std::string::npos || fwVersion == "dev"; }
@@ -246,6 +251,19 @@ private:
     void aprsTick(int64_t mono);
     void aprsHandle(const aprs::Frame& f);
     std::string aprsJson();
+    // ---- packet radio on the APRS modem: monitor, connected-mode terminal, KISS for PC programs
+    ax25::Link pkt_;
+    std::deque<std::pair<uint32_t, std::string>> pktMon_, pktTerm_;   // numbered lines for the web page
+    uint32_t pktMonN_ = 0, pktTermN_ = 0;
+    std::vector<std::vector<uint8_t>> pktOut_;        // frames (with FCS) waiting for the channel
+    std::mutex kissMtx_;
+    std::deque<std::vector<uint8_t>> kissRx_, kissTx_;   // frames without FCS: heard -> clients, clients -> air
+    bool kissTxWarned_ = false;
+    std::string pktMyCall() const;
+    void pktMon(const std::string& s);
+    void pktTerm(const std::string& s);
+    void pktTick(int64_t mono);
+    std::string pktJson(uint32_t monSince, uint32_t termSince);
     double gpsLat_ = 0, gpsLon_ = 0;
     int64_t gpsPosMono_ = 0, radioGpsMono_ = 0;
     const char* volatile gpsSrc_ = "GPS";          // where the last position came from (a string constant: set from the USB threads)

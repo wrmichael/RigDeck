@@ -3,6 +3,7 @@
 // RigDeck - ESP-IDF entry point.
 #include "platform.h"
 #include "peers_net.h"
+#include "kiss_net.h"
 #include "ui.h"
 #include "clock.h"
 #include "freertos/FreeRTOS.h"
@@ -207,6 +208,7 @@ extern "C" void app_main(void) {
     net_start(s_app);
     web_start(s_app);
     peers_start(s_app);
+    kiss_start(s_app);
 #if CONFIG_IDF_TARGET_ESP32P4
     wifichip_start(s_app);
     mapfile_start(s_app, !logDir.empty());

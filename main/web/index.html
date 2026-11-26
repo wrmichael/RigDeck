@@ -129,7 +129,7 @@ table.imp th{color:var(--dim);font-weight:500}
 <button id="tl" type="button" title="Transmit status. While this page is open and in view you count as present; tap to restart the watchdog after it was hidden."><i></i><i></i><i></i><span>TX off</span></button>
 <div id="txline"></div>
 <nav>
-  <button data-tab="op" class="on">Operate</button><button data-tab="qlog">SSB / CW log</button><button data-tab="log">Log</button><button data-tab="cwt">CW trainer</button><button data-tab="set">Settings</button>
+  <button data-tab="op" class="on">Operate</button><button data-tab="qlog">SSB / CW log</button><button data-tab="log">Log</button><button data-tab="cwt">CW trainer</button><button data-tab="pkt">Packet</button><button data-tab="set">Settings</button>
 </nav>
 <main>
 <section id="tab-op">
@@ -325,6 +325,41 @@ table.imp th{color:var(--dim);font-weight:500}
   </div>
 </section>
 
+<section id="tab-pkt" class="hide">
+  <div class="pan" style="margin-bottom:10px">
+    <h3>Packet radio</h3>
+    <div id="pkNote" class="dim" style="margin-bottom:6px"></div>
+    <div class="row" style="flex-wrap:wrap;gap:8px;align-items:center">
+      <span>Radio: <b id="pkFreq">–</b></span>
+      <button type="button" id="pkTunePkt">Packet <span id="pkPf"></span></button>
+      <button type="button" id="pkTuneAprs">APRS <span id="pkAf"></span></button>
+      <span class="dim" id="pkKiss"></span>
+    </div>
+  </div>
+  <div class="pan" style="margin-bottom:10px">
+    <h3>Terminal (connected mode)</h3>
+    <div class="row" style="flex-wrap:wrap;gap:8px;align-items:center">
+      <label>Connect to <input id="pkCall" placeholder="W9ABC-1" style="width:110px;text-transform:uppercase" autocomplete="off"></label>
+      <label>via <input id="pkVia" placeholder="digipeaters, optional" style="width:170px;text-transform:uppercase" autocomplete="off"></label>
+      <button type="button" class="pri" id="pkConn">Connect</button><button type="button" id="pkDisc">Disconnect</button>
+      <span id="pkState" class="dim"></span>
+    </div>
+    <pre id="pkTerm" style="height:300px;overflow:auto;background:#0b1014;border:1px solid var(--line);border-radius:6px;padding:8px;margin:8px 0;font:14px/1.35 var(--mono);white-space:pre-wrap;word-break:break-word"></pre>
+    <div class="row" style="gap:8px"><input id="pkIn" placeholder="Type and press Enter" style="flex:1;font-family:var(--mono)" autocomplete="off"><button type="button" class="pri" id="pkSend">Send</button></div>
+  </div>
+  <div class="pan" style="margin-bottom:10px">
+    <h3>Unproto (UI frame to anyone)</h3>
+    <div class="row" style="flex-wrap:wrap;gap:8px;align-items:center">
+      <label>To <input id="pkUiTo" value="CQ" style="width:90px;text-transform:uppercase"></label>
+      <label>via <input id="pkUiVia" style="width:150px;text-transform:uppercase" placeholder="optional"></label>
+      <input id="pkUiTxt" placeholder="Text" style="flex:1;min-width:160px"><button type="button" id="pkUiSend">Send UI</button>
+    </div>
+  </div>
+  <div class="pan">
+    <h3 style="display:flex;align-items:center;gap:10px">Monitor <span style="flex:1"></span><label style="text-transform:none;letter-spacing:0;font-weight:400"><input type="checkbox" id="pkHideAprs"> hide APRS</label></h3>
+    <pre id="pkMon" style="height:260px;overflow:auto;background:#0b1014;border:1px solid var(--line);border-radius:6px;padding:8px;margin:0;font:12.5px/1.35 var(--mono);white-space:pre-wrap;word-break:break-all"></pre>
+  </div>
+</section>
 <section id="tab-set" class="hide">
   <div class="pan">
     <h3>Station</h3>
@@ -361,6 +396,10 @@ table.imp th{color:var(--dim);font-weight:500}
       <label for="s_aprsLat">Fixed position: latitude</label><input id="s_aprsLat" inputmode="decimal" placeholder="e.g. 39.7686 (empty = GPS or grid)">
       <label for="s_aprsLon">Fixed position: longitude</label><input id="s_aprsLon" inputmode="decimal" placeholder="e.g. -86.1581 (west is minus)">
       <label for="s_aprsLevel">APRS audio level % (FM deviation)</label><input id="s_aprsLevel" inputmode="numeric">
+      <label for="s_pktCall">Packet call-SSID (empty = callsign)</label><input id="s_pktCall" maxlength="9" style="text-transform:uppercase" placeholder="AC9HP">
+      <label for="s_pktFreq">Packet frequency, MHz</label><input id="s_pktFreq" inputmode="decimal" placeholder="145.010">
+      <label for="s_pktAccept">Take incoming packet connections</label><select id="s_pktAccept"><option value="1">Yes (with Enable TX on)</option><option value="0">No</option></select>
+      <label for="s_kissPort">KISS TNC TCP port (0 = off)</label><input id="s_kissPort" inputmode="numeric" placeholder="8001">
       <div style="grid-column:1/-1"><b>Map on the touch screen:</b> <span id="mapInfo">…</span>
         <div class="row" style="margin-top:4px"><button type="button" id="mapGet">Get detailed map from GitHub</button><button type="button" id="mapDel">Remove detailed map</button><span id="mapMsg" class="hint"></span></div>
         <p class="hint" style="margin:4px 0 0">The detailed map adds US counties, highways and finer coasts and borders (Natural Earth 1:10m, about 3.5 MB). This browser downloads it from the RigDeck site, so it needs internet; RigDeck stores it on the microSD card. Without it the touch screen uses the outlines built into RigDeck.</p></div>
@@ -578,7 +617,7 @@ function render(){
   if(tx.wd) banner("TX watchdog stopped automatic transmission. Press Enable TX to resume.");
   if(S.cfg&&!cfgLoaded){
     cfgLoaded=true;
-    for(const k in S.cfg){const e=$("s_"+k);if(e) e.value=k==="civAddr"?"0x"+(+S.cfg[k]).toString(16).toUpperCase():k==="aprsFreq"?(+S.cfg[k]/1e6).toFixed(3):S.cfg[k];}
+    for(const k in S.cfg){const e=$("s_"+k);if(e) e.value=k==="civAddr"?"0x"+(+S.cfg[k]).toString(16).toUpperCase():(k==="aprsFreq"||k==="pktFreq")?(+S.cfg[k]/1e6).toFixed(3):S.cfg[k];}
     for(const [id,key] of [["dvBright","bright"],["dvContrast","contrast"]]) if(S.cfg[key]!==undefined){$(id).value=S.cfg[key];$(id+"V").textContent=S.cfg[key]+" %";}
     if(S.conlog!==undefined) $("dvConsole").checked=!!S.conlog; else if(S.cfg.consoleLog!==undefined) $("dvConsole").checked=+S.cfg.consoleLog>0;
     rigName=S.cfg.rigName||"";
@@ -686,10 +725,11 @@ wf.addEventListener("click",e=>{
 document.querySelector("nav").addEventListener("click",e=>{
   const t=e.target.dataset.tab; if(!t) return;
   document.querySelectorAll("nav button").forEach(b=>b.className=b.dataset.tab===t?"on":"");
-  ["op","qlog","log","cwt","set"].forEach(x=>$("tab-"+x).classList.toggle("hide",x!==t));
+  ["op","qlog","log","cwt","pkt","set"].forEach(x=>$("tab-"+x).classList.toggle("hide",x!==t));
   if(t!=="cwt") ctStop();
   if(t==="log"&&!LG.edit) lgLoad();
   if(t==="set"){ loadConsoleLogs(); mapInfo(); }
+  PK.on=t==="pkt";if(PK.on)pkPoll();
 });
 document.body.addEventListener("click",e=>{
   const b=e.target.closest("button,tr"); if(!b) return; const d=b.dataset;
@@ -741,6 +781,40 @@ $("freq").onclick=async()=>{
   await cmd("rmode",{m:code,fil:1});
   cmd("rdata",{v:md.endsWith("-D")?"1":"0"});
 };
+// ---- packet terminal: polls the board while the Packet tab is open
+const PK={on:false,mon:0,term:0,busy:false,lines:[]};
+function pkMHz(hz){return hz?(hz/1e6).toFixed(3)+" MHz":"–";}
+async function pkPoll(){
+  if(!PK.on||PK.busy)return;PK.busy=true;
+  try{
+    const j=await cmd("pktview",{mon:PK.mon,term:PK.term});
+    if(j&&j.ok!==false&&j.state!==undefined){
+      $("pkNote").textContent=j.aprsMode?`Your call on packet: ${j.me}. Packet uses the APRS modem: 1200 baud AFSK on FM. ${j.txen?"TX enabled: RigDeck answers stations that connect to you"+(j.accept?"":" (incoming connections off in Settings)")+" and sends for KISS programs.":"Press Enable TX to let RigDeck answer incoming connections and send for KISS programs."}`:"Switch the mode to APRS (Operate tab) to use packet: it runs on the APRS modem.";
+      $("pkFreq").textContent=pkMHz(j.freq);$("pkPf").textContent=pkMHz(j.pktFreq);$("pkAf").textContent=pkMHz(j.aprsFreq);
+      $("pkKiss").textContent=j.kiss.port?`KISS TNC: TCP port ${j.kiss.port} at this RigDeck's address, ${j.kiss.clients} program${j.kiss.clients===1?"":"s"} connected`:"KISS TNC off (Settings, APRS)";
+      $("pkState").textContent=j.state==="disconnected"?"Not connected":`${j.state[0].toUpperCase()+j.state.slice(1)} ${j.peer}${j.via?" via "+j.via:""}${j.wait?" · "+j.wait+" waiting":""}${j.dcd?" · channel busy":""}`;
+      $("pkConn").disabled=j.state!=="disconnected";$("pkDisc").disabled=j.state==="disconnected";$("pkSend").disabled=j.state!=="connected";
+      const t=$("pkTerm"),atEnd=t.scrollTop+t.clientHeight>=t.scrollHeight-20;
+      for(const [n,s] of j.term){PK.term=n;const k=s[0],x=s.slice(1);const sp=document.createElement("span");
+        if(k==="i"){sp.style.color="var(--amb)";sp.textContent=(t.textContent&&!t.textContent.endsWith("\n")?"\n":"")+x+"\n";}
+        else if(k==="s"){sp.style.color="var(--rx)";sp.textContent=x;}else sp.textContent=x;t.appendChild(sp);}
+      if(atEnd)t.scrollTop=t.scrollHeight;
+      const m=$("pkMon"),mEnd=m.scrollTop+m.clientHeight>=m.scrollHeight-20;
+      for(const [n,s] of j.mon){PK.mon=n;PK.lines.push(s);}
+      if(j.mon.length){if(PK.lines.length>300)PK.lines=PK.lines.slice(-300);pkMonDraw();if(mEnd)m.scrollTop=m.scrollHeight;}
+    }
+  }catch(e){}
+  PK.busy=false;setTimeout(pkPoll,1000);
+}
+function pkMonDraw(){const hide=$("pkHideAprs").checked;$("pkMon").textContent=PK.lines.filter(l=>!hide||!/>AP[A-Z0-9]*[ ,<]/.test(l)&&!/ <UI C>: [!=@\/;:)`'>]/.test(l)).join("\n");}
+$("pkHideAprs").onchange=pkMonDraw;
+async function pkDo(c,a,okMsg){const j=await cmd(c,a||{});if(j&&j.ok===false&&j.err)banner(j.err);return j;}
+$("pkConn").onclick=()=>{const c=$("pkCall").value.trim();if(!c){$("pkCall").focus();return;}pkDo("pktconn",{call:c,via:$("pkVia").value.trim()});};
+$("pkDisc").onclick=()=>pkDo("pktdisc");
+$("pkSend").onclick=()=>{const v=$("pkIn").value;pkDo("pktsend",{text:v});$("pkIn").value="";$("pkIn").focus();};
+$("pkIn").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();$("pkSend").click();}};
+$("pkUiSend").onclick=()=>{if(!$("pkUiTxt").value.trim())return;pkDo("pktui",{to:$("pkUiTo").value.trim(),via:$("pkUiVia").value.trim(),text:$("pkUiTxt").value});$("pkUiTxt").value="";};
+$("pkTunePkt").onclick=()=>pkDo("pkttune",{f:"pkt"});$("pkTuneAprs").onclick=()=>pkDo("pkttune",{f:"aprs"});
 $("dvBetaN").onchange=()=>{cmd("set",{betaNotice:$("dvBetaN").checked?"1":"0"});updLast=0;setTimeout(updCheck,1200);};
 $("dvConsole").onchange=()=>{cmd("set",{consoleLog:$("dvConsole").checked?"1":"0"});setTimeout(loadConsoleLogs,1500);};
 // Answer priority list: s_prio holds "pota,-sota,dx,..." ('-' = rule off); the list edits it.
@@ -1297,7 +1371,7 @@ async function updCheck(){
 }
 $("save").onclick=async()=>{
   const a={};
-  document.querySelectorAll("#form input[id^=\"s_\"],#form select[id^=\"s_\"]").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=k==="aprsFreq"&&e.value?String(Math.round(parseFloat(e.value)*1e6)):e.value;});
+  document.querySelectorAll("#form input[id^=\"s_\"],#form select[id^=\"s_\"]").forEach(e=>{const k=e.id.slice(2);if(e.type==="password"&&!e.value)return;a[k]=(k==="aprsFreq"||k==="pktFreq")&&e.value?String(Math.round(parseFloat(e.value)*1e6)):e.value;});
   const j=await cmd("set",a);
   if(j.ok){$("saveinfo").textContent=j.restart?"Saved. Restart the device to apply the hotspot changes.":"Saved.";cfgLoaded=false;render.call=undefined;}
 };

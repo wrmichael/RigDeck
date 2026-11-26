@@ -85,6 +85,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
     <li><a href="#listen">Listening in the browser</a></li>
     <li><a href="#time">Keeping the time</a></li>
     <li><a href="#wifi">Wi-Fi</a></li>
+    <li><a href="#packet">Packet radio</a></li>
     <li><a href="#multi">All stations in one window</a></li>
     <li><a href="#update">Updates and settings files</a></li>
     <li><a href="#trouble">Troubleshooting</a></li>
@@ -365,6 +366,18 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
   <li>A different dog every game, most often a Shih Tzu or a Maltese. Now and then a station answers with its own QSL card, signed by its cat or dog; it goes in your <b>album</b> (viewing it pauses the game). The album is kept on the microSD card.</li>
   <li>Calls from your log show up on the air. ☰ has the voice (the dog and your human talk, using the browser's speech), the tone and whether your human's side is played.</li>
   <li>You can also <a href="k0dog.html">play it here in the browser</a> (album kept in that browser).</li>
+</ul>
+
+<h2 id="packet">Packet radio <span class="pill">BETA</span></h2>
+<p><img src="img/web-packet.png" alt="Packet tab: connected to a BBS, the monitor below" style="max-width:100%"></p>
+<p>Packet uses the APRS modem (1200 baud AFSK on FM), so switch the mode to <b>APRS</b> first. Then the web page's <b>Packet</b> tab has:</p>
+<ul>
+  <li><b>Radio</b>: buttons that tune the radio to your packet frequency (Settings, APRS; 145.010 MHz unless you change it) and back to APRS. APRS beacons pause while the radio is away from the APRS frequency.</li>
+  <li><b>Terminal</b>: connect to a BBS, a node or another station (AX.25 connected mode), optionally through digipeaters, and type away; Disconnect ends it. Stations can also connect to you while <b>Enable TX</b> is on (keyboard to keyboard); turn that off in Settings if you prefer.</li>
+  <li><b>Unproto</b>: a one-off UI frame to anyone (CQ, a beacon), through digipeaters if you like.</li>
+  <li><b>Monitor</b>: every packet heard and sent, TNC style, APRS hidden if you tick the box.</li>
+  <li><b>KISS TNC</b>: PC programs (Winlink Express, Pat, YAAC, APRSIS32, Linux AX.25 …) connect over the network to <b>TCP port 8001</b> at the RigDeck's address and use it as their TNC. What they send goes out only while <b>Enable TX</b> is on. Works on the hotspot and on the home network.</li>
+  <li>Your packet call-SSID is your callsign unless you set one in Settings, APRS.</li>
 </ul>
 
 <h2 id="multi">All stations in one window <span class="pill">BETA</span></h2>

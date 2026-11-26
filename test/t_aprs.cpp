@@ -3,6 +3,7 @@
 #include "aprs.h"
 #include "dsp.h"
 #include "app.h"
+#include "ax25.h"
 #include "clock.h"
 #include <sys/stat.h>
 #include <cstdio>
@@ -138,6 +139,47 @@ int main() {
         CHECK(js.find("\"queued\":3") != std::string::npos);           // the ack, the message once, one beacon
         CHECK(app.command("set", {{"aprsPath", "WIDE1-1,WIDE2-1"}, {"aprsSym", "/>"}, {"aprsLat", "39.77"}, {"aprsLon", "-86.16"}}).find("\"ok\":true") != std::string::npos);
         CHECK(app.command("set", {{"aprsPath", "WIDE1-1,,"}}).find("\"ok\":false") != std::string::npos);
+    }
+
+    {   // packet on the same modem: a station connects to us, the monitor and KISS see it, we answer UA
+        App app;
+        app.begin("test/out/aprs2");
+        app.usbSerial = true;
+        app.usbAudio = true;
+        app.command("set", {{"call", "AC9HP"}, {"grid", "EM69"}});
+        app.command("mode", {{"m", "APRS"}});
+        clk::setUtcMs(1795600000000LL, "test");
+        CHECK(app.command("txen", {{"v", "1"}}).find("\"ok\":true") != std::string::npos);
+        app.kissClients = 1;
+        ax25::Frame s;
+        s.dst = "AC9HP"; s.src = "W9ABC-1"; s.command = true; s.ctl = ax25::ctlU(ax25::K_SABM, true); s.pid = -1;
+        AfskMod m;
+        m.start({ax25::encodeFcs(s)}, 48000, 300);
+        std::vector<int16_t> pcm;
+        while (!m.done()) pcm.push_back((int16_t)(8000 * m.next()));
+        for (int i = 0; i < 4800; i++) pcm.push_back(0);
+        for (size_t p = 0; p < pcm.size(); p += 480) app.rxAudio48k(pcm.data() + p, std::min<size_t>(480, pcm.size() - p));
+        app.tick();
+        std::string js = app.command("pktview", {});
+        CHECK(js.find("W9ABC-1>AC9HP <SABM C P>") != std::string::npos);
+        CHECK(js.find("\"state\":\"connected\"") != std::string::npos && js.find("they called you") != std::string::npos);
+        CHECK(js.find("TX AC9HP>W9ABC-1 <UA R F>") != std::string::npos);
+        std::vector<std::vector<uint8_t>> k;
+        app.kissTake(k);
+        ax25::Frame g;
+        CHECK(k.size() == 1 && ax25::decode(k[0].data(), k[0].size(), g) && g.kind() == ax25::K_SABM);   // without FCS
+        // a program sends a UI frame through KISS; and an unproto CQ from the web page
+        ax25::Frame ui; ui.dst = "CQ"; ui.src = "AC9HP"; ui.ctl = ax25::ctlU(ax25::K_UI, false); ui.info = "from Winlink";
+        app.kissFromHost(ax25::encode(ui));
+        CHECK(app.command("pktui", {{"to", "CQ"}, {"text", "RigDeck packet test"}}).find("\"ok\":true") != std::string::npos);
+        CHECK(app.command("pktsend", {{"text", "hello"}}).find("\"ok\":true") != std::string::npos);
+        app.tick();
+        js = app.command("pktview", {});
+        CHECK(js.find("(KISS)") != std::string::npos && js.find("RigDeck packet test") != std::string::npos);
+        CHECK(app.command("pktconn", {{"call", "W9XYZ"}}).find("disconnect first") != std::string::npos);
+        app.command("pktdisc", {});
+        app.tick();
+        CHECK(app.command("pktview", {}).find("disconnecting") != std::string::npos);
     }
 
     printf(fails ? "t_aprs: %d of %d FAILED\n" : "t_aprs: all %d checks passed\n", fails ? fails : checks, checks);

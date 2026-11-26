@@ -1180,11 +1180,23 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
     if (aprsTuneReq_ && radio.connected()) { bandReqHz_ = cfg.aprsFreq; aprsTuneReq_ = false; }
     std::vector<std::vector<uint8_t>> in;
     { std::lock_guard<std::mutex> lk(aprsInMtx_); in.swap(aprsIn_); }
-    for (const auto& b : in) { aprs::Frame f; if (aprs::decodeFrame(b.data(), b.size(), f)) aprsHandle(f); }
+    pkt_.me = pktMyCall();
+    pkt_.acceptIncoming = cfg.pktAccept && seq.txEnabled;             // answering on its own only with Enable TX on
+    for (const auto& b : in) {                                         // every frame: monitor, KISS, terminal, APRS
+        ax25::Frame g;
+        if (!ax25::decodeFcs(b.data(), b.size(), g)) continue;
+        pktMon(ax25::monitor(g));
+        if (kissClients.load() > 0) { std::lock_guard<std::mutex> lk(kissMtx_); if (kissRx_.size() < 50) kissRx_.emplace_back(b.begin(), b.end() - 2); }
+        pkt_.onFrame(g, mono);
+        aprs::Frame f;
+        if (g.kind() == ax25::K_UI && aprs::decodeFrame(b.data(), b.size(), f)) aprsHandle(f);
+    }
+    pktTick(mono);
+    bool onAprs = radio.freq.load() == 0 || llabs((long long)radio.freq.load() - cfg.aprsFreq) < 5000;   // the terminal may have tuned away
     // Beacons only while TX is enabled (the watchdog applies as for FT8); the first one soon after enabling.
     if (seq.txEnabled && !aprsWasEnabled_) aprsNextBeacon_ = mono + 5000;
     aprsWasEnabled_ = seq.txEnabled;
-    if (seq.txEnabled && cfg.aprsBeaconMin > 0 && aprsNextBeacon_ && mono >= aprsNextBeacon_) {
+    if (seq.txEnabled && onAprs && cfg.aprsBeaconMin > 0 && aprsNextBeacon_ && mono >= aprsNextBeacon_) {
         double la, lo;
         std::string src;
         if (aprs::validCallSsid(aprsMyCall()) && aprsMyPos(la, lo, src)) {
@@ -1207,12 +1219,17 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
     // Send when the channel has been clear for a moment (a random wait, so stations do not collide).
     if (aprsDem_.busy()) { aprsClearSince_ = 0; return; }
     if (!aprsClearSince_) aprsClearSince_ = mono + 300 + (mono % 7) * 100;
-    if (aprsOut_.empty() || mono < aprsClearSince_ || mono - aprsLastTx_ < 3000) return;
-    if (!radio.connected() || !usbAudio || !aprs::validCallSsid(aprsMyCall())) return;
+    if ((aprsOut_.empty() && pktOut_.empty()) || mono < aprsClearSince_ || mono - aprsLastTx_ < (pktOut_.empty() ? 3000 : 1000)) return;
+    if (!radio.connected() || !usbAudio) return;
     std::vector<std::vector<uint8_t>> frames;
+    size_t np = std::min<size_t>(pktOut_.size(), 7);                     // packet frames first: a link is waiting on them
+    frames.assign(pktOut_.begin(), pktOut_.begin() + (long)np);
+    pktOut_.erase(pktOut_.begin(), pktOut_.begin() + (long)np);
+    if (!aprs::validCallSsid(aprsMyCall()) || !onAprs) aprsOut_.clear();   // APRS only on its own frequency
+    size_t na = 0;
     std::vector<std::string> path;
     { std::string p = cfg.aprsPath, cur; for (size_t i = 0; i <= p.size(); i++) { if (i == p.size() || p[i] == ',') { if (!cur.empty()) path.push_back(cur); cur.clear(); } else cur += p[i]; } }
-    for (size_t i = 0; i < aprsOut_.size() && i < 3; i++) {
+    for (size_t i = 0; i < aprsOut_.size() && i < 3; i++, na++) {
         aprs::Frame f;
         f.src = aprsMyCall(); f.dst = "APZRDK"; f.path = path; f.info = aprsOut_[i];
         frames.push_back(aprs::encodeFrame(f));
@@ -1223,7 +1240,8 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
             if (m.out && !m.acked && m.nextMono < 0 && aprs::encodeMessage(m.to, m.text, m.id) == aprsOut_[i]) m.nextMono = mono + 30000;
     }
     while (aprsRaw_.size() > 30) aprsRaw_.pop_front();
-    aprsOut_.erase(aprsOut_.begin(), aprsOut_.begin() + (long)frames.size());
+    aprsOut_.erase(aprsOut_.begin(), aprsOut_.begin() + (long)na);
+    if (frames.empty()) return;
     aprsSeq_++;
     aprsMod_.start(frames, 48000, 300);
     maxTxMs_ = (int64_t)(aprsMod_.seconds() * 1000) + 2000;
@@ -1236,6 +1254,80 @@ void App::aprsQueueBeacon(const std::string& info) {              // mtx_ held
     for (auto& o : aprsOut_)
         if (!o.empty() && (o[0] == '=' || o[0] == '!' || o[0] == '@' || o[0] == '/')) { o = info; return; }
     aprsOut_.push_back(info);
+}
+
+// ---- packet radio
+std::string App::pktMyCall() const { return cfg.pktCall.empty() ? upperTrim(cfg.call) : cfg.pktCall; }
+void App::pktMon(const std::string& s) {                              // mtx_ held
+    char t[12];
+    time_t u = (time_t)(clk::utcMs() / 1000);
+    struct tm tm;
+    gmtime_r(&u, &tm);
+    snprintf(t, sizeof t, "%02d:%02d:%02d ", tm.tm_hour, tm.tm_min, tm.tm_sec);
+    pktMon_.push_back({++pktMonN_, t + s});
+    while (pktMon_.size() > 200) pktMon_.pop_front();
+}
+void App::pktTerm(const std::string& s) {                             // mtx_ held; first character: r received, s sent, i info
+    pktTerm_.push_back({++pktTermN_, s});
+    while (pktTerm_.size() > 400) pktTerm_.pop_front();
+}
+void App::pktTick(int64_t mono) {                                    // mtx_ held
+    pkt_.me = pktMyCall();
+    pkt_.acceptIncoming = cfg.pktAccept && seq.txEnabled;             // answering on its own only with Enable TX on
+    pkt_.tick(mono);
+    for (auto& e : pkt_.takeEvents()) {
+        if (e.type == ax25::Link::Event::INFO) { pktTerm("i" + e.text); logLine("Packet: " + e.text); status("Packet: " + e.text); }
+        else pktTerm("r" + e.text);
+    }
+    bool idle = pkt_.state() == ax25::Link::DISCONNECTED;
+    for (auto& f : pkt_.takeOut()) {
+        if (idle && !seq.txEnabled) continue;                         // no automatic answers (DM) without Enable TX
+        pktOut_.push_back(ax25::encodeFcs(f));
+        pktMon("TX " + ax25::monitor(f));
+    }
+    std::deque<std::vector<uint8_t>> k;
+    { std::lock_guard<std::mutex> lk(kissMtx_); k.swap(kissTx_); }
+    for (auto& fr : k) {
+        ax25::Frame g;
+        if (!ax25::decode(fr.data(), fr.size(), g)) continue;
+        if (!seq.txEnabled) {
+            if (!kissTxWarned_) { status("KISS: a program on the network wants to transmit: press Enable TX"); logLine("KISS: frame from a program dropped, TX not enabled"); }
+            kissTxWarned_ = true;
+            continue;
+        }
+        kissTxWarned_ = false;
+        std::vector<uint8_t> w = fr;
+        uint16_t c = aprs::fcs(w.data(), w.size());
+        w.push_back((uint8_t)(c & 0xFF));
+        w.push_back((uint8_t)(c >> 8));
+        pktOut_.push_back(w);
+        pktMon("TX " + ax25::monitor(g) + "  (KISS)");
+    }
+    while (pktOut_.size() > 40) pktOut_.erase(pktOut_.begin());
+}
+void App::kissFromHost(const std::vector<uint8_t>& frame) {
+    std::lock_guard<std::mutex> lk(kissMtx_);
+    if (kissTx_.size() < 20 && frame.size() >= 15 && frame.size() <= 400) kissTx_.push_back(frame);
+}
+void App::kissTake(std::vector<std::vector<uint8_t>>& out) {
+    std::lock_guard<std::mutex> lk(kissMtx_);
+    for (auto& f : kissRx_) out.push_back(std::move(f));
+    kissRx_.clear();
+}
+std::string App::pktJson(uint32_t monSince, uint32_t termSince) {    // mtx_ held
+    static const char* st[] = {"disconnected", "connecting", "connected", "disconnecting"};
+    std::string o = std::string("{\"ok\":true,\"aprsMode\":") + jbool(mode_ == DM_APRS) + ",\"me\":" + jstr(pktMyCall()) + ",\"state\":" + jstr(st[pkt_.state()]) +
+                    ",\"peer\":" + jstr(pkt_.peer()) + ",\"via\":" + jstr(pkt_.via()) + ",\"wait\":" + jnum((long long)pkt_.waiting()) +
+                    ",\"queued\":" + jnum((long long)pktOut_.size()) + ",\"dcd\":" + jbool(aprsDem_.busy()) + ",\"txen\":" + jbool(seq.txEnabled) +
+                    ",\"freq\":" + jnum((long long)radio.freq.load()) + ",\"pktFreq\":" + jnum(cfg.pktFreq) + ",\"aprsFreq\":" + jnum(cfg.aprsFreq) +
+                    ",\"accept\":" + jbool(cfg.pktAccept != 0) + ",\"kiss\":{\"port\":" + jnum((long long)cfg.kissPort) + ",\"clients\":" + jnum((long long)kissClients.load()) + "}";
+    o += ",\"monN\":" + jnum((long long)pktMonN_) + ",\"mon\":[";
+    bool first = true;
+    for (const auto& m : pktMon_) if (m.first > monSince) { o += std::string(first ? "" : ",") + "[" + jnum((long long)m.first) + "," + jstr(m.second) + "]"; first = false; }
+    o += "],\"termN\":" + jnum((long long)pktTermN_) + ",\"term\":[";
+    first = true;
+    for (const auto& m : pktTerm_) if (m.first > termSince) { o += std::string(first ? "" : ",") + "[" + jnum((long long)m.first) + "," + jstr(m.second) + "]"; first = false; }
+    return o + "]}";
 }
 
 // Every APRS packet heard and sent, one line each, in a daily file next to the logs (microSD card or the board).
@@ -1868,6 +1960,50 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         aprsSeq_++;
         return ok();
     }
+    // ---- packet terminal (APRS mode: the same modem) ----
+    if (c == "pktview") return pktJson((uint32_t)atol(arg(a, "mon").c_str()), (uint32_t)atol(arg(a, "term").c_str()));
+    if (c == "pktconn" || c == "pktsend" || c == "pktui" || c == "pkttune") {
+        if (mode_ != DM_APRS) return err("Switch to APRS first: packet uses the APRS modem (2 m FM)");
+        int64_t now = clk::monoMs();
+        if (c == "pkttune") {
+            long long hz = arg(a, "f") == "aprs" ? cfg.aprsFreq : arg(a, "f") == "pkt" ? cfg.pktFreq : atoll(arg(a, "f").c_str());
+            if (hz < 1800000 || hz > 450000000) return err("Not a frequency");
+            bandReqHz_ = hz;
+            logLine("Packet: radio to " + std::to_string(hz) + " Hz");
+            return ok();
+        }
+        if (c == "pktconn") {
+            std::string e;
+            pkt_.me = pktMyCall();
+            if (!pkt_.connect(upperTrim(arg(a, "call")), arg(a, "via"), now, e)) return err(e);
+            pktTick(now);
+            return ok();
+        }
+        if (c == "pktsend") {
+            std::string t = arg(a, "text");
+            if (t.size() > 2000) return err("Too long");
+            if (pkt_.state() != ax25::Link::CONNECTED) return err("Not connected");
+            pkt_.send(t + "\n");
+            pktTerm("s" + t + "\n");
+            pktTick(now);
+            return ok();
+        }
+        // unproto: a UI frame to anyone (CQ, a beacon), through digipeaters if wanted
+        std::string to = upperTrim(arg(a, "to")), t = arg(a, "text");
+        if (to.empty()) to = "CQ";
+        if (!ax25::validCall(to) || !ax25::validCall(pktMyCall())) return err("Callsigns: letters and digits, -SSID 0..15");
+        if (t.empty() || t.size() > 256) return err("Text: 1 to 256 characters");
+        ax25::Frame f;
+        f.dst = to; f.src = pktMyCall(); f.ctl = ax25::ctlU(ax25::K_UI, false); f.pid = 0xF0; f.info = t;
+        std::string v = upperTrim(arg(a, "via")), cur;
+        for (size_t i = 0; i <= v.size(); i++) { char ch = i < v.size() ? v[i] : ','; if (ch == ',' || ch == ' ') { if (!cur.empty()) f.path.push_back(cur); cur.clear(); } else cur += ch; }
+        for (const auto& d : f.path) if (!ax25::validCall(d)) return err("Not a digipeater call: " + d);
+        pktOut_.push_back(ax25::encodeFcs(f));
+        pktMon("TX " + ax25::monitor(f));
+        pktTerm("s[UI to " + to + "] " + t + "\n");
+        return ok();
+    }
+    if (c == "pktdisc") { pkt_.disconnect(clk::monoMs()); pktTick(clk::monoMs()); return ok(); }
     if (c == "aprsclear") { aprsSta_.clear(); aprsRaw_.clear(); aprsMsgs_.clear(); return ok(); }
     // ---- CW trainer through the radio's sidetone: break-in off, so the keyer does not transmit ----
     if (c == "cwtrain") {

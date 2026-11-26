@@ -132,6 +132,10 @@ bool Settings::set(const std::string& k, const std::string& v) {
         return true;
     }
     if (k == "prioOn") return toInt(v, 0, 1, prioOn);
+    if (k == "pktCall") { std::string c = upperTrim(v); if (!c.empty() && !aprs::validCallSsid(c)) return false; pktCall = c; return true; }
+    if (k == "pktFreq") { long long hz = atoll(v.c_str()); if (hz < 1800000 || hz > 450000000) return false; pktFreq = hz; return true; }
+    if (k == "pktAccept") return toInt(v, 0, 1, pktAccept);
+    if (k == "kissPort") return toInt(v, 0, 65535, kissPort);
     if (k == "aprsCall") { std::string c = upperTrim(v); if (!c.empty() && !aprs::validCallSsid(c)) return false; aprsCall = c; return true; }
     if (k == "aprsFreq") { long long hz = atoll(v.c_str()); if (hz < 28000000 || hz > 450000000) return false; aprsFreq = hz; return true; }
     if (k == "aprsBeaconMin") return toInt(v, 0, 120, aprsBeaconMin);
@@ -193,6 +197,7 @@ std::string Settings::serialize(bool secrets) const {
     I("cwWpm", cwWpm); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);
     I("gpsModule", gpsModule); I("gpsModBaud", gpsModBaud); I("gpsRxPin", gpsRxPin); I("gpsPpsPin", gpsPpsPin);
     I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("betaNotice", betaNotice); S("updSeen", updSeen); I("confirmQso", confirmQso); I("deadman", deadman); S("dnw", dnw); I("prioOn", prioOn); S("prio", prio); I("dxKm", dxKm);
+    S("pktCall", pktCall); s += "pktFreq=" + std::to_string(pktFreq) + "\n"; I("pktAccept", pktAccept); I("kissPort", kissPort);
     S("aprsCall", aprsCall); s += "aprsFreq=" + std::to_string(aprsFreq) + "\n"; I("aprsBeaconMin", aprsBeaconMin); S("aprsSym", aprsSym); S("aprsComment", aprsComment);
     S("aprsPath", aprsPath); S("aprsLat", aprsLat); S("aprsLon", aprsLon); I("aprsLevel", aprsLevel); S("deadmanHost", deadmanHost); S("txLevels", txLevels);
     return s;

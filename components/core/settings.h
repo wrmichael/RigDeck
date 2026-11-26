@@ -64,6 +64,10 @@ struct Settings {
     int dxKm = 2500;                     // the "DX" rule: farther than this, from the grid in its message
     // APRS (mode APRS on the web page): 1200 baud packets on FM
     std::string aprsCall;                // call-SSID on the air, e.g. AC9HP-9 (empty = the station callsign)
+    std::string pktCall;                 // packet terminal call-SSID (empty = the station callsign)
+    long long pktFreq = 145010000;       // packet frequency the terminal tunes to (BBS, nodes)
+    int pktAccept = 1;                   // take incoming connections (keyboard to keyboard)
+    int kissPort = 8001;                 // KISS TNC on TCP for PC programs (0 = off)
     long long aprsFreq = 144390000;      // North America; 144.800 in Europe
     int aprsBeaconMin = 10;              // position beacon interval while TX is enabled (0 = no beacons)
     std::string aprsSym = "/-";          // symbol table and code: /- house, /> car, /[ person, /k truck

@@ -1,6 +1,13 @@
 # Changes
 
 ## 1.1.7-beta
+- **Packet radio** on the APRS modem (switch to APRS): a Packet tab with a connected-mode AX.25 2.0 terminal (BBS,
+  nodes, keyboard to keyboard, digipeaters; window 4, retries, REJ, polling), unproto UI frames, a TNC-style
+  monitor of every frame, and buttons to tune between the packet and APRS frequencies (beacons pause away from
+  APRS). **KISS TNC over TCP** (port 8001) for Winlink Express, Pat, YAAC and other programs; their frames go out
+  only with Enable TX on. Incoming connections are answered only with Enable TX on. Settings: packet call-SSID,
+  packet frequency, incoming connections, KISS port. The demodulator now also passes the shortest control
+  frames (17 bytes).
 - **K0DOG**, the QSL-card dog game, in the CW trainer (button in Audiowide, opens /k0dog): copy the call, RST and
   band from a CW QSO between your operator and a station on the air, fill out the QSL card and the dog stamps it
   "PSE QSL" with its paw and sends it out the mail slot. Random dogs (mostly Shih Tzu and Maltese), random OM/YL
