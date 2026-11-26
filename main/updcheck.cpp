@@ -26,8 +26,9 @@ static void task(void*) {
         int waitMin = 10;
         if (s_app->staStatus().state == "connected") {
             std::string e1, e2;
-            std::string st = versionAt("https://wrmichael.github.io/RigDeck/stable/manifest.json", e1);
-            std::string be = versionAt("https://wrmichael.github.io/RigDeck/manifest.json", e2);
+            // Each board has its own folder on the site (RIGDECK_SITE_DIR: "" for the 7B, "nano/" for the NANO).
+            std::string st = versionAt(std::string("https://wrmichael.github.io/RigDeck/") + RIGDECK_SITE_DIR + "stable/manifest.json", e1);
+            std::string be = versionAt(std::string("https://wrmichael.github.io/RigDeck/") + RIGDECK_SITE_DIR + "manifest.json", e2);
             if (!st.empty() || !be.empty()) {
                 s_app->setReleases(st, be);
                 ESP_LOGI(TAG, "RigDeck site: Stable %s, Beta %s", st.empty() ? "?" : st.c_str(), be.empty() ? "?" : be.c_str());

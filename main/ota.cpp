@@ -18,6 +18,7 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#include "esp_app_desc.h"
 #include "esp_app_format.h"
 #include "esp_partition.h"
 #include "esp_heap_caps.h"
@@ -75,7 +76,10 @@ static std::string checkHeader(const uint8_t* b, std::string& ver) {
     char proj[33] = {}, v[33] = {};
     memcpy(proj, d->project_name, 32);
     memcpy(v, d->version, 32);
-    if (strcmp(proj, "rigdeck") != 0) return std::string("That is firmware for something else (") + proj + "), not RigDeck.";
+    const char* mine = esp_app_get_description()->project_name;   // rigdeck (7B) or rigdeck-nano
+    if (strncmp(proj, "rigdeck", 7) != 0) return std::string("That is firmware for something else (") + proj + "), not RigDeck.";
+    if (strcmp(proj, mine) != 0)
+        return std::string("That firmware is for another RigDeck board (") + proj + "); this board needs " + mine + ". Nothing was changed.";
     ver = v;
     return "";
 }

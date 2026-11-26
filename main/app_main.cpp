@@ -176,6 +176,7 @@ extern "C" void app_main(void) {
     clk::setSink(rtcSink);
     s_app.haveRam = haveRam;
     s_app.fwVersion = esp_app_get_description()->version;
+    s_app.siteDir = RIGDECK_SITE_DIR;
     s_app.logFn = [](const char* line) { ESP_LOGI("app", "%s", line); };
     std::string logDir;                               // the log goes on the microSD card when one is in
 #if CONFIG_IDF_TARGET_ESP32P4

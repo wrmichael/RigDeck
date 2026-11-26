@@ -1379,7 +1379,7 @@ async function otaSend(blob,name){
 }
 $("otaGo").onclick=()=>{const f=$("otaFile").files[0];if(!f){$("otaMsg").textContent="Choose rigdeck-x.y.z.bin first";return;}otaSend(f,f.name);};
 async function otaNet(ch){
-  const m=$("otaMsg"),base=OTA_SITE+(ch==="stable"?"stable/":"");
+  const m=$("otaMsg"),base=OTA_SITE+(S.site||"")+(ch==="stable"?"stable/":"");
   try{
     m.textContent="Checking "+ch+" …";
     const man=await (await fetch(base+"manifest.json",{cache:"no-store"})).json();
@@ -1410,7 +1410,7 @@ async function updCheck(){
   if(now-updLast>6*3600e3&&!(S.rel&&(S.rel.stable||S.rel.beta))){
     updLast=now;
     const get=async u=>{try{return (await (await fetch(u,{cache:"no-store"})).json()).version||"";}catch(e){return "";}};
-    updRel={stable:await get(OTA_SITE+"stable/manifest.json"),beta:await get(OTA_SITE+"manifest.json")};
+    updRel={stable:await get(OTA_SITE+(S.site||"")+"stable/manifest.json"),beta:await get(OTA_SITE+(S.site||"")+"manifest.json")};
   }
   const rel=S.rel&&(S.rel.stable||S.rel.beta)?S.rel:updRel;
   const o=vOffer(S.ver,rel.stable,rel.beta,!!S.betan),box=$("updBox");

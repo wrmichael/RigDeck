@@ -1,5 +1,11 @@
 # Changes
 
+## 1.1.12-beta
+- **Waveshare ESP32-P4-NANO** (no screen) as a second board: the same RigDeck without the touch screen, for
+  16 MB of flash, operated from the web page and the All stations page. The flasher page has a board choice; each
+  board finds its releases in its own folder (the NANO in nano/) and installs only firmware for its own board
+  (firmware name rigdeck / rigdeck-nano). release.ps1 builds both (-Board 7b or nano for one).
+
 ## 1.1.11-beta
 - **Wi-Fi update no longer hangs part-way** (seen stuck at 22 %): a piece whose answer never comes is sent again
   after a time limit, the board gives up on a stalled piece after about 90 s instead of 10 minutes and asks for

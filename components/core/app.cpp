@@ -2579,7 +2579,7 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     }
     o += "]}";
     std::string usbP = usbProblemText();
-    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : !usbP.empty() ? usbP : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) + ",\"k0dog\":" + jbool(k0dogReady.load()) + ",\"conlog\":" + jbool(consoleLogOn()) + ",\"betan\":" + jbool(betaNoticeOn()) + ",\"rel\":{\"stable\":" + jstr(relStable_) + ",\"beta\":" + jstr(relBeta_) + "}" +
+    o += ",\"msg\":" + jstr(memFail ? "Not enough RAM for the decoder - this firmware needs a board with PSRAM" : !usbP.empty() ? usbP : status_) + ",\"net\":" + jstr(netInfo_) + ",\"ver\":" + jstr(fwVersion) + ",\"site\":" + jstr(siteDir) + ",\"k0dog\":" + jbool(k0dogReady.load()) + ",\"conlog\":" + jbool(consoleLogOn()) + ",\"betan\":" + jbool(betaNoticeOn()) + ",\"rel\":{\"stable\":" + jstr(relStable_) + ",\"beta\":" + jstr(relBeta_) + "}" +
          ",\"sta\":{\"state\":" + jstr(sta_.state) + ",\"ssid\":" + jstr(sta_.ssid) + ",\"ip\":" + jstr(sta_.ip) +
          ",\"rssi\":" + jnum(sta_.rssi) + ",\"reason\":" + jstr(sta_.reason) + "}" +
          ",\"inet\":" + jnum(cfg.deadman ? inet_.load() : -2) +

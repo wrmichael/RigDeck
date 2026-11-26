@@ -45,7 +45,10 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
   <p class="tag">FT8 / FT4 / FT-CW station, ADIF logger and control head for your radio. <a href="guide.html">Read the user guide</a>.</p>
 
   <div class="card">
-    <div class="ver">Waveshare ESP32-P4-WIFI6-Touch-LCD-7B</div>
+    <div class="chan" role="radiogroup" aria-label="Board">
+      <label><input type="radio" name="bd" value="7b" checked> <b>Waveshare ESP32-P4-WIFI6-Touch-LCD-7B</b> <small>7-inch touch screen</small></label>
+      <label><input type="radio" name="bd" value="nano"> <b>Waveshare ESP32-P4-NANO</b> <small>no screen: use the web page and the All stations page</small></label>
+    </div>
     <div class="chan" role="radiogroup" aria-label="Firmware channel">
       <label><input type="radio" name="ch" value="stable" checked> <b>Stable</b> <span id="vStable">…</span> <small>tested, recommended</small></label>
       <label><input type="radio" name="ch" value="beta"> <b>Beta</b> <span id="vBeta">…</span> <small>newest features, may have bugs</small></label>
@@ -54,7 +57,7 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
       <li>Connect the board's <b>USB-C port</b> to this computer with a data cable (not the USB-A port the radio plugs into).</li>
       <li>Press <b>Install RigDeck</b>, pick the board's serial port (often "USB Serial" or "CH343"), and follow the steps.</li>
       <li><b>Updating?</b> When asked, leave <b>"Erase device" unticked</b> to keep your logs and settings.</li>
-      <li>When it restarts, join the Wi-Fi network <b>RigDeck</b> (password <code>ft8ft8ft8</code>) and open <b>http://192.168.4.1</b>, or use the touch screen.</li>
+      <li>When it restarts, join the Wi-Fi network <b>RigDeck-XXXXXX</b> (password <code>ft8ft8ft8</code>) and open <b>http://192.168.4.1</b>, or use the touch screen (7B).</li>
     </ol>
     <div class="row">
       <esp-web-install-button id="inst" manifest="stable/manifest.json">
@@ -107,19 +110,38 @@ esp-web-install-button:not(:defined) [slot=unsupported],esp-web-install-button:n
   <footer>RigDeck by AC9HP. Flashing uses <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a>; nothing is installed on your computer. Title font: Audiowide (<a href="fonts/Audiowide-OFL.txt">SIL Open Font License</a>).</footer>
 </main>
 <script>
+// Each board has its own folder: the 7B at the top level, the NANO in nano/ (same layout inside).
+const DIR = {"7b": "", nano: "nano/"};
 const CH = {stable: {m: "stable/manifest.json", bin: "stable/rigdeck.bin", el: "vStable"},
             beta:   {m: "manifest.json",        bin: "firmware/rigdeck.bin", el: "vBeta"}};
-const ver = {};
-for (const k in CH) fetch(CH[k].m).then(r => r.json()).then(m => {
-  ver[k] = m.version; document.getElementById(CH[k].el).textContent = m.version; pick();
-}).catch(() => { document.getElementById(CH[k].el).textContent = "(not released yet)"; });
+let ver = {};
+function board() { return document.querySelector("input[name=bd]:checked").value; }
+function loadVersions() {
+  const d = DIR[board()], b = board();
+  ver = {};
+  for (const k in CH) {
+    document.getElementById(CH[k].el).textContent = "…";
+    fetch(d + CH[k].m, {cache: "no-store"}).then(r => r.json()).then(m => {
+      if (board() !== b) return;
+      ver[k] = m.version; document.getElementById(CH[k].el).textContent = m.version; pick();
+    }).catch(() => {
+      if (board() !== b) return;
+      document.getElementById(CH[k].el).textContent = "(not released yet)";
+      if (k === "stable") document.querySelector("input[name=ch][value=beta]").checked = true;   // only a Beta yet
+      pick();
+    });
+  }
+  pick();
+}
 function pick() {
-  const k = document.querySelector("input[name=ch]:checked").value;
-  document.getElementById("inst").setAttribute("manifest", CH[k].m);
+  const k = document.querySelector("input[name=ch]:checked").value, d = DIR[board()];
+  document.getElementById("inst").setAttribute("manifest", d + CH[k].m);
   const dl = document.getElementById("dl");
-  dl.href = CH[k].bin; dl.setAttribute("download", "rigdeck-" + (ver[k] || k) + ".bin");
+  dl.href = d + CH[k].bin; dl.setAttribute("download", (board() === "nano" ? "rigdeck-nano-" : "rigdeck-") + (ver[k] || k) + ".bin");
 }
 document.querySelectorAll("input[name=ch]").forEach(e => e.onchange = pick);
+document.querySelectorAll("input[name=bd]").forEach(e => e.onchange = loadVersions);
+loadVersions();
 fetch("firmware/rigdeck-wifi-chip.bin", {method: "HEAD"}).then(r => {
   if (r.ok) { document.getElementById("wc").style.display = ""; document.getElementById("wcnote").style.display = ""; }
 }).catch(() => {});

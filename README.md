@@ -7,8 +7,8 @@
 More screens, including the web control page, are on the [flasher page](https://wrmichael.github.io/RigDeck/).
 **[User guide](https://wrmichael.github.io/RigDeck/guide.html)**: setting up, connecting your radio, operating and logging.
 
-RigDeck is firmware for the Waveshare ESP32-P4 7-inch touch board. Plug it into your radio's USB
-port with one cable and it:
+RigDeck is firmware for the Waveshare ESP32-P4 7-inch touch board (a screenless build for the Waveshare
+ESP32-P4-NANO is in Beta). Plug it into your radio's USB port with one cable and it:
 
 - works **FT8 / FT4** contacts on its own (Auto CQ, Auto hunt) or by hand, with a live waterfall;
 - runs **FT-CW**, FT8-style automatic contacts sent as high-speed Morse, and **PSK31**;

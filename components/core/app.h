@@ -126,6 +126,7 @@ public:
     std::atomic<bool> rebootReq{false};
     std::atomic<bool> ntpSynced{false};
     std::string fwVersion = "dev";                  // set by the platform (version.txt on the ESP32)
+    std::string siteDir;                            // this board's folder on the RigDeck site ("" 7B, "nano/")
     // Beta builds carry "-beta" in their version (version.txt); Stable builds a plain number.
     std::atomic<bool> k0dogReady{false};
     // KISS TNC over TCP (kiss_net.cpp): frames from PC programs, frames heard for them, clients connected.
