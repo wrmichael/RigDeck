@@ -611,14 +611,16 @@ static void usbLibTask(void* arg) {
     usb_host_config_t cfg = {};
     cfg.intr_flags = ESP_INTR_FLAG_LOWMED;
     // The radio's serial and audio chips are full-speed devices behind its hub. A high-speed host
-    // (ESP32-P4) cannot reach them through a high-speed hub, so run the port at full speed.
-    cfg.fsls_only = true;
+    // (ESP32-P4) cannot reach them through a high-speed hub (FTX-1: no transaction translator in the USB
+    // host stack), so run the port at full speed (components/espressif__usb, patched). usbFullSpeed=0 turns it off.
+    cfg.fsls_only = s_app->cfg.usbFullSpeed != 0;
     esp_err_t err = usb_host_install(&cfg);
     if (err == ESP_ERR_NOT_SUPPORTED) {
         ESP_LOGW(TAG, "full-speed-only mode not available in this ESP-IDF; continuing without it");
         cfg.fsls_only = false;
         err = usb_host_install(&cfg);
     }
+    if (err == ESP_OK) ESP_LOGI(TAG, "radio USB port at %s", cfg.fsls_only ? "full speed (12 Mbit/s)" : "high speed");
     ESP_ERROR_CHECK(err);
     xTaskNotifyGive((TaskHandle_t)arg);
     for (;;) {

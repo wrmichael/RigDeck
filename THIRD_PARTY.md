@@ -5,6 +5,7 @@
 | ft8_lib by Karlis Goba | `components/ft8_lib` | MIT (`components/ft8_lib/LICENSE`) | commit 9fec6ca, unmodified subset |
 | KISS FFT by Mark Borgerding | `components/ft8_lib/fft` | BSD-3-Clause | |
 | ESP-Hosted by Espressif | `components/espressif__esp_hosted` | Apache-2.0 (`components/espressif__esp_hosted/LICENSE`) | version 3.1.0, **modified** (see below) |
+| USB Host Library by Espressif | `components/espressif__usb` | Apache-2.0 (`components/espressif__usb/LICENSE`) | version 1.6.1, **modified** (see `components/espressif__usb/PATCHED.md`) |
 | ESP-IDF, USB host, UAC, CDC-ACM, esp_wifi_remote | fetched at build time | Apache-2.0 | Espressif component registry |
 | LVGL 9.5 | fetched at build time | MIT | |
 | Waveshare ESP32-P4-WIFI6-Touch-LCD-7B BSP | fetched at build time | Apache-2.0 | |

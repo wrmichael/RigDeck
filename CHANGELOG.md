@@ -8,6 +8,9 @@
   only with Enable TX on. Incoming connections are answered only with Enable TX on. Settings: packet call-SSID,
   packet frequency, incoming connections, KISS port. The demodulator now also passes the shortest control
   frames (17 bytes).
+- **Yaesu FTX-1 over USB**: the board could not reach the FTX-1's serial port and sound chip (full-speed chips
+  behind the radio's high-speed USB hub). The radio USB port now runs at full speed (12 Mbit/s) with a patched copy
+  of the USB host library (components/espressif__usb); setting usbFullSpeed=0 goes back to high speed.
 - **Packet BBS** on the microSD card (Settings, APRS: Packet BBS on): a small mailbox on its own call-SSID
   (default the packet call with -1), up to 3 users at once over AX.25 connected mode, with the classic commands
   (L, LM, LB, R n, RM, S call, SB ALL, K n, I, J, B, ?). Personal mail and bulletins, kept one file per message

@@ -48,6 +48,7 @@ struct Settings {
         "My call|{MYCALL}",
         "AGN?|AGN?",
     };
+    int usbFullSpeed = 1;                // 1 = radio USB port at full speed (reaches chips behind a high-speed hub, FTX-1)
     int gpsClock = 0;                    // 1 = set the clock from GPS sentences on the radio's second USB serial port
     int gpsBaud = 4800;                  // must match the radio's "DVdat/GPS Out Baud"
     int gpsDelayMs = 150;                // how long after the second the receiver starts sending its sentence
