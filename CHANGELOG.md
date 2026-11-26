@@ -1,5 +1,10 @@
 # Changes
 
+## 1.1.11-beta
+- **Wi-Fi update no longer hangs part-way** (seen stuck at 22 %): a piece whose answer never comes is sent again
+  after a time limit, the board gives up on a stalled piece after about 90 s instead of 10 minutes and asks for
+  it again, and an update session survives such a pause.
+
 ## 1.1.10-beta
 - **All stations page: status row.** One light per station at the top, checked every 10 seconds: green (radio
   connected, clock set), amber (answering, something to look at; hover for what), red (not answering), with the

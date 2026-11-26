@@ -1357,16 +1357,21 @@ async function otaSend(blob,name){
   for(let off=0;off<total;){
     const piece=img.subarray(off,Math.min(total,off+P)),crc=crc32(piece);
     let j=null;
-    for(let tries=0;tries<6;tries++){
+    // Each piece has a time limit (the first one longer: RigDeck erases the update slot then); a piece whose
+    // answer never comes (connection lost on the way) is sent again instead of waiting for ever.
+    for(let tries=0;tries<10;tries++){
+      const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),off===0?120000:45000);
       try{
-        const r=await fetch(`/api/otachunk?off=${off}&total=${total}&crc=${crc}`,{method:"POST",body:piece});
+        const r=await fetch(`/api/otachunk?off=${off}&total=${total}&crc=${crc}`,{method:"POST",body:piece,signal:ac.signal});
         j=await r.json();
-      }catch(e){j=null;if(off+piece.length>=total){return end("The connection dropped at the end: RigDeck is probably restarting with the new firmware. Reload this page in a minute and check the version.");}}
+      }catch(e){j=null;if(off+piece.length>=total&&e.name!=="AbortError"){clearTimeout(tm);return end("The connection dropped at the end: RigDeck is probably restarting with the new firmware. Reload this page in a minute and check the version.");}}
+      clearTimeout(tm);
       if(j&&j.ok)break;
       if(j&&!j.retry)return end(j.err||"Update failed");
-      resent++;await new Promise(r=>setTimeout(r,500));
+      resent++;m.textContent=`Sending ${Math.round(off*100/total)} % (waiting for RigDeck, try ${tries+2})`;
+      await new Promise(r=>setTimeout(r,j?500:3000));
     }
-    if(!j||!j.ok)return end("Update failed: a piece kept arriving damaged. RigDeck keeps its current firmware.");
+    if(!j||!j.ok)return end("Update failed: RigDeck stopped answering. It keeps its current firmware; try again (one browser tab, close the All stations page while updating).");
     off+=piece.length;
     m.textContent=off<total?`Sending ${Math.round(off*100/total)} %`+(resent?` (${resent} piece(s) resent)`:""):(j.msg||"Installed");
   }

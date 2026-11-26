@@ -32,10 +32,10 @@ static const size_t kChunk = 4096;
 static const size_t kMergedAppOffset = 0x10000;       // where the app sits inside the complete image
 static const uint16_t kChipP4 = 18;                   // esp_chip_id_t ESP_CHIP_ID_ESP32P4
 
-static esp_err_t reply(httpd_req_t* req, bool ok, const std::string& msg) {
+static esp_err_t reply(httpd_req_t* req, bool ok, const std::string& msg, bool retry = false) {
     ESP_LOGI(TAG, "%s", msg.c_str());
     if (s_app) s_app->setOtaStatus(msg);
-    std::string js = std::string("{\"ok\":") + (ok ? "true" : "false") + (ok ? ",\"msg\":" : ",\"err\":") + "\"";
+    std::string js = std::string("{\"ok\":") + (ok ? "true" : "false") + (retry ? ",\"retry\":true" : "") + (ok ? ",\"msg\":" : ",\"err\":") + "\"";
     for (char c : msg) { if (c == '"' || c == '\\') js += '\\'; js += c; }
     js += "\"}";
     httpd_resp_set_type(req, "application/json");
@@ -47,7 +47,9 @@ static bool recvAll(httpd_req_t* req, uint8_t* p, size_t n) {
     int timeouts = 0;
     while (n) {
         int r = httpd_req_recv(req, (char*)p, n);
-        if (r == HTTPD_SOCK_ERR_TIMEOUT) { if (++timeouts > 20) return false; continue; }
+        // A sender that stopped (connection lost on the way) is given up after about 90 s, so the page's resend
+        // of the piece is not refused as "already running" for minutes.
+        if (r == HTTPD_SOCK_ERR_TIMEOUT) { if (++timeouts > 3) return false; continue; }
         if (r <= 0) return false;
         timeouts = 0;
         p += r;
@@ -225,14 +227,14 @@ static esp_err_t chunk(httpd_req_t* req) {
         return reply(req, false, "bad request");
     size_t n = req->content_len;
     if (n == 0 || n > kPiece || off + n > total) return reply(req, false, "bad piece size");
-    if (s_busy.exchange(true)) return reply(req, false, "An update is already running");
+    if (s_busy.exchange(true)) return reply(req, false, "An update piece is still arriving", true);
     struct Done { ~Done() { s_busy = false; } } done;
-    if (s_cs.active && esp_timer_get_time() - s_cs.lastUs > 60000000LL) csAbort();   // stale session
+    if (s_cs.active && esp_timer_get_time() - s_cs.lastUs > 240000000LL) csAbort();  // stale session (4 min: a stalled piece is resent)
 
     static uint8_t* piece = nullptr;                   // 64 kB in external RAM, kept for later updates
     if (!piece) piece = (uint8_t*)heap_caps_malloc(kPiece, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!piece) return reply(req, false, "Not enough memory");
-    if (!recvAll(req, piece, n)) return reply(req, false, "piece interrupted");
+    if (!recvAll(req, piece, n)) return reply(req, false, "piece interrupted", true);
     uint32_t c = esp_rom_crc32_le(0, piece, n);
     if (c != crc) {
         s_cs.bad++;
