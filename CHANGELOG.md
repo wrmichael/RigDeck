@@ -1,5 +1,20 @@
 # Changes
 
+## 1.1.8-beta
+- **Smaller firmware**: the web pages are kept gzip-compressed in flash (index page 137 kB → 49 kB) and sent
+  compressed; about 97 kB more room in the 3 MB slot used by USB installs.
+- **Yaesu FTX-1 over USB**: the board could not reach the FTX-1's serial port and sound chip (full-speed chips
+  behind the radio's high-speed USB hub). The radio USB port now runs at full speed (12 Mbit/s) with a patched copy
+  of the USB host library (components/espressif__usb); setting usbFullSpeed=0 goes back to high speed.
+  Unplugging or swapping radios while running reconnects without a restart.
+- **Tune with the radio's tuner (Yaesu)**: Settings "Tune button (Yaesu)": Tune sends AC002 so the radio's
+  own tuner or ATAS tunes, instead of a 10-second carrier.
+- **Packet BBS** on the microSD card (Settings, APRS: Packet BBS on): a small mailbox on its own call-SSID
+  (default the packet call with -1), up to 3 users at once over AX.25 connected mode, with the classic commands
+  (L, LM, LB, R n, RM, S call, SB ALL, K n, I, J, B, ?). Personal mail and bulletins, kept one file per message
+  in RigDeck/bbs. It answers only in APRS mode with Enable TX on. The Packet tab shows the BBS: who is connected,
+  the messages, read, kill and post as the sysop.
+
 ## 1.1.7-beta
 - **Packet radio** on the APRS modem (switch to APRS): a Packet tab with a connected-mode AX.25 2.0 terminal (BBS,
   nodes, keyboard to keyboard, digipeaters; window 4, retries, REJ, polling), unproto UI frames, a TNC-style
@@ -8,16 +23,6 @@
   only with Enable TX on. Incoming connections are answered only with Enable TX on. Settings: packet call-SSID,
   packet frequency, incoming connections, KISS port. The demodulator now also passes the shortest control
   frames (17 bytes).
-- **Yaesu FTX-1 over USB**: the board could not reach the FTX-1's serial port and sound chip (full-speed chips
-  behind the radio's high-speed USB hub). The radio USB port now runs at full speed (12 Mbit/s) with a patched copy
-  of the USB host library (components/espressif__usb); setting usbFullSpeed=0 goes back to high speed.
-- **Tune with the radio's tuner (Yaesu)**: Settings "Tune button (Yaesu)": Tune sends AC002 so the radio's
-  own tuner or ATAS tunes, instead of a 10-second carrier.
-- **Packet BBS** on the microSD card (Settings, APRS: Packet BBS on): a small mailbox on its own call-SSID
-  (default the packet call with -1), up to 3 users at once over AX.25 connected mode, with the classic commands
-  (L, LM, LB, R n, RM, S call, SB ALL, K n, I, J, B, ?). Personal mail and bulletins, kept one file per message
-  in RigDeck/bbs. It answers only in APRS mode with Enable TX on. The Packet tab shows the BBS: who is connected,
-  the messages, read, kill and post as the sysop.
 - **K0DOG**, the QSL-card dog game, in the CW trainer (button in Audiowide, opens /k0dog): copy the call, RST and
   band from a CW QSO between your operator and a station on the air, fill out the QSL card and the dog stamps it
   "PSE QSL" with its paw and sends it out the mail slot. Random dogs (mostly Shih Tzu and Maltese), random OM/YL

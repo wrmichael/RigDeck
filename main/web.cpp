@@ -20,10 +20,11 @@ void ota_register(httpd_handle_t srv);
 #endif
 #include "peers_net.h"
 static App* s_app;
-extern const char index_html_start[] asm("_binary_index_html_start");
-extern const char index_html_end[] asm("_binary_index_html_end");
-extern const char multi_html_start[] asm("_binary_multi_html_start");
-extern const char multi_html_end[] asm("_binary_multi_html_end");
+// gzip-compressed at build time (main/CMakeLists.txt, tools/gzip_file.py), sent as Content-Encoding: gzip
+extern const char index_html_start[] asm("_binary_index_html_gz_start");
+extern const char index_html_end[] asm("_binary_index_html_gz_end");
+extern const char multi_html_start[] asm("_binary_multi_html_gz_start");
+extern const char multi_html_end[] asm("_binary_multi_html_gz_end");
 extern const uint8_t icon_png_start[] asm("_binary_icon_png_start");
 extern const uint8_t icon_png_end[] asm("_binary_icon_png_end");
 
@@ -82,18 +83,16 @@ static esp_err_t hIndex(httpd_req_t* req) {
     WebBusy wb("sending the page");
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-    size_t n = index_html_end - index_html_start;
-    if (n && index_html_start[n - 1] == 0) n--;      // EMBED_TXTFILES appends a NUL
-    return httpd_resp_send(req, index_html_start, n);
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    return httpd_resp_send(req, index_html_start, index_html_end - index_html_start);
 }
 
 // All stations in one window: each RigDeck's own page in a frame (the list is kept in the browser).
 static esp_err_t hMulti(httpd_req_t* req) {
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-    size_t n = multi_html_end - multi_html_start;
-    if (n && multi_html_start[n - 1] == 0) n--;
-    return httpd_resp_send(req, multi_html_start, n);
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    return httpd_resp_send(req, multi_html_start, multi_html_end - multi_html_start);
 }
 
 static esp_err_t hState(httpd_req_t* req) {
