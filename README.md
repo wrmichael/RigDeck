@@ -443,7 +443,7 @@ that radio a few seconds after it recognises it. A radio it has never seen keeps
 ## Keeping the time
 
 FT8 needs the clock within about a second. RigDeck sets it from, best first: a GPS module with PPS,
-the radio's GPS, NTP (when it has joined a Wi-Fi network with internet), or the browser of the
+a USB GPS receiver, the radio's GPS, NTP (when it has joined a Wi-Fi network with internet), or the browser of the
 phone/PC showing the web page. The Clock dot on the web page shows which one it is using.
 
 - **Restarts keep the time.** Every time the clock is set it is also written into the chip's own
@@ -468,6 +468,21 @@ boards and similar, about $10-15) gives timing to within a few milliseconds.
 - The monitor log shows once a minute whether the module sends time and how many PPS pulses it
   saw. The module needs a sky view for its first fix; after that the Clock dot shows "gps-pps".
 - Without PPS the sentence arrival time is used, adjusted by "GPS sentence delay" (see below).
+
+## USB GPS receiver (no wiring)
+
+A u-blox USB GPS "mouse" (VK172 G-Mouse, VK-162 and similar, about $10) works on the ESP32-P4 boards:
+
+- Plug it into the board's **USB-A socket**. With a radio on that socket as well, use a small **USB hub**
+  (powered is best) for the two. RigDeck is a USB host on the USB-A socket only; the board's USB-C port is
+  the PC port (flashing, console), so a GPS on a USB-C-to-A adapter there is not seen.
+- No setting: RigDeck finds it within a few seconds (monitor log: "USB GPS found"). Give it a sky view; once
+  it has a fix the Clock dot shows "gps-usb" and APRS uses its position (unless a fixed position is set).
+- It has no PPS, so timing is from the sentence arrival plus "GPS sentence delay" (150 ms default): good
+  for FT8. If decodes show a steady DT offset, adjust that delay.
+- Order of preference: header module, USB GPS, the radio's GPS, internet time, the browser.
+- Other USB GPS receivers (Prolific / CH340 / CP210x chips) are not used: those chips are also found in
+  radios and CAT cables.
 
 ## Wi-Fi tips
 

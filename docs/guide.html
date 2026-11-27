@@ -346,12 +346,18 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 <p>The <b>Listen</b> button next to the band buttons plays the radio's receive audio in your browser, with a volume slider; press <b>Stop</b> to end. The sound comes about half a second late, in a narrow, phone-quality band (to about 4 kHz). It uses the board's Wi-Fi, so it works best on the hotspot or a good home network.</p>
 
 <h2 id="time">Keeping the time</h2>
-<p>RigDeck sets its clock from, best first: a GPS module with PPS, the radio's GPS, internet time, or the browser showing the web page. A restart keeps the time; switching the power off loses it.</p>
+<p>RigDeck sets its clock from, best first: a GPS module with PPS, a USB GPS receiver, the radio's GPS, internet time, or the browser showing the web page. A restart keeps the time; switching the power off loses it.</p>
 <h3>GPS module on the board</h3>
 <p>Any 3.3 V-logic NMEA module works; one with a <b>PPS</b> output (u-blox NEO-6M / NEO-M8N, ATGM336H and similar) gives timing within a few milliseconds and needs no internet.</p>
 <ul>
   <li>Wiring: module <b>TX → GPIO3</b>, <b>PPS → GPIO4</b>, GND → GND, VCC → 3.3 V or 5 V as the module needs.</li>
   <li>Settings, Clock: <b>GPS module on the header: On</b>, the baud (most modules ship at 9600) and the pins. Save and restart. The Clock light then shows "gps-pps".</li>
+</ul>
+<h3>USB GPS receiver</h3>
+<p>A u-blox USB GPS "mouse" (VK172 G-Mouse, VK-162 and similar) needs no wiring and no setting (ESP32-P4 boards).</p>
+<ul>
+  <li>Plug it into the board's <b>USB-A socket</b>; with the radio there too, use a small USB hub. RigDeck is a USB host on the USB-A socket only; the USB-C port is the PC port.</li>
+  <li>Give it a sky view. Once it has a fix the Clock light shows "gps-usb" and APRS uses its position. If decodes show a steady DT offset, adjust "GPS sentence delay".</li>
 </ul>
 
 <h2 id="wifi">Wi-Fi</h2>

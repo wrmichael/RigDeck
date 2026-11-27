@@ -12,6 +12,6 @@ int64_t utcMs();                   // 0 offset (i.e. garbage) until valid()
 bool valid();
 void setUtcMs(int64_t utc, const char* source);
 void trim(int ms);                 // manual nudge
-const char* source();              // "none", "browser", "ntp", "gps", "gps-pps", "rtc"
+const char* source();              // "none", "browser", "ntp", "gps", "gps-pps", "gps-nmea", "gps-usb", "rtc"
 int64_t ageMs();                   // ms since last sync
 }

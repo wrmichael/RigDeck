@@ -620,6 +620,43 @@ int main() {
             CHECK(js.find("almost full") != std::string::npos && js.find("\"left\":30") != std::string::npos);
         }
     }
+    {   // ---------------- USB GPS (u-blox G-Mouse): first time sentence of each second, ahead of the radio's GPS
+        const char* dir = "test/out/usbgps";
+        mkdir(dir, 0755);
+        remove("test/out/usbgps/settings.txt");
+        App app;
+        app.begin(dir);
+        app.command("set", {{"gpsClock", "1"}, {"gpsDelayMs", "150"}});
+        auto nmea = [](const char* body) {
+            char s[128];
+            unsigned ck = 0;
+            for (const char* p = body; *p; p++) ck ^= (unsigned char)*p;
+            snprintf(s, sizeof s, "$%s*%02X\r\n", body, ck);
+            return std::string(s);
+        };
+        const int64_t t0 = 1795046400000LL;            // 2026-11-19 00:00:00 UTC
+        simMs = 7000000;
+        std::string rmc = nmea("GPRMC,183005.00,A,3946.000,N,08609.000,W,0.0,0.0,191126,,,A");
+        app.usbGpsRx((const uint8_t*)rmc.data(), rmc.size());
+        const int64_t want = t0 + ((18 * 60 + 30) * 60 + 5) * 1000LL + 150;
+        CHECK(clk::valid() && !strcmp(clk::source(), "gps-usb"));
+        CHECK(llabs(clk::utcMs() - want) <= 1);
+        {   // its position is used (no fixed position set)
+            App::AprsView v = app.aprsView(false);
+            CHECK(v.havePos && v.src == "USB GPS" && fabs(v.lat - 39.7667) < 0.001 && fabs(v.lon + 86.15) < 0.001);
+        }
+        // GGA for the same second arrives 70 ms later: not used, it would put the clock 70 ms late
+        simMs += 70;
+        std::string gga = nmea("GPGGA,183005.00,3946.000,N,08609.000,W,1,08,1.0,250.0,M,-33.0,M,,");
+        app.usbGpsRx((const uint8_t*)gga.data(), gga.size());
+        CHECK(llabs(clk::utcMs() - (want + 70)) <= 1);
+        // the radio's GPS is ignored while the USB GPS has the time
+        std::string late = nmea("GPRMC,183005.00,A,3946.000,N,08609.000,W,0.0,0.0,191126,,,A");
+        simMs += 10;
+        app.gpsRx((const uint8_t*)late.data(), late.size());
+        CHECK(!strcmp(clk::source(), "gps-usb"));
+        CHECK(llabs(clk::utcMs() - (want + 80)) <= 1);
+    }
     {   // ---------------- GPS module: PPS pins the second, NMEA names it
         const char* dir = "test/out/gps";
         mkdir(dir, 0755);

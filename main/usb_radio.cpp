@@ -7,6 +7,9 @@
 //  IC-7300 / IC-7610 / IC-9700, FTDX10 / FT-991A / FT-710: like the IC-7100 / FTX-1 (CP210x + codec).
 //  Digirig: a hub with a CP2102 (CAT, PTT on RTS) and a CM108 sound card.
 //  SignaLink USB: only a sound card; it keys the radio itself (VOX) - Settings > Radio "No CAT".
+//  USB GPS (u-blox "G-Mouse" VK172 / VK-162, ESP32-P4 only): a CDC-ACM serial port sending NMEA. It is
+//           not a radio, so the radio search never opens it; it is opened on its own and sets the clock
+//           and position. Next to a radio it needs a hub (the board has one USB-A socket).
 //
 // Endpoint budget: an ESP32-S3 has only 8 host channels. Hub (2) + three control pipes (3) + CI-V
 // bulk in/out (2) leaves exactly one for audio, so the receive and transmit audio streams are never
@@ -37,6 +40,7 @@ static App* s_app;
 #define SILABS_VID 0x10C4
 #define ICOM_VID 0x0C26
 #define STM_VID 0x0483                 // QRP Labs QMX / QMX+ (0483:A34C)
+#define UBLOX_VID 0x1546               // u-blox GPS receivers (VK172 G-Mouse = u-blox 7, 1546:01A7)
 #define WCH_VID 0x1A86                 // WCH CH340 / CH341 serial chips: FX-4CR (1A86:7523), many CAT and CI-V cables
 #define CH34X_REQ_OUT 0x40             // vendor, host-to-device, recipient device
 #define CH34X_REQ_WRITE_REG 0x9A
@@ -59,6 +63,7 @@ static const struct { uint16_t vid; PortKind kind; uint8_t ifaces; uint8_t proto
 
 static cdc_acm_dev_hdl_t s_cdc = nullptr;
 static cdc_acm_dev_hdl_t s_gps = nullptr;         // the radio's second serial port, used for GPS sentences
+static cdc_acm_dev_hdl_t s_usbGps = nullptr;      // a USB GPS receiver of its own
 static uint8_t s_civDev = 0, s_civIface = 0;      // where the CI-V port was found
 static PortKind s_civKind = PK_CP210X;
 static uint16_t s_civVid = 0;
@@ -76,11 +81,17 @@ static bool gpsRx(const uint8_t* data, size_t len, void*) {
     return true;
 }
 
+static bool usbGpsRx(const uint8_t* data, size_t len, void*) {
+    s_app->usbGpsRx(data, len);
+    return true;
+}
+
 static void cdcEvent(const cdc_acm_host_dev_event_data_t* ev, void*) {
     if (ev->type == CDC_ACM_HOST_DEVICE_DISCONNECTED) {
         ESP_LOGW(TAG, "serial port disconnected");
         xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
         if (s_gps == ev->data.cdc_hdl) s_gps = nullptr;
+        if (s_usbGps == ev->data.cdc_hdl) { s_usbGps = nullptr; ESP_LOGW(TAG, "USB GPS unplugged"); }
         if (s_cdc == ev->data.cdc_hdl) { s_cdc = nullptr; s_app->usbSerial = false; }
         xSemaphoreGive(s_cdcMtx);
         cdc_acm_host_close(ev->data.cdc_hdl);
@@ -227,9 +238,10 @@ static int buildProbes(uint8_t protos, Probe* out) {
 // radio sees the host go away cleanly instead of in the middle of an audio transfer.
 void usbradio_stop_for_restart() {
     xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
-    cdc_acm_dev_hdl_t c = s_cdc, g = s_gps;
-    s_cdc = nullptr; s_gps = nullptr;
+    cdc_acm_dev_hdl_t c = s_cdc, g = s_gps, u = s_usbGps;
+    s_cdc = nullptr; s_gps = nullptr; s_usbGps = nullptr;
     xSemaphoreGive(s_cdcMtx);
+    if (u) cdc_acm_host_close(u);
     if (g) cdc_acm_host_close(g);
     if (c) cdc_acm_host_close(c);
     usb_host_lib_set_root_port_power(false);
@@ -237,11 +249,49 @@ void usbradio_stop_for_restart() {
     vTaskDelay(pdMS_TO_TICKS(400));
 }
 
+// USB GPS: each device that appears on the bus is checked (up to three times) for a u-blox serial port.
+// One that is not a u-blox (the radio's chips) is then left alone until it is unplugged and comes back. The
+// receiver stays open: on the ESP32-P4 the host has endpoints and memory to spare. Not on the ESP32-S3,
+// whose 8 host channels the radio already uses up.
+static void pollUsbGps() {
+#if CONFIG_IDF_TARGET_ESP32P4
+    static uint8_t checked[16], tries[16];             // address, and how often it was asked
+    static int nChecked = 0;
+    uint8_t addrs[16];
+    int n = 0;
+    if (usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) != ESP_OK) return;
+    int keep = 0;                                  // forget addresses no longer on the bus
+    for (int i = 0; i < nChecked; i++)
+        for (int j = 0; j < n; j++) if (checked[i] == addrs[j]) { tries[keep] = tries[i]; checked[keep++] = checked[i]; break; }
+    nChecked = keep;
+    if (s_usbGps) return;
+    for (int j = 0; j < n && !s_usbGps; j++) {
+        // three tries per device: a receiver that was still starting up gets another chance
+        int k = 0;
+        while (k < nChecked && checked[k] != addrs[j]) k++;
+        if (k == nChecked) {
+            if (nChecked == (int)sizeof checked) continue;
+            checked[nChecked] = addrs[j]; tries[nChecked++] = 0;
+        }
+        if (tries[k] >= 3) continue;
+        tries[k]++;
+        // u-blox receivers ignore the line coding (USB-native port); 9600 is their UART default.
+        cdc_acm_dev_hdl_t h = openPort(UBLOX_VID, PK_CDC, addrs[j], 0, 9600, usbGpsRx);
+        if (!h) continue;
+        xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
+        s_usbGps = h;
+        xSemaphoreGive(s_cdcMtx);
+        ESP_LOGI(TAG, "USB GPS found: USB address %d; it sets the clock and position once it has a fix", addrs[j]);
+    }
+#endif
+}
+
 static void serialTask(void*) {
     int gpsFails = 0;
     int64_t gpsNextUs = 0, gpsOpenedUs = 0, gpsFixAt = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
+        pollUsbGps();
         uint8_t addrs[12];
         int n = 0;
         // Settings > Radio "No CAT" (SignaLink, or a Digirig without a CAT cable): no radio to find.
