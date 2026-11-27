@@ -103,7 +103,9 @@ void Radio::ptt(bool on) {
     if (m == PTT_VOX || proto == RP_NONE) { pttState = on; return; }   // the transmit audio keys it
     if (proto == RP_YAESU) return sendText(on ? "TX1;" : "TX0;", true);
     if (proto == RP_QMX) return sendText(on ? "TQ1;" : "TQ0;", true);
-    if (proto == RP_KENWOOD) return sendText(on ? "TX;" : "RX;", true);
+    // Kenwood: plain TX; transmits the microphone. TS-480 / TS-590 / TS-990 and radios that emulate them
+    // (FX-4CR) take TX1; ("data send") to transmit the USB / rear audio. TS-2000 and Elecraft: TX;.
+    if (proto == RP_KENWOOD) return sendText(on ? (textId_ == 17 || textId_ == 19 ? "TX;" : "TX1;") : "RX;", true);
     send(0x1C, {0x00, (uint8_t)(on ? 0x01 : 0x00)}, true);
 }
 

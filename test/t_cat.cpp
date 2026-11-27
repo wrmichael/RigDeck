@@ -21,6 +21,7 @@ struct FakeText {
     Radio* r = nullptr;
     bool yaesu = true, kenwood = false;
     int ecProduct = -1;                     // Elecraft: -1 = K2 (no OM), else the OM product number (2 = KX2)
+    std::string kid;                        // Kenwood ID answer to use instead (e.g. "ID021", a TS-590S)
     std::string dt = "0";
     std::string yid = "ID0800";
     uint64_t freq = 14074000;
@@ -72,7 +73,7 @@ struct FakeText {
     }
     void kenwoodCmd(const std::string& c) {             // TS-2000 (no TQ, no MD6, TX; / RX;)
         char b[64];
-        if (c == "ID") say(ecProduct == -2 ? "ID019" : "ID017");
+        if (c == "ID") say(kid.size() ? kid : ecProduct == -2 ? "ID019" : "ID017");
         else if (c == "OM") { if (ecProduct < 0) say("?"); else { snprintf(b, sizeof b, "OM AP----------%02d", ecProduct); say(b); } }
         else if (c.compare(0, 2, "DT") == 0 && c.size() == 3) dt = c.substr(2);
         else if (c == "PC") { snprintf(b, sizeof b, "PC%03d", watts); say(b); }
@@ -85,6 +86,7 @@ struct FakeText {
         else if (c == "MD") say(std::string("MD") + mode);
         else if (c.compare(0, 2, "MD") == 0) mode = c[2];
         else if (c == "TX") tx = true;
+        else if (c == "TX1" && kid.size()) tx = true;   // TS-590-style "data send"
         else if (c == "RX") tx = false;
         else if (c == "KS") { snprintf(b, sizeof b, "KS%03d", ks); say(b); }
         else if (c.compare(0, 2, "KS") == 0) ks = atoi(c.c_str() + 2);
@@ -255,6 +257,19 @@ int main() {
         r.pttMethod = PTT_CAT;
         r.setProto(RP_YAESU); run(r, 4000);
         CHECK(!r.connected());
+    }
+    {   // ---------------- FX-4CR (TS-590S CAT): TX1; so the radio transmits the USB audio, not the microphone
+        for (const char* id : {"ID021", "ID023", "ID999"}) {
+            Radio r; FakeText f; f.r = &r; f.kenwood = true; f.kid = id; f.mode = '2'; f.freq = 18100000;
+            r.write = [&f](const uint8_t* d, size_t n) { f.rx(d, n); return true; };
+            r.setProto(RP_KENWOOD);
+            r.requestId();
+            run(r, 3000);
+            r.ptt(true); run(r, 1000);
+            CHECK(f.tx && r.pttState && sent(f, "TX1"));
+            r.ptt(false); run(r, 1000);
+            CHECK(!f.tx && !r.pttState);
+        }
     }
     {   // ---------------- Elecraft KX2 (e.g. through a Digirig): ID017 + OM ...02; FT8 in DATA A
         Radio r; FakeText f; f.r = &r; f.kenwood = true; f.ecProduct = 2; f.mode = '2'; f.freq = 14074000; f.watts = 5;
