@@ -276,6 +276,7 @@ private:
     std::string bbsMyCall() const;
     bool bbsActive() const { return cfg.bbsOn && logOnSd_; }
     void bbsTick(int64_t mono);
+    bool pktQueue(const std::vector<uint8_t>& b);     // false: the same frame is already waiting
     std::set<std::string> kissLocal_;                  // calls of programs on our KISS port that talk to our BBS
     bool bbsLocal(const std::string& dst) const;       // addressed to this RigDeck's own BBS?
     void bbsLocalFrame(const ax25::Frame& f, int64_t mono);

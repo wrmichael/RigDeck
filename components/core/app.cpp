@@ -1259,6 +1259,14 @@ void App::aprsQueueBeacon(const std::string& info) {              // mtx_ held
 }
 
 // ---- packet radio
+// Queue a frame for the air, unless the very same frame is already waiting: while the channel is busy a link
+// keeps repeating its poll (RR) and answers every repeated SABM with UA, and those copies all went out together
+// once the channel cleared.
+bool App::pktQueue(const std::vector<uint8_t>& b) {                 // mtx_ held
+    if (std::find(pktOut_.begin(), pktOut_.end(), b) != pktOut_.end()) return false;
+    pktOut_.push_back(b);
+    return true;
+}
 std::string App::pktMyCall() const { return cfg.pktCall.empty() ? upperTrim(cfg.call) : cfg.pktCall; }
 void App::pktMon(const std::string& s) {                              // mtx_ held
     char t[12];
@@ -1285,7 +1293,7 @@ void App::pktTick(int64_t mono) {                                    // mtx_ hel
     for (auto& f : pkt_.takeOut()) {
         if (bbsLocal(f.dst)) { pktMon("   " + ax25::monitor(f) + "  (to this RigDeck's BBS, not on the air)"); bbsLocalFrame(f, mono); continue; }
         if (idle && !seq.txEnabled) continue;                         // no automatic answers (DM) without Enable TX
-        pktOut_.push_back(ax25::encodeFcs(f));
+        if (!pktQueue(ax25::encodeFcs(f))) continue;
         pktMon("TX " + ax25::monitor(f));
     }
     std::deque<std::vector<uint8_t>> k;
@@ -1374,7 +1382,7 @@ void App::bbsTick(int64_t mono) {                                     // mtx_ he
             continue;
         }
         if (!seq.txEnabled) continue;
-        pktOut_.push_back(ax25::encodeFcs(f));
+        if (!pktQueue(ax25::encodeFcs(f))) continue;
         pktMon("TX " + ax25::monitor(f) + "  (BBS)");
     }
     for (auto& l : bbs_.takeLog()) { pktMon("BBS: " + l); logLine("BBS: " + l); }

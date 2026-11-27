@@ -1,6 +1,8 @@
 # Changes
 
 ## 1.1.14-beta
+- Packet: a frame already waiting to go out is not queued a second time (while the channel was busy, repeated
+  polls and answers piled up and then went out together).
 - **BBS on the same RigDeck**: a program on RigDeck's own KISS port (QTerm, Winlink Express …) or RigDeck's own
   packet terminal can connect to that RigDeck's BBS. A radio cannot hear its own transmission, so those frames go
   straight to the BBS and back, not on the air (Enable TX not needed for that).
