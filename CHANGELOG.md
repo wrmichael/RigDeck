@@ -4,6 +4,9 @@
 - FX-4CR (low transmit level, still being worked on): the direct 0 dB write of 1.1.20 found no volume control. It
   now follows the sound chip's whole playback path (also through mixer and selector units) and logs the chip's
   audio layout and what each volume control took.
+- Kenwood TS-590 / TS-990 and the FX-4CR: RigDeck now also sends the data-mode command (DA1) after setting USB, as
+  flrig's USB-D does. Being tested on the FX-4CR, which transmits with full audio from flrig (USB-D) but not yet
+  from RigDeck. TS-2000 and TS-480 are left as before.
 
 ## 1.1.20-beta
 - FX-4CR (low transmit level, still being worked on): 1.1.19 showed the radio's USB sound chip reports a wrong volume

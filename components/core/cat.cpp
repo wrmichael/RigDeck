@@ -50,7 +50,13 @@ void Radio::tSetFreq(uint64_t hz) {
 void Radio::tSetUsbData() {
     if (proto == RP_YAESU) { sendText("MD0C;"); sendText("MD0;"); }      // DATA-U
     else if (proto == RP_KENWOOD && ecModel_ >= 0) { sendText("MD6;"); sendText("DT0;"); sendText("IF;"); }   // Elecraft DATA A
-    else if (proto == RP_KENWOOD) { sendText("MD2;"); sendText("IF;"); } // USB
+    else if (proto == RP_KENWOOD) {                                        // USB, data on (DA1)
+        // TS-590 / TS-990: DA1 is data mode (USB-D in flrig), with the data input for transmit. Also sent to the
+        // FX-4CR (TS-590S CAT). TS-2000 (19) and TS-480 (20) have no DA.
+        sendText("MD2;");
+        if (textId_ != 19 && textId_ != 20) sendText("DA1;");
+        sendText("IF;");
+    }
     else { sendText("Q90;"); sendText("MD6;"); sendText("MD;"); }        // IQ mode off, DIGI
 }
 
