@@ -1,6 +1,8 @@
 # Changes
 
 ## 1.1.14-beta
+- **Clear the band activity list**: a Clear button on the web page (that browser's list), and on the touch screen
+  hold the list for a second. New decodes keep coming.
 - **Web page: transmit controls above the waterfall** (Enable TX, Halt, Tune, Manual / Auto CQ / Auto answer,
   TX Hz, slot), in one row, so they are in view without scrolling.
 - **All stations page: compact station view** (Compact, on by default): smaller header, buttons and waterfall,

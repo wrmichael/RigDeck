@@ -251,6 +251,12 @@ void onWaterfall(lv_event_t*) {
 void onTable(lv_event_t* e) {
     lv_event_code_t code = lv_event_get_code(e);
     if (code == LV_EVENT_PRESSED || code == LV_EVENT_SCROLL) { touched(); return; }
+    if (code == LV_EVENT_LONG_PRESSED) {                                 // hold the list: clear it
+        rows.clear();
+        lv_table_set_row_count(table, 0);
+        note("Band activity cleared");
+        return;
+    }
     if (code != LV_EVENT_VALUE_CHANGED) return;
     uint32_t r, c;
     lv_table_get_selected_cell(table, &r, &c);

@@ -173,7 +173,7 @@ table.imp th{color:var(--dim);font-weight:500}
   <div class="grid">
     <div>
       <div class="pan" id="ftPane">
-        <h3>Band activity <span id="decinfo" style="text-transform:none;letter-spacing:0"></span></h3>
+        <h3 style="display:flex;align-items:center;gap:8px">Band activity <span id="decinfo" style="text-transform:none;letter-spacing:0"></span><span style="flex:1"></span><button type="button" id="actClr" title="Clear the list in this browser; new decodes keep coming" style="padding:2px 10px;font-size:12px;text-transform:none;letter-spacing:0">Clear</button></h3>
         <div id="act"><table><tbody></tbody></table></div>
         <div class="hint" style="margin-top:6px">Tap a line to work that station. Blue = CQ, red = calling you, amber = your transmissions.</div>
       </div>
@@ -792,6 +792,7 @@ $("psksend").onclick=()=>{const t=$("psktxt").value;if(t)cmd("psktx",{text:t+"\n
 $("psktxt").onkeydown=e=>{if(e.key==="Enter")$("psksend").click();};
 $("pskclr").onclick=()=>$("pskrx").textContent="";
 $("psklog").onclick=()=>cmd("logqso",{call:$("pskcall").value,rs:$("pskrs").value,rr:$("pskrr").value}).then(j=>{if(j.ok)banner("Logged "+$("pskcall").value.toUpperCase());});
+$("actClr").onclick=()=>{document.querySelector("#act tbody").innerHTML="";};
 $("clrlog").onclick=()=>{if(confirm("Clear the current log? Its contacts stay in the archive."))cmd("clearlog",{confirm:"yes"});};
 $("eraseall").onclick=async()=>{
   if(prompt("Erase EVERY contact log on this RigDeck (not the console logs): current logs, archives, deleted contacts and cleared logs of all station callsigns, on the card and in the board's memory. The worked-before list goes too. There is no undo.\n\nDownload what you want to keep first. Type NUKE to erase:")!=="NUKE") return;
