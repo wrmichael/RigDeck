@@ -1,5 +1,10 @@
 # Changes
 
+## 1.1.21-beta
+- FX-4CR (low transmit level, still being worked on): the direct 0 dB write of 1.1.20 found no volume control. It
+  now follows the sound chip's whole playback path (also through mixer and selector units) and logs the chip's
+  audio layout and what each volume control took.
+
 ## 1.1.20-beta
 - FX-4CR (low transmit level, still being worked on): 1.1.19 showed the radio's USB sound chip reports a wrong volume
   range (0 % read back -28.0 dB, 100 % -31.8 dB), so its normal 0 dB was refused. When the chip is still more than

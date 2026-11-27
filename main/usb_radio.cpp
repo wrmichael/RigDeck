@@ -639,7 +639,9 @@ static int rawControl(RawCtl& c, usb_device_handle_t dev, uint8_t reqType, uint8
 }
 
 // Sets every playback volume channel to db (1/256 dB). Returns true when at least one channel took it;
-// *readBack is the first channel's value afterwards.
+// *readBack is the first channel's value afterwards. The playback Feature Units are the ones reachable from a USB
+// streaming input terminal (directly or through mixer / selector / processing units). The chip's audio layout
+// and each request's result go to the log.
 static bool rawSetPlaybackVolume(uint8_t addr, int16_t db, int16_t* readBack) {
     RawCtl c = {};
     usb_host_client_config_t cc = {};
@@ -647,50 +649,94 @@ static bool rawSetPlaybackVolume(uint8_t addr, int16_t db, int16_t* readBack) {
     cc.max_num_event_msg = 3;
     cc.async.client_event_callback = rawClientCb;
     cc.async.callback_arg = nullptr;
-    if (usb_host_client_register(&cc, &c.cl) != ESP_OK) return false;
+    esp_err_t r = usb_host_client_register(&cc, &c.cl);
+    if (r != ESP_OK) { ESP_LOGW(TAG, "audio to radio: direct volume: no USB client (%s)", esp_err_to_name(r)); return false; }
     c.done = xSemaphoreCreateBinary();
     usb_device_handle_t dev = nullptr;
     bool ok = false;
-    if (c.done && usb_host_device_open(c.cl, addr, &dev) == ESP_OK) {
-        const usb_config_desc_t* cfg = nullptr;
-        if (usb_host_get_active_config_descriptor(dev, &cfg) == ESP_OK && cfg) {
-            const uint8_t* p = (const uint8_t*)cfg;
-            const int total = cfg->wTotalLength;
-            int acIface = -1, curIface = -1, curClass = -1, curSub = -1;
-            uint8_t usbIn[8]; int nIn = 0;
-            // first pass: AudioControl interface and the USB streaming input terminals
-            for (int i = 0; i + 2 <= total && p[i] >= 2; i += p[i]) {
-                if (p[i + 1] == 0x04 && i + 7 <= total) { curIface = p[i + 2]; curClass = p[i + 5]; curSub = p[i + 6]; }
-                else if (p[i + 1] == 0x24 && curClass == 1 && curSub == 1) {
-                    acIface = curIface;
-                    if (p[i + 2] == 0x02 && p[i] >= 6 && (p[i + 4] | (p[i + 5] << 8)) == 0x0101 && nIn < 8) usbIn[nIn++] = p[i + 3];
-                }
+    r = c.done ? usb_host_device_open(c.cl, addr, &dev) : ESP_ERR_NO_MEM;
+    if (r != ESP_OK) ESP_LOGW(TAG, "audio to radio: direct volume: cannot open USB address %d (%s)", addr, esp_err_to_name(r));
+    const usb_config_desc_t* cfg = nullptr;
+    if (r == ESP_OK && (usb_host_get_active_config_descriptor(dev, &cfg) != ESP_OK || !cfg)) {
+        ESP_LOGW(TAG, "audio to radio: direct volume: no configuration descriptor");
+        cfg = nullptr;
+    }
+    if (cfg) {
+        const uint8_t* p = (const uint8_t*)cfg;
+        const int total = cfg->wTotalLength;
+        // the AudioControl interface's units: id, kind (descriptor subtype), sources
+        struct Unit { uint8_t id, kind, nSrc, src[8]; int at; bool usb, reach; };
+        Unit u[24]; int nu = 0;
+        int acIface = -1, curIface = -1, curClass = -1, curSub = -1;
+        char layout[200]; int lp = 0;
+        layout[0] = 0;
+        for (int i = 0; i + 2 <= total && p[i] >= 2 && i + p[i] <= total; i += p[i]) {
+            const int L = p[i];
+            if (p[i + 1] == 0x04 && L >= 9) { curIface = p[i + 2]; curClass = p[i + 5]; curSub = p[i + 6]; continue; }
+            if (p[i + 1] != 0x24 || curClass != 1 || curSub != 1 || L < 4 || nu >= 24) continue;
+            acIface = curIface;
+            Unit x = {}; x.id = p[i + 3]; x.kind = p[i + 2]; x.at = i;
+            switch (x.kind) {
+                case 0x02: if (L >= 6) x.usb = (p[i + 4] | (p[i + 5] << 8)) == 0x0101; break;        // input terminal
+                case 0x03: if (L >= 8) { x.nSrc = 1; x.src[0] = p[i + 7]; } break;                    // output terminal
+                case 0x04: case 0x05:                                                                 // mixer, selector
+                    if (L >= 5) { x.nSrc = p[i + 4] > 8 ? 8 : p[i + 4]; for (int k = 0; k < x.nSrc && 5 + k < L; k++) x.src[k] = p[i + 5 + k]; }
+                    break;
+                case 0x06: if (L >= 7) { x.nSrc = 1; x.src[0] = p[i + 4]; } break;                    // feature unit
+                case 0x07: case 0x08:                                                                 // processing, extension
+                    if (L >= 7) { x.nSrc = p[i + 6] > 8 ? 8 : p[i + 6]; for (int k = 0; k < x.nSrc && 7 + k < L; k++) x.src[k] = p[i + 7 + k]; }
+                    break;
+                default: continue;
             }
-            curClass = curSub = -1;
-            for (int i = 0; acIface >= 0 && i + 2 <= total && p[i] >= 2; i += p[i]) {
-                if (p[i + 1] == 0x04 && i + 7 <= total) { curClass = p[i + 5]; curSub = p[i + 6]; continue; }
-                if (p[i + 1] != 0x24 || curClass != 1 || curSub != 1 || p[i + 2] != 0x06 || p[i] < 7) continue;
-                const uint8_t fu = p[i + 3], src = p[i + 4], csz = p[i + 5];
-                bool fromUsb = false;
-                for (int k = 0; k < nIn; k++) if (usbIn[k] == src) fromUsb = true;
-                if (!fromUsb || csz == 0) continue;
-                const int nCtl = (p[i] - 7) / csz;           // master (0) and each channel
-                for (int ch = 0; ch < nCtl && ch < 8; ch++) {
-                    if (!(p[i + 6 + ch * csz] & 0x02)) continue;   // no volume control on this channel
-                    const uint16_t wValue = (0x02 << 8) | ch, wIndex = (fu << 8) | acIface;
-                    uint8_t d[2] = {(uint8_t)(db & 0xFF), (uint8_t)((uint16_t)db >> 8)};
-                    if (rawControl(c, dev, 0x21, 0x01, wValue, wIndex, d, 2) < 0) continue;   // SET_CUR
-                    ok = true;
-                    uint8_t r[2] = {0, 0};
-                    if (readBack && rawControl(c, dev, 0xA1, 0x81, wValue, wIndex, r, 2) == 2) {   // GET_CUR
-                        *readBack = (int16_t)(r[0] | (r[1] << 8));
-                        readBack = nullptr;                   // the first channel is enough
-                    }
+            u[nu++] = x;
+            static const char* kn[] = {"", "", "IT", "OT", "MU", "SU", "FU", "PU", "XU"};
+            if (lp < (int)sizeof layout - 24) {
+                lp += snprintf(layout + lp, sizeof layout - lp, " %s%d", kn[x.kind], x.id);
+                if (x.kind == 0x02 && lp < (int)sizeof layout - 8) lp += snprintf(layout + lp, sizeof layout - lp, x.usb ? "(usb)" : "(%04x)", p[i + 4] | (p[i + 5] << 8));
+                for (int k = 0; k < x.nSrc && lp < (int)sizeof layout - 6; k++) lp += snprintf(layout + lp, sizeof layout - lp, "%s%d", k ? "," : "<", x.src[k]);
+                if (x.kind == 0x06 && lp < (int)sizeof layout - 30) {
+                    const int csz = p[i + 5], nCtl = csz ? (L - 7) / csz : 0;
+                    lp += snprintf(layout + lp, sizeof layout - lp, "[");
+                    for (int ch = 0; ch < nCtl && ch < 8 && lp < (int)sizeof layout - 4; ch++) lp += snprintf(layout + lp, sizeof layout - lp, "%s%02x", ch ? " " : "", p[i + 6 + ch * csz]);
+                    lp += snprintf(layout + lp, sizeof layout - lp, "]");
                 }
             }
         }
-        usb_host_device_close(c.cl, dev);
+        ESP_LOGI(TAG, "audio to radio: chip layout (AudioControl interface %d):%s", acIface, layout);
+        // reachable from a USB streaming input terminal
+        for (int k = 0; k < nu; k++) u[k].reach = u[k].kind == 0x02 && u[k].usb;
+        for (bool more = true; more;) {
+            more = false;
+            for (int k = 0; k < nu; k++) {
+                if (u[k].reach) continue;
+                for (int s2 = 0; s2 < u[k].nSrc && !u[k].reach; s2++)
+                    for (int m = 0; m < nu; m++) if (u[m].id == u[k].src[s2] && u[m].reach) { u[k].reach = more = true; break; }
+            }
+        }
+        int nFu = 0;
+        for (int k = 0; k < nu && acIface >= 0; k++) {
+            if (u[k].kind != 0x06 || !u[k].reach) continue;
+            nFu++;
+            const int i = u[k].at, csz = p[i + 5];
+            if (csz == 0) continue;
+            const int nCtl = (p[i] - 7) / csz;           // master (0) and each channel
+            for (int ch = 0; ch < nCtl && ch < 8; ch++) {
+                if (!(p[i + 6 + ch * csz] & 0x02)) continue;   // no volume control on this channel
+                const uint16_t wValue = (0x02 << 8) | ch, wIndex = (u[k].id << 8) | acIface;
+                uint8_t d[2] = {(uint8_t)(db & 0xFF), (uint8_t)((uint16_t)db >> 8)};
+                int w = rawControl(c, dev, 0x21, 0x01, wValue, wIndex, d, 2);                       // SET_CUR
+                uint8_t rb[2] = {0, 0};
+                int g = rawControl(c, dev, 0xA1, 0x81, wValue, wIndex, rb, 2);                     // GET_CUR
+                ESP_LOGI(TAG, "audio to radio: FU%d channel %d: set %.1f dB %s, reads %s%.1f dB", u[k].id, ch, db / 256.0f,
+                         w >= 0 ? "ok" : "refused", g == 2 ? "" : "(no answer) ", (int16_t)(rb[0] | (rb[1] << 8)) / 256.0f);
+                if (w < 0) continue;
+                ok = true;
+                if (readBack && g == 2) { *readBack = (int16_t)(rb[0] | (rb[1] << 8)); readBack = nullptr; }
+            }
+        }
+        if (!nFu) ESP_LOGW(TAG, "audio to radio: direct volume: no feature unit on the playback path");
     }
+    if (dev) usb_host_device_close(c.cl, dev);
     if (c.done) vSemaphoreDelete(c.done);
     usb_host_client_deregister(c.cl);
     return ok;
