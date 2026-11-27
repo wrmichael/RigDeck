@@ -735,6 +735,58 @@ static bool rawSetPlaybackVolume(uint8_t addr, int16_t db, int16_t* readBack) {
             }
         }
         if (!nFu) ESP_LOGW(TAG, "audio to radio: direct volume: no feature unit on the playback path");
+        // Mute states on the playback path (GET_CUR mute, master channel), and every mixer unit on it: its
+        // controls bitmap, each crosspoint from a USB-fed input read, and set to 0 dB (UAC1 mixer control:
+        // wValue = input channel << 8 | output channel). Channel counts: input terminal and mixer say theirs,
+        // feature and selector units pass their source's on.
+        int nch[24] = {0};
+        for (int k = 0; k < nu; k++) {
+            const int i = u[k].at;
+            if (u[k].kind == 0x02 && p[i] >= 8) nch[k] = p[i + 7];
+            if (u[k].kind == 0x04 && p[i] >= 6 + u[k].nSrc) nch[k] = p[i + 5 + p[i + 4]];
+        }
+        for (int pass = 0; pass < 4; pass++)
+            for (int k = 0; k < nu; k++)
+                if (!nch[k] && (u[k].kind == 0x06 || u[k].kind == 0x05) && u[k].nSrc)
+                    for (int m = 0; m < nu; m++) if (u[m].id == u[k].src[0] && nch[m]) { nch[k] = nch[m]; break; }
+        for (int k = 0; k < nu && acIface >= 0; k++) {
+            if (!u[k].reach) continue;
+            const int i = u[k].at;
+            if (u[k].kind == 0x06 && (p[i + 6] & 0x01)) {
+                uint8_t m1[1] = {0xFF};
+                int g = rawControl(c, dev, 0xA1, 0x81, (0x01 << 8) | 0, (u[k].id << 8) | acIface, m1, 1);
+                ESP_LOGI(TAG, "audio to radio: FU%d master mute: %s", u[k].id, g == 1 ? (m1[0] ? "ON" : "off") : "no answer");
+            }
+            if (u[k].kind != 0x04) continue;
+            const int np = p[i + 4], outN = p[i + 5 + np];
+            const int ctlAt = i + 9 + np, ctlLen = p[i] - 10 - np;
+            char bm[40]; int bl = 0; bm[0] = 0;
+            for (int b = 0; b < ctlLen && b < 12; b++) bl += snprintf(bm + bl, sizeof bm - bl, "%02x", p[ctlAt + b]);
+            ESP_LOGI(TAG, "audio to radio: MU%d: %d inputs, %d output channel(s), controls %s", u[k].id, np, outN, ctlLen > 0 ? bm : "none");
+            int inCh = 0;
+            for (int pin = 0; pin < np; pin++) {
+                int src = -1;
+                for (int m = 0; m < nu; m++) if (u[m].id == p[i + 5 + pin]) src = m;
+                const int n = src >= 0 && nch[src] ? nch[src] : 1;
+                const bool usbFed = src >= 0 && u[src].kind == 0x02 && u[src].usb;
+                for (int a = 1; a <= n && a <= 8; a++)
+                    for (int v = 1; v <= outN && v <= 8; v++) {
+                        const uint16_t wValue = (uint16_t)(((inCh + a) << 8) | v), wIndex = (u[k].id << 8) | acIface;
+                        uint8_t cur[2] = {0, 0};
+                        int g = rawControl(c, dev, 0xA1, 0x81, wValue, wIndex, cur, 2);
+                        int w = -2;
+                        if (usbFed) { uint8_t z[2] = {0, 0}; w = rawControl(c, dev, 0x21, 0x01, wValue, wIndex, z, 2); }
+                        uint8_t after[2] = {0, 0};
+                        int g2 = usbFed ? rawControl(c, dev, 0xA1, 0x81, wValue, wIndex, after, 2) : -1;
+                        ESP_LOGI(TAG, "audio to radio: MU%d in %d (from %s%d) -> out %d: was %s%.1f dB%s%s%.1f dB", u[k].id, inCh + a,
+                                 src >= 0 && u[src].kind == 0x02 ? "IT" : "unit ", src >= 0 ? u[src].id : 0, v,
+                                 g == 2 ? "" : "(no answer) ", (int16_t)(cur[0] | (cur[1] << 8)) / 256.0f,
+                                 !usbFed ? "" : w >= 0 ? ", set 0 dB ok, now " : ", set 0 dB refused, now ",
+                                 !usbFed ? "" : g2 == 2 ? "" : "(no answer) ", usbFed ? (int16_t)(after[0] | (after[1] << 8)) / 256.0f : 0.0f);
+                    }
+                inCh += n;
+            }
+        }
     }
     if (dev) usb_host_device_close(c.cl, dev);
     if (c.done) vSemaphoreDelete(c.done);

@@ -1,5 +1,10 @@
 # Changes
 
+## 1.1.22-beta
+- FX-4CR (no transmit audio, still being worked on): 1.1.21 showed the radio's sound chip mixes the USB audio with
+  its mic monitor in a mixer unit before the volume control. RigDeck now reads that mixer's gains, sets the USB
+  inputs to 0 dB and logs the before / after values, plus the mute state on the playback path.
+
 ## 1.1.21-beta
 - FX-4CR (low transmit level, still being worked on): the direct 0 dB write of 1.1.20 found no volume control. It
   now follows the sound chip's whole playback path (also through mixer and selector units) and logs the chip's
