@@ -1,4 +1,4 @@
-// The board looks at the RigDeck site every 6 hours while it is on a home network, so the touch screen and
+// The board looks at the RigDeck site at start-up and then once a day while it is on a home network, so the touch screen and
 // the web page can say "update available" (the decision is ver::offer in core/version.cpp).
 #include "mapfile.h"
 #include <string>
@@ -23,7 +23,7 @@ static std::string versionAt(const std::string& url, std::string& err) {
 static void task(void*) {
     vTaskDelay(pdMS_TO_TICKS(90000));                 // after start-up, NTP and the first decodes
     for (;;) {
-        int waitMin = 10;
+        int waitMin = 60;                                 // not reached (no home network or site): try again in an hour
         if (s_app->staStatus().state == "connected") {
             std::string e1, e2;
             // Each board has its own folder on the site (RIGDECK_SITE_DIR: "" for the 7B, "nano/" for the NANO).
@@ -32,7 +32,7 @@ static void task(void*) {
             if (!st.empty() || !be.empty()) {
                 s_app->setReleases(st, be);
                 ESP_LOGI(TAG, "RigDeck site: Stable %s, Beta %s", st.empty() ? "?" : st.c_str(), be.empty() ? "?" : be.c_str());
-                waitMin = 6 * 60;
+                waitMin = 24 * 60;                            // at start, then once a day
             } else ESP_LOGW(TAG, "RigDeck site not reached: %s", e1.c_str());
         }
         // One minute at a time: pdMS_TO_TICKS(6 h) overflows FreeRTOS's 32-bit tick arithmetic (ms x 1000 Hz) and

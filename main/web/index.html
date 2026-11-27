@@ -1407,7 +1407,7 @@ function vOffer(run,st,be,betaOn){       // the same rule as the board's ver::of
 async function updCheck(){
   if(!S||!S.ver||demo)return;
   const now=Date.now();
-  if(now-updLast>6*3600e3&&!(S.rel&&(S.rel.stable||S.rel.beta))){
+  if(now-updLast>24*3600e3&&!(S.rel&&(S.rel.stable||S.rel.beta))){
     updLast=now;
     const get=async u=>{try{return (await (await fetch(u,{cache:"no-store"})).json()).version||"";}catch(e){return "";}};
     updRel={stable:await get(OTA_SITE+(S.site||"")+"stable/manifest.json"),beta:await get(OTA_SITE+(S.site||"")+"manifest.json")};

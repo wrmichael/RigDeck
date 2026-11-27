@@ -1,6 +1,7 @@
 # Changes
 
 ## 1.1.14-beta
+- Checks for new RigDeck releases once at start-up and then once a day (was every 6 hours).
 - The "Update available" box no longer comes back after pressing Install (it reappeared while the update was
   downloading and being sent).
 
