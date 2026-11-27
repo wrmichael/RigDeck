@@ -139,7 +139,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
     <tr><td>IC-7300, IC-7610, IC-9700, IC-905</td><td>one USB cable</td><td class="st dim">untested</td></tr>
     <tr><td>FTDX10, FT-991A, FT-710, FTDX101</td><td>one USB cable</td><td class="st dim">untested</td></tr>
     <tr><td>TS-2000, TS-480, TS-590, K2, K3</td><td>Digirig with the radio's CAT cable, or a CP2102 or CH340 USB-RS232 cable plus a sound card on a powered hub</td><td class="st dim">untested</td></tr>
-    <tr><td>FX-4CR <span class="pill">BETA 1.1.0</span></td><td>one USB cable; set the radio's CAT to TS-590S, 115200</td><td class="st dim">untested</td></tr>
+    <tr><td>FX-4CR <span class="pill">BETA 1.1.24</span></td><td>one USB cable; Settings, Radio: <b>FX-4CR</b>; radio in DIG-U (see below)</td><td class="st dim">transmit audio reaches Level 100 %; first contacts still to come</td></tr>
     <tr><td>Elecraft KX2, KX3</td><td>Digirig with the Elecraft CAT cable</td><td class="st dim">untested</td></tr>
   </tbody>
 </table></div>
@@ -162,6 +162,15 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 <ul>
   <li>One USB cable carries CAT and 24-bit audio. RigDeck uses the QMX's <b>DIGI</b> mode and keys it over CAT.</li>
   <li>The QMX has no ALC and no CAT commands for power, gains or filters, so those controls on the radio screen do nothing. Frequency, band, mode, A/B and keyer speed work.</li>
+</ul>
+<h3>FX-4CR</h3>
+<ul>
+  <li>One USB cable carries CAT (CH340 serial, Kenwood TS-590S commands, 115200 baud) and audio (the radio's C-Media USB sound chip).</li>
+  <li>Settings, Radio: <b>FX-4CR</b>. RigDeck then looks for it at 115200 first. PTT stays <b>CAT command</b>.</li>
+  <li>On the radio, press <b>SSB</b> until the display shows <b>DIG-U</b>. In USB mode the FX-4CR does not key up on RigDeck's transmit command; DIG-U is the radio manual's mode for digital work.</li>
+  <li>Set the transmit level on the radio: MENU, MENU again (DATA settings), turn TUNE to <b>Aux-Input-Level</b>, turn AF. While transmitting, the radio shows "Level"; aim for 100 %. The radio moves in steps of 5 (on our test radio: 63 % at 5, 100 % at 10). Leave it at the first step that reaches 100 % and fine-tune with RigDeck's TX level: lower it until Level just drops below 100 %, then one step up.</li>
+  <li>RigDeck sets the sound chip's playback volume to the chip's maximum by itself (from 1.1.24). Earlier versions left it near -28 dB, and the radio transmitted with almost no audio.</li>
+  <li>The FX-4CR gives RigDeck no ALC readings, so set the TX level by hand as above.</li>
 </ul>
 <h3>No CAT: SignaLink or another sound card</h3>
 <ul>

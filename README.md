@@ -225,7 +225,7 @@ Radios and interfaces:
 | IC-7300, IC-7610, IC-9700, IC-905 | one USB cable (CI-V + sound card) | should work, untested |
 | FTDX10, FT-991A, FT-710, FTDX101 | one USB cable (CAT at the radio's rate + sound card) | should work, untested |
 | TS-2000, TS-480, TS-590, K2, K3 | Digirig with the radio's CAT cable (or a CP2102 / CH340 USB-RS232 cable + sound card on a hub) | should work, untested |
-| FX-4CR | one USB cable (CH340 serial + USB audio); set the radio's CAT to TS-590S, 115200 | should work, untested |
+| FX-4CR | one USB cable (CH340 serial + USB audio); Settings, Radio "FX-4CR"; radio in DIG-U, Aux-Input-Level set for Level 100 % (see the user guide) | transmit audio reaches Level 100 % (1.1.24-beta); first contacts still to come |
 | Elecraft KX2, KX3 | Digirig with the Elecraft (ACC1, 3.5 mm) CAT cable; audio to the mic and phones jacks; PTT "CAT command" | should work, untested |
 | SignaLink USB (any radio) | Radio "No CAT": the SignaLink keys the radio on its own | tested on the air (K2) |
 | Digirig without a CAT cable | Radio "No CAT", PTT "Serial RTS" | should work, untested |

@@ -78,7 +78,7 @@ bool Settings::set(const std::string& k, const std::string& v) {
     if (k == "logHost") { if (v.size() > 63) return false; logHost = v; return true; }
     if (k == "civAddr") return toInt(v, 1, 0xDF, civAddr);
     if (k == "civBaud") return toInt(v, 4800, 115200, civBaud);
-    if (k == "radioType") return toInt(v, 0, 5, radioType);
+    if (k == "radioType") return toInt(v, 0, 6, radioType);
     if (k == "pttMethod") return toInt(v, 0, 3, pttMethod);
     if (k == "dialMode") return toInt(v, 0, 0x17, dialMode);
     if (k == "dialData") return toInt(v, 0, 1, dialData);

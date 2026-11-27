@@ -339,6 +339,10 @@ int main() {
         App app2;
         app2.begin(dir);
         CHECK(app2.cfg.dialHz == 7030000 && app2.cfg.dialMode == 3 && app2.cfg.radioType == 5 && app2.cfg.pttMethod == 1);
+        app2.command("set", {{"radioType", "6"}, {"pttMethod", "0"}});            // FX-4CR: CAT PTT stays CAT
+        CHECK(app2.cfg.radioType == 6 && app2.radio.pttMethod == PTT_CAT);
+        app2.command("set", {{"radioType", "7"}});                                 // no such radio: refused
+        CHECK(app2.cfg.radioType == 6);
     }
     {   // ---------------- a CI-V port echoes: it must not pass for a text radio
         Radio r;

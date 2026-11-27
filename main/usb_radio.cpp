@@ -234,11 +234,12 @@ static int buildProbes(uint8_t protos, Probe* out) {
     }
     // Text CAT over a CP210x: the configured rate first, then the usual ones (FTDX10 / FT-991A /
     // K2 default 4800, TS-2000 9600, FTX-1 38400, FX-4CR 115200). A USB-native port has no rate: one try.
-    uint32_t bauds[6] = {(uint32_t)s_app->cfg.catBaud, 4800, 9600, 19200, 38400, 115200};
+    // FX-4CR (Settings, Radio): Kenwood CAT, its 115200 tried first.
+    uint32_t bauds[6] = {type == 6 ? 115200u : (uint32_t)s_app->cfg.catBaud, 4800, 9600, 19200, 38400, 115200};
     int nb = 1;
     for (int i = 1; i < 6; i++) if (bauds[i] != bauds[0]) bauds[nb++] = bauds[i];
     if ((protos & (1 << RP_YAESU)) && (type == 0 || type == 2)) for (int i = 0; i < nb; i++) out[n++] = {RP_YAESU, 0, bauds[i]};
-    if ((protos & (1 << RP_KENWOOD)) && (type == 0 || type == 4)) for (int i = 0; i < nb; i++) out[n++] = {RP_KENWOOD, 0, bauds[i]};
+    if ((protos & (1 << RP_KENWOOD)) && (type == 0 || type == 4 || type == 6)) for (int i = 0; i < nb; i++) out[n++] = {RP_KENWOOD, 0, bauds[i]};
     if ((protos & (1 << RP_QMX)) && (type == 0 || type == 3)) out[n++] = {RP_QMX, 0, 115200};
     return n;
 }

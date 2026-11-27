@@ -7,7 +7,9 @@
   sets it there when the control is more than 1 dB below (logged). Found with the 1.1.23 USB report; setting the
   chip's maximum by hand gave Level 100 % on the radio. The workarounds of 1.1.18-1.1.22 (0 % / 0 dB / mixer
   tries) are gone; the USB report of the sound chip still goes in the log when it connects.
-- FX-4CR setup: radio in DIG-U; Aux-Input-Level (radio menu, Digital settings) set for a Level just above 100 %.
+- **FX-4CR in Settings, Radio**: Kenwood CAT, its 115200 tried first. Setup notes in the user guide (Connecting
+  your radio, FX-4CR): radio in DIG-U; Aux-Input-Level on the radio for Level 100 %, fine-tuned with RigDeck's TX
+  level.
 
 ## 1.1.23-beta
 - **Radio diagnostics** (Settings, under Console logs), kept in every build for bringing up new radios:
