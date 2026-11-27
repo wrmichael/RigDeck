@@ -592,6 +592,23 @@ static bool startStream(uac_host_device_handle_t h, const uac_host_stream_config
 // ignored while transmitting), and the transmit stream carries silence while receiving. Stopping
 // and starting them at every transmission cost internal RAM each time (about 2 kB per cycle on the
 // IC-705) until the next start failed and the radio keyed up with no audio.
+// The radio's playback volume: full scale (100 %), then read back what the codec holds. Not every codec
+// has these controls: errors are ignored. If 100 % left the codec far below unity gain (seen with the
+// FX-4CR's C-Media codec: the radio's input level stayed at a few percent), ask for 0 dB directly.
+static void spkVolume(uac_host_device_handle_t h) {
+    uac_host_device_set_mute(h, false);
+    if (uac_host_device_set_volume(h, 100) != ESP_OK) { ESP_LOGI(TAG, "audio to radio: no volume control"); return; }
+    int16_t v = 0;
+    if (uac_host_device_get_volume_db(h, &v) != ESP_OK) { ESP_LOGW(TAG, "audio to radio: volume set to 100 %%, cannot read it back"); return; }
+    ESP_LOGI(TAG, "audio to radio: volume 100 %% = %.1f dB (0x%04X)", v / 256.0f, (unsigned)(uint16_t)v);
+    if (v >= -10 * 256) return;
+    esp_err_t r = uac_host_device_set_volume_db(h, 0);
+    int16_t v2 = v;
+    uac_host_device_get_volume_db(h, &v2);
+    ESP_LOGW(TAG, "audio to radio: volume was %.1f dB at 100 %%; 0 dB asked: %s, now %.1f dB (0x%04X)", v / 256.0f,
+             r == ESP_OK ? "ok" : esp_err_to_name(r), v2 / 256.0f, (unsigned)(uint16_t)v2);
+}
+
 // This task also runs the receive DSP (ft8_lib's FFT keeps ~31 kB of work arrays on the stack).
 static void audioTask(void*) {
     static int16_t mono[960], txMono[480];
@@ -613,8 +630,7 @@ static void audioTask(void*) {
         }
         if (!s_spkRun) {
             if (!startStream(s_spk, &s_spkCfg, "to radio")) continue;
-            uac_host_device_set_mute(s_spk, false);      // not every codec has these controls: ignore errors
-            uac_host_device_set_volume(s_spk, 100);
+            spkVolume(s_spk);
             s_spkRun = true;
         }
         s_app->usbAudio = true;

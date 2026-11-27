@@ -1,8 +1,12 @@
 # Changes
 
+## 1.1.18-beta
+- FX-4CR (low transmit level, still being worked on): the console log now shows the volume the radio's USB sound chip
+  is at after RigDeck sets it to 100 %. If that is more than 10 dB below 0 dB, RigDeck asks the chip for 0 dB and logs
+  the result.
+
 ## 1.1.17-beta
-- **FX-4CR and Kenwood TS-480 / TS-590 / TS-990: transmit sends RigDeck's audio.** PTT was "TX;", which these radios
-  treat as microphone transmit, so they keyed up with no power out. Now "TX1;" (data send: USB audio). TS-2000 and
+- Kenwood TS-480 / TS-590 / TS-990 and the FX-4CR: PTT is now "TX1;" (data send) instead of "TX;". TS-2000 and
   Elecraft keep "TX;".
 - **USB GPS receiver** (u-blox "G-Mouse" VK172 / VK-162 and other u-blox USB receivers, ESP32-P4 boards): plug it
   into the USB port (next to the radio: through a USB hub) and it sets the clock (Clock dot "gps-usb") and the APRS
