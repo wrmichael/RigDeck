@@ -470,6 +470,7 @@ static void serialTask(void*) {
 struct AudioEv { uint8_t kind, addr, iface; uac_host_device_handle_t h; };   // kind: 0 rx connected, 1 tx connected, 2 gone, 3 transfer error
 static QueueHandle_t s_evq;
 static uac_host_device_handle_t s_mic = nullptr, s_spk = nullptr;
+static uint8_t s_spkAddr = 0;                         // USB address of the radio's sound chip (playback)
 static uac_host_stream_config_t s_micCfg, s_spkCfg;
 static bool s_micRun = false, s_spkRun = false;
 
@@ -555,7 +556,7 @@ static void handleEvent(const AudioEv& e) {
         return;
     }
     ESP_LOGI(TAG, "audio %s: interface %d, %d channel(s), %d-bit, 48 kHz", tx ? "to radio" : "from radio", e.iface, fmt.channels, fmt.bit_resolution);
-    if (tx) { s_spk = h; s_spkCfg = fmt; } else { s_mic = h; s_micCfg = fmt; }
+    if (tx) { s_spk = h; s_spkCfg = fmt; s_spkAddr = e.addr; } else { s_mic = h; s_micCfg = fmt; }
 }
 
 // A stream that will not start (usually: internal RAM too short for the USB transfer buffers) is
@@ -593,10 +594,112 @@ static bool startStream(uac_host_device_handle_t h, const uac_host_stream_config
 // ignored while transmitting), and the transmit stream carries silence while receiving. Stopping
 // and starting them at every transmission cost internal RAM each time (about 2 kB per cycle on the
 // IC-705) until the next start failed and the radio keyed up with no audio.
+// ---- playback volume written to the sound chip directly
+// For a chip whose reported volume range is wrong (the FX-4CR's C-Media chip reports both ends near -30 dB, so
+// the UAC driver refuses 0 dB), RigDeck sends the standard USB Audio request itself: SET_CUR volume on the
+// playback Feature Unit (the one fed by the USB streaming input terminal), every channel that has a volume
+// control. Its own short-lived USB host client; the driver's state is not touched.
+struct RawCtl { usb_host_client_handle_t cl; SemaphoreHandle_t done; };
+static void rawClientCb(const usb_host_client_event_msg_t*, void*) {}
+static void rawXferCb(usb_transfer_t* t) { xSemaphoreGive(((RawCtl*)t->context)->done); }
+
+// One control request on endpoint 0. Returns the bytes of data moved, or -1.
+static int rawControl(RawCtl& c, usb_device_handle_t dev, uint8_t reqType, uint8_t req, uint16_t value,
+                      uint16_t index, uint8_t* data, uint16_t len) {
+    usb_transfer_t* t = nullptr;
+    if (usb_host_transfer_alloc(sizeof(usb_setup_packet_t) + 64, 0, &t) != ESP_OK) return -1;
+    usb_setup_packet_t* sp = (usb_setup_packet_t*)t->data_buffer;
+    sp->bmRequestType = reqType; sp->bRequest = req; sp->wValue = value; sp->wIndex = index; sp->wLength = len;
+    if (!(reqType & 0x80) && len) memcpy(t->data_buffer + sizeof(usb_setup_packet_t), data, len);
+    t->num_bytes = sizeof(usb_setup_packet_t) + len;
+    t->device_handle = dev;
+    t->bEndpointAddress = 0;
+    t->callback = rawXferCb;
+    t->context = &c;
+    t->timeout_ms = 500;
+    int got = -1;
+    if (usb_host_transfer_submit_control(c.cl, t) == ESP_OK) {
+        int64_t until = esp_timer_get_time() + 1000000;
+        bool fin = false;
+        while (!fin && esp_timer_get_time() < until) {
+            usb_host_client_handle_events(c.cl, pdMS_TO_TICKS(10));
+            fin = xSemaphoreTake(c.done, 0) == pdTRUE;
+        }
+        if (fin && t->status == USB_TRANSFER_STATUS_COMPLETED) {
+            got = t->actual_num_bytes - (int)sizeof(usb_setup_packet_t);
+            if (got < 0) got = 0;
+            if ((reqType & 0x80) && got) memcpy(data, t->data_buffer + sizeof(usb_setup_packet_t), got > len ? len : got);
+        } else if (!fin) {
+            ESP_LOGW(TAG, "audio to radio: volume request got no answer");
+            return -1;                                   // the transfer is still owned by the host: not freed
+        }
+    }
+    usb_host_transfer_free(t);
+    return got;
+}
+
+// Sets every playback volume channel to db (1/256 dB). Returns true when at least one channel took it;
+// *readBack is the first channel's value afterwards.
+static bool rawSetPlaybackVolume(uint8_t addr, int16_t db, int16_t* readBack) {
+    RawCtl c = {};
+    usb_host_client_config_t cc = {};
+    cc.is_synchronous = false;
+    cc.max_num_event_msg = 3;
+    cc.async.client_event_callback = rawClientCb;
+    cc.async.callback_arg = nullptr;
+    if (usb_host_client_register(&cc, &c.cl) != ESP_OK) return false;
+    c.done = xSemaphoreCreateBinary();
+    usb_device_handle_t dev = nullptr;
+    bool ok = false;
+    if (c.done && usb_host_device_open(c.cl, addr, &dev) == ESP_OK) {
+        const usb_config_desc_t* cfg = nullptr;
+        if (usb_host_get_active_config_descriptor(dev, &cfg) == ESP_OK && cfg) {
+            const uint8_t* p = (const uint8_t*)cfg;
+            const int total = cfg->wTotalLength;
+            int acIface = -1, curIface = -1, curClass = -1, curSub = -1;
+            uint8_t usbIn[8]; int nIn = 0;
+            // first pass: AudioControl interface and the USB streaming input terminals
+            for (int i = 0; i + 2 <= total && p[i] >= 2; i += p[i]) {
+                if (p[i + 1] == 0x04 && i + 7 <= total) { curIface = p[i + 2]; curClass = p[i + 5]; curSub = p[i + 6]; }
+                else if (p[i + 1] == 0x24 && curClass == 1 && curSub == 1) {
+                    acIface = curIface;
+                    if (p[i + 2] == 0x02 && p[i] >= 6 && (p[i + 4] | (p[i + 5] << 8)) == 0x0101 && nIn < 8) usbIn[nIn++] = p[i + 3];
+                }
+            }
+            curClass = curSub = -1;
+            for (int i = 0; acIface >= 0 && i + 2 <= total && p[i] >= 2; i += p[i]) {
+                if (p[i + 1] == 0x04 && i + 7 <= total) { curClass = p[i + 5]; curSub = p[i + 6]; continue; }
+                if (p[i + 1] != 0x24 || curClass != 1 || curSub != 1 || p[i + 2] != 0x06 || p[i] < 7) continue;
+                const uint8_t fu = p[i + 3], src = p[i + 4], csz = p[i + 5];
+                bool fromUsb = false;
+                for (int k = 0; k < nIn; k++) if (usbIn[k] == src) fromUsb = true;
+                if (!fromUsb || csz == 0) continue;
+                const int nCtl = (p[i] - 7) / csz;           // master (0) and each channel
+                for (int ch = 0; ch < nCtl && ch < 8; ch++) {
+                    if (!(p[i + 6 + ch * csz] & 0x02)) continue;   // no volume control on this channel
+                    const uint16_t wValue = (0x02 << 8) | ch, wIndex = (fu << 8) | acIface;
+                    uint8_t d[2] = {(uint8_t)(db & 0xFF), (uint8_t)((uint16_t)db >> 8)};
+                    if (rawControl(c, dev, 0x21, 0x01, wValue, wIndex, d, 2) < 0) continue;   // SET_CUR
+                    ok = true;
+                    uint8_t r[2] = {0, 0};
+                    if (readBack && rawControl(c, dev, 0xA1, 0x81, wValue, wIndex, r, 2) == 2) {   // GET_CUR
+                        *readBack = (int16_t)(r[0] | (r[1] << 8));
+                        readBack = nullptr;                   // the first channel is enough
+                    }
+                }
+            }
+        }
+        usb_host_device_close(c.cl, dev);
+    }
+    if (c.done) vSemaphoreDelete(c.done);
+    usb_host_client_deregister(c.cl);
+    return ok;
+}
+
 // The radio's playback volume: full scale, then read back what the codec holds. Not every codec has these
-// controls: errors are ignored. Some codecs report their volume range upside down (the FX-4CR's C-Media chip:
-// "100 %" read back as -31.8 dB and 0 dB was refused as out of range), so 100 % is their quietest setting. When
-// 100 % reads back more than 10 dB below 0 dB, 0 % is tried too and the louder of the two is kept.
+// controls: errors are ignored. When the codec is still more than 10 dB below 0 dB (the FX-4CR's C-Media chip:
+// 100 % read back as -31.8 dB, 0 % as -28.0 dB, 0 dB refused by the driver as out of the reported range),
+// RigDeck writes 0 dB to the chip itself and keeps it if the chip reads back louder.
 static void spkVolume(uac_host_device_handle_t h) {
     uac_host_device_set_mute(h, false);
     if (uac_host_device_set_volume(h, 100) != ESP_OK) { ESP_LOGI(TAG, "audio to radio: no volume control"); return; }
@@ -605,14 +708,26 @@ static void spkVolume(uac_host_device_handle_t h) {
     ESP_LOGI(TAG, "audio to radio: volume 100 %% = %.1f dB (0x%04X)", v100 / 256.0f, (unsigned)(uint16_t)v100);
     if (v100 >= -10 * 256) return;
     int16_t v0 = INT16_MIN;
-    if (uac_host_device_set_volume(h, 0) == ESP_OK && uac_host_device_get_volume_db(h, &v0) == ESP_OK && v0 > v100) {
-        ESP_LOGW(TAG, "audio to radio: volume range reported upside down: 0 %% = %.1f dB (0x%04X) is louder, kept",
-                 v0 / 256.0f, (unsigned)(uint16_t)v0);
+    if (uac_host_device_set_volume(h, 0) != ESP_OK || uac_host_device_get_volume_db(h, &v0) != ESP_OK) v0 = INT16_MIN;
+    int16_t best = v100;
+    if (v0 > v100) best = v0; else uac_host_device_set_volume(h, 100);
+    int16_t raw = INT16_MIN;
+    const bool written = rawSetPlaybackVolume(s_spkAddr, 0, &raw);
+    if (written && raw == INT16_MIN) {
+        ESP_LOGW(TAG, "audio to radio: chip reports a wrong volume range (0 %% = %.1f dB, 100 %% = %.1f dB); 0 dB written "
+                 "directly, could not read it back", v0 / 256.0f, v100 / 256.0f);
         return;
     }
-    uac_host_device_set_volume(h, 100);
-    if (v0 == INT16_MIN) ESP_LOGW(TAG, "audio to radio: volume stays at %.1f dB (0 %% could not be tried)", v100 / 256.0f);
-    else ESP_LOGW(TAG, "audio to radio: volume stays at %.1f dB (0 %% = %.1f dB)", v100 / 256.0f, v0 / 256.0f);
+    if (written && raw > best) {
+        ESP_LOGW(TAG, "audio to radio: chip reports a wrong volume range (0 %% = %.1f dB, 100 %% = %.1f dB); 0 dB written "
+                 "directly, reads back %.1f dB (0x%04X)", v0 / 256.0f, v100 / 256.0f, raw / 256.0f, (unsigned)(uint16_t)raw);
+        return;
+    }
+    if (written) {         // the chip kept its own limit: back to the louder of 0 % / 100 %
+        if (best == v0) uac_host_device_set_volume(h, 0); else uac_host_device_set_volume(h, 100);
+    }
+    ESP_LOGW(TAG, "audio to radio: volume stays at %.1f dB (0 %% = %.1f dB, 100 %% = %.1f dB, 0 dB written directly: %s)",
+             best / 256.0f, v0 / 256.0f, v100 / 256.0f, written ? "chip kept its limit" : "not taken");
 }
 
 // This task also runs the receive DSP (ft8_lib's FFT keeps ~31 kB of work arrays on the stack).
