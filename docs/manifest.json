@@ -1,6 +1,6 @@
 {
   "name": "RigDeck (7B)",
-  "version": "1.1.20-beta",
+  "version": "1.1.21-beta",
   "new_install_prompt_erase": true,
   "new_install_improv_wait_time": 0,
   "builds": [
