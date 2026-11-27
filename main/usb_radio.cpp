@@ -16,6 +16,7 @@
 // open at the same time. FT8 is half duplex anyway. ESP32-P4 (16 channels) has room to spare.
 #include "platform.h"
 #include "clock.h"
+#include <cstdint>
 #include <cstring>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -592,21 +593,26 @@ static bool startStream(uac_host_device_handle_t h, const uac_host_stream_config
 // ignored while transmitting), and the transmit stream carries silence while receiving. Stopping
 // and starting them at every transmission cost internal RAM each time (about 2 kB per cycle on the
 // IC-705) until the next start failed and the radio keyed up with no audio.
-// The radio's playback volume: full scale (100 %), then read back what the codec holds. Not every codec
-// has these controls: errors are ignored. If 100 % left the codec far below unity gain (seen with the
-// FX-4CR's C-Media codec: the radio's input level stayed at a few percent), ask for 0 dB directly.
+// The radio's playback volume: full scale, then read back what the codec holds. Not every codec has these
+// controls: errors are ignored. Some codecs report their volume range upside down (the FX-4CR's C-Media chip:
+// "100 %" read back as -31.8 dB and 0 dB was refused as out of range), so 100 % is their quietest setting. When
+// 100 % reads back more than 10 dB below 0 dB, 0 % is tried too and the louder of the two is kept.
 static void spkVolume(uac_host_device_handle_t h) {
     uac_host_device_set_mute(h, false);
     if (uac_host_device_set_volume(h, 100) != ESP_OK) { ESP_LOGI(TAG, "audio to radio: no volume control"); return; }
-    int16_t v = 0;
-    if (uac_host_device_get_volume_db(h, &v) != ESP_OK) { ESP_LOGW(TAG, "audio to radio: volume set to 100 %%, cannot read it back"); return; }
-    ESP_LOGI(TAG, "audio to radio: volume 100 %% = %.1f dB (0x%04X)", v / 256.0f, (unsigned)(uint16_t)v);
-    if (v >= -10 * 256) return;
-    esp_err_t r = uac_host_device_set_volume_db(h, 0);
-    int16_t v2 = v;
-    uac_host_device_get_volume_db(h, &v2);
-    ESP_LOGW(TAG, "audio to radio: volume was %.1f dB at 100 %%; 0 dB asked: %s, now %.1f dB (0x%04X)", v / 256.0f,
-             r == ESP_OK ? "ok" : esp_err_to_name(r), v2 / 256.0f, (unsigned)(uint16_t)v2);
+    int16_t v100 = 0;
+    if (uac_host_device_get_volume_db(h, &v100) != ESP_OK) { ESP_LOGW(TAG, "audio to radio: volume set to 100 %%, cannot read it back"); return; }
+    ESP_LOGI(TAG, "audio to radio: volume 100 %% = %.1f dB (0x%04X)", v100 / 256.0f, (unsigned)(uint16_t)v100);
+    if (v100 >= -10 * 256) return;
+    int16_t v0 = INT16_MIN;
+    if (uac_host_device_set_volume(h, 0) == ESP_OK && uac_host_device_get_volume_db(h, &v0) == ESP_OK && v0 > v100) {
+        ESP_LOGW(TAG, "audio to radio: volume range reported upside down: 0 %% = %.1f dB (0x%04X) is louder, kept",
+                 v0 / 256.0f, (unsigned)(uint16_t)v0);
+        return;
+    }
+    uac_host_device_set_volume(h, 100);
+    if (v0 == INT16_MIN) ESP_LOGW(TAG, "audio to radio: volume stays at %.1f dB (0 %% could not be tried)", v100 / 256.0f);
+    else ESP_LOGW(TAG, "audio to radio: volume stays at %.1f dB (0 %% = %.1f dB)", v100 / 256.0f, v0 / 256.0f);
 }
 
 // This task also runs the receive DSP (ft8_lib's FFT keeps ~31 kB of work arrays on the stack).

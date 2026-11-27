@@ -1,5 +1,11 @@
 # Changes
 
+## 1.1.19-beta
+- FX-4CR (low transmit level, still being worked on): 1.1.18 showed RigDeck sends full audio but the radio's USB
+  sound chip sits at -31.8 dB when set to 100 %, and refuses 0 dB. When 100 % reads back that low, RigDeck now also
+  tries 0 % (for a chip that reports its volume range upside down) and keeps the louder setting. The console log says
+  which.
+
 ## 1.1.18-beta
 - FX-4CR (low transmit level, still being worked on): the console log now shows the volume the radio's USB sound chip
   is at after RigDeck sets it to 100 %. If that is more than 10 dB below 0 dB, RigDeck asks the chip for 0 dB and logs
