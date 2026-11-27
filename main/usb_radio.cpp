@@ -599,15 +599,8 @@ static bool startStream(uac_host_device_handle_t h, const uac_host_stream_config
     return false;
 }
 
-// Both streams are started once and then left running: receive audio is read all the time (and
-// ignored while transmitting), and the transmit stream carries silence while receiving. Stopping
-// and starting them at every transmission cost internal RAM each time (about 2 kB per cycle on the
-// IC-705) until the next start failed and the radio keyed up with no audio.
-// ---- playback volume written to the sound chip directly
-// For a chip whose reported volume range is wrong (the FX-4CR's C-Media chip reports both ends near -30 dB, so
-// the UAC driver refuses 0 dB), RigDeck sends the standard USB Audio request itself: SET_CUR volume on the
-// playback Feature Unit (the one fed by the USB streaming input terminal), every channel that has a volume
-// control. Its own short-lived USB host client; the driver's state is not touched.
+// ---- USB control requests sent by RigDeck itself (sound chip volume, diagnostics): a short-lived USB host
+// client of its own, so the audio driver's state is not touched.
 struct RawCtl { usb_host_client_handle_t cl; SemaphoreHandle_t done; };
 static void rawClientCb(const usb_host_client_event_msg_t*, void*) {}
 static void rawXferCb(usb_transfer_t* t) { xSemaphoreGive(((RawCtl*)t->context)->done); }
@@ -645,162 +638,6 @@ static int rawControl(RawCtl& c, usb_device_handle_t dev, uint8_t reqType, uint8
     }
     usb_host_transfer_free(t);
     return got;
-}
-
-// Sets every playback volume channel to db (1/256 dB). Returns true when at least one channel took it;
-// *readBack is the first channel's value afterwards. The playback Feature Units are the ones reachable from a USB
-// streaming input terminal (directly or through mixer / selector / processing units). The chip's audio layout
-// and each request's result go to the log.
-static bool rawSetPlaybackVolume(uint8_t addr, int16_t db, int16_t* readBack) {
-    RawCtl c = {};
-    usb_host_client_config_t cc = {};
-    cc.is_synchronous = false;
-    cc.max_num_event_msg = 3;
-    cc.async.client_event_callback = rawClientCb;
-    cc.async.callback_arg = nullptr;
-    esp_err_t r = usb_host_client_register(&cc, &c.cl);
-    if (r != ESP_OK) { ESP_LOGW(TAG, "audio to radio: direct volume: no USB client (%s)", esp_err_to_name(r)); return false; }
-    c.done = xSemaphoreCreateBinary();
-    usb_device_handle_t dev = nullptr;
-    bool ok = false;
-    r = c.done ? usb_host_device_open(c.cl, addr, &dev) : ESP_ERR_NO_MEM;
-    if (r != ESP_OK) ESP_LOGW(TAG, "audio to radio: direct volume: cannot open USB address %d (%s)", addr, esp_err_to_name(r));
-    const usb_config_desc_t* cfg = nullptr;
-    if (r == ESP_OK && (usb_host_get_active_config_descriptor(dev, &cfg) != ESP_OK || !cfg)) {
-        ESP_LOGW(TAG, "audio to radio: direct volume: no configuration descriptor");
-        cfg = nullptr;
-    }
-    if (cfg) {
-        const uint8_t* p = (const uint8_t*)cfg;
-        const int total = cfg->wTotalLength;
-        // the AudioControl interface's units: id, kind (descriptor subtype), sources
-        struct Unit { uint8_t id, kind, nSrc, src[8]; int at; bool usb, reach; };
-        Unit u[24]; int nu = 0;
-        int acIface = -1, curIface = -1, curClass = -1, curSub = -1;
-        char layout[200]; int lp = 0;
-        layout[0] = 0;
-        for (int i = 0; i + 2 <= total && p[i] >= 2 && i + p[i] <= total; i += p[i]) {
-            const int L = p[i];
-            if (p[i + 1] == 0x04 && L >= 9) { curIface = p[i + 2]; curClass = p[i + 5]; curSub = p[i + 6]; continue; }
-            if (p[i + 1] != 0x24 || curClass != 1 || curSub != 1 || L < 4 || nu >= 24) continue;
-            acIface = curIface;
-            Unit x = {}; x.id = p[i + 3]; x.kind = p[i + 2]; x.at = i;
-            switch (x.kind) {
-                case 0x02: if (L >= 6) x.usb = (p[i + 4] | (p[i + 5] << 8)) == 0x0101; break;        // input terminal
-                case 0x03: if (L >= 8) { x.nSrc = 1; x.src[0] = p[i + 7]; } break;                    // output terminal
-                case 0x04: case 0x05:                                                                 // mixer, selector
-                    if (L >= 5) { x.nSrc = p[i + 4] > 8 ? 8 : p[i + 4]; for (int k = 0; k < x.nSrc && 5 + k < L; k++) x.src[k] = p[i + 5 + k]; }
-                    break;
-                case 0x06: if (L >= 7) { x.nSrc = 1; x.src[0] = p[i + 4]; } break;                    // feature unit
-                case 0x07: case 0x08:                                                                 // processing, extension
-                    if (L >= 7) { x.nSrc = p[i + 6] > 8 ? 8 : p[i + 6]; for (int k = 0; k < x.nSrc && 7 + k < L; k++) x.src[k] = p[i + 7 + k]; }
-                    break;
-                default: continue;
-            }
-            u[nu++] = x;
-            static const char* kn[] = {"", "", "IT", "OT", "MU", "SU", "FU", "PU", "XU"};
-            if (lp < (int)sizeof layout - 24) {
-                lp += snprintf(layout + lp, sizeof layout - lp, " %s%d", kn[x.kind], x.id);
-                if (x.kind == 0x02 && lp < (int)sizeof layout - 8) lp += snprintf(layout + lp, sizeof layout - lp, x.usb ? "(usb)" : "(%04x)", p[i + 4] | (p[i + 5] << 8));
-                for (int k = 0; k < x.nSrc && lp < (int)sizeof layout - 6; k++) lp += snprintf(layout + lp, sizeof layout - lp, "%s%d", k ? "," : "<", x.src[k]);
-                if (x.kind == 0x06 && lp < (int)sizeof layout - 30) {
-                    const int csz = p[i + 5], nCtl = csz ? (L - 7) / csz : 0;
-                    lp += snprintf(layout + lp, sizeof layout - lp, "[");
-                    for (int ch = 0; ch < nCtl && ch < 8 && lp < (int)sizeof layout - 4; ch++) lp += snprintf(layout + lp, sizeof layout - lp, "%s%02x", ch ? " " : "", p[i + 6 + ch * csz]);
-                    lp += snprintf(layout + lp, sizeof layout - lp, "]");
-                }
-            }
-        }
-        ESP_LOGI(TAG, "audio to radio: chip layout (AudioControl interface %d):%s", acIface, layout);
-        // reachable from a USB streaming input terminal
-        for (int k = 0; k < nu; k++) u[k].reach = u[k].kind == 0x02 && u[k].usb;
-        for (bool more = true; more;) {
-            more = false;
-            for (int k = 0; k < nu; k++) {
-                if (u[k].reach) continue;
-                for (int s2 = 0; s2 < u[k].nSrc && !u[k].reach; s2++)
-                    for (int m = 0; m < nu; m++) if (u[m].id == u[k].src[s2] && u[m].reach) { u[k].reach = more = true; break; }
-            }
-        }
-        int nFu = 0;
-        for (int k = 0; k < nu && acIface >= 0; k++) {
-            if (u[k].kind != 0x06 || !u[k].reach) continue;
-            nFu++;
-            const int i = u[k].at, csz = p[i + 5];
-            if (csz == 0) continue;
-            const int nCtl = (p[i] - 7) / csz;           // master (0) and each channel
-            for (int ch = 0; ch < nCtl && ch < 8; ch++) {
-                if (!(p[i + 6 + ch * csz] & 0x02)) continue;   // no volume control on this channel
-                const uint16_t wValue = (0x02 << 8) | ch, wIndex = (u[k].id << 8) | acIface;
-                uint8_t d[2] = {(uint8_t)(db & 0xFF), (uint8_t)((uint16_t)db >> 8)};
-                int w = rawControl(c, dev, 0x21, 0x01, wValue, wIndex, d, 2);                       // SET_CUR
-                uint8_t rb[2] = {0, 0};
-                int g = rawControl(c, dev, 0xA1, 0x81, wValue, wIndex, rb, 2);                     // GET_CUR
-                ESP_LOGI(TAG, "audio to radio: FU%d channel %d: set %.1f dB %s, reads %s%.1f dB", u[k].id, ch, db / 256.0f,
-                         w >= 0 ? "ok" : "refused", g == 2 ? "" : "(no answer) ", (int16_t)(rb[0] | (rb[1] << 8)) / 256.0f);
-                if (w < 0) continue;
-                ok = true;
-                if (readBack && g == 2) { *readBack = (int16_t)(rb[0] | (rb[1] << 8)); readBack = nullptr; }
-            }
-        }
-        if (!nFu) ESP_LOGW(TAG, "audio to radio: direct volume: no feature unit on the playback path");
-        // Mute states on the playback path (GET_CUR mute, master channel), and every mixer unit on it: its
-        // controls bitmap, each crosspoint from a USB-fed input read, and set to 0 dB (UAC1 mixer control:
-        // wValue = input channel << 8 | output channel). Channel counts: input terminal and mixer say theirs,
-        // feature and selector units pass their source's on.
-        int nch[24] = {0};
-        for (int k = 0; k < nu; k++) {
-            const int i = u[k].at;
-            if (u[k].kind == 0x02 && p[i] >= 8) nch[k] = p[i + 7];
-            if (u[k].kind == 0x04 && p[i] >= 6 + u[k].nSrc) nch[k] = p[i + 5 + p[i + 4]];
-        }
-        for (int pass = 0; pass < 4; pass++)
-            for (int k = 0; k < nu; k++)
-                if (!nch[k] && (u[k].kind == 0x06 || u[k].kind == 0x05) && u[k].nSrc)
-                    for (int m = 0; m < nu; m++) if (u[m].id == u[k].src[0] && nch[m]) { nch[k] = nch[m]; break; }
-        for (int k = 0; k < nu && acIface >= 0; k++) {
-            if (!u[k].reach) continue;
-            const int i = u[k].at;
-            if (u[k].kind == 0x06 && (p[i + 6] & 0x01)) {
-                uint8_t m1[1] = {0xFF};
-                int g = rawControl(c, dev, 0xA1, 0x81, (0x01 << 8) | 0, (u[k].id << 8) | acIface, m1, 1);
-                ESP_LOGI(TAG, "audio to radio: FU%d master mute: %s", u[k].id, g == 1 ? (m1[0] ? "ON" : "off") : "no answer");
-            }
-            if (u[k].kind != 0x04) continue;
-            const int np = p[i + 4], outN = p[i + 5 + np];
-            const int ctlAt = i + 9 + np, ctlLen = p[i] - 10 - np;
-            char bm[40]; int bl = 0; bm[0] = 0;
-            for (int b = 0; b < ctlLen && b < 12; b++) bl += snprintf(bm + bl, sizeof bm - bl, "%02x", p[ctlAt + b]);
-            ESP_LOGI(TAG, "audio to radio: MU%d: %d inputs, %d output channel(s), controls %s", u[k].id, np, outN, ctlLen > 0 ? bm : "none");
-            int inCh = 0;
-            for (int pin = 0; pin < np; pin++) {
-                int src = -1;
-                for (int m = 0; m < nu; m++) if (u[m].id == p[i + 5 + pin]) src = m;
-                const int n = src >= 0 && nch[src] ? nch[src] : 1;
-                const bool usbFed = src >= 0 && u[src].kind == 0x02 && u[src].usb;
-                for (int a = 1; a <= n && a <= 8; a++)
-                    for (int v = 1; v <= outN && v <= 8; v++) {
-                        const uint16_t wValue = (uint16_t)(((inCh + a) << 8) | v), wIndex = (u[k].id << 8) | acIface;
-                        uint8_t cur[2] = {0, 0};
-                        int g = rawControl(c, dev, 0xA1, 0x81, wValue, wIndex, cur, 2);
-                        int w = -2;
-                        if (usbFed) { uint8_t z[2] = {0, 0}; w = rawControl(c, dev, 0x21, 0x01, wValue, wIndex, z, 2); }
-                        uint8_t after[2] = {0, 0};
-                        int g2 = usbFed ? rawControl(c, dev, 0xA1, 0x81, wValue, wIndex, after, 2) : -1;
-                        ESP_LOGI(TAG, "audio to radio: MU%d in %d (from %s%d) -> out %d: was %s%.1f dB%s%s%.1f dB", u[k].id, inCh + a,
-                                 src >= 0 && u[src].kind == 0x02 ? "IT" : "unit ", src >= 0 ? u[src].id : 0, v,
-                                 g == 2 ? "" : "(no answer) ", (int16_t)(cur[0] | (cur[1] << 8)) / 256.0f,
-                                 !usbFed ? "" : w >= 0 ? ", set 0 dB ok, now " : ", set 0 dB refused, now ",
-                                 !usbFed ? "" : g2 == 2 ? "" : "(no answer) ", usbFed ? (int16_t)(after[0] | (after[1] << 8)) / 256.0f : 0.0f);
-                    }
-                inCh += n;
-            }
-        }
-    }
-    if (dev) usb_host_device_close(c.cl, dev);
-    if (c.done) vSemaphoreDelete(c.done);
-    usb_host_client_deregister(c.cl);
-    return ok;
 }
 
 // ============================================================================ diagnostics
@@ -1178,49 +1015,74 @@ void usbdiag_register(void* srv) {
     httpd_register_uri_handler((httpd_handle_t)srv, &b);
 }
 
-// The radio's playback volume: full scale, then read back what the codec holds. Not every codec has these
-// controls: errors are ignored. When the codec is still more than 10 dB below 0 dB (the FX-4CR's C-Media chip:
-// 100 % read back as -31.8 dB, 0 % as -28.0 dB, 0 dB refused by the driver as out of the reported range),
-// RigDeck writes 0 dB to the chip itself and keeps it if the chip reads back louder.
-static void spkVolume(uac_host_device_handle_t h) {
-    {                                                   // the sound chip's controls, for the log (every radio)
-        xSemaphoreTake(s_rawMtx, portMAX_DELAY);
-        std::string o;
-        if (s_spkAddr) usbReportDev(o, s_spkAddr);
-        xSemaphoreGive(s_rawMtx);
-        logLines(o);
+// The playback volume of the radio's sound chip: unmuted and at the chip's own maximum. The USB audio driver's
+// "100 %" relies on the range it reads from the chip, and it read the FX-4CR's C-Media CM108 wrong: 100 % came out
+// at -31.8 dB and the chip sat near -28 dB, its quiet end (the radio's input level stayed at a few percent). So
+// RigDeck also asks every volume control on the playback path (fed by the USB input) for its maximum itself and sets
+// that when the control is more than 1 dB below it. The chip's controls go in the log first (USB report).
+static void playbackToMax(uint8_t addr) {
+    RawDev r;
+    std::string err;
+    if (!addr || !rawOpen(r, addr, &err)) { ESP_LOGW(TAG, "audio to radio: volume check: %s", addr ? err.c_str() : "no address"); return; }
+    const usb_config_desc_t* cfg = nullptr;
+    if (usb_host_get_active_config_descriptor(r.dev, &cfg) == ESP_OK && cfg) {
+        const uint8_t* p = (const uint8_t*)cfg;
+        AcUnit u[24];
+        int acIface;
+        const int nu = acUnits(p, cfg->wTotalLength, u, 24, acIface);
+        bool reach[24] = {};
+        for (int k = 0; k < nu; k++) reach[k] = u[k].kind == 0x02 && u[k].usb;
+        for (bool more = true; more;) {
+            more = false;
+            for (int k = 0; k < nu; k++)
+                for (int s2 = 0; !reach[k] && s2 < u[k].nSrc; s2++)
+                    for (int m = 0; m < nu; m++) if (u[m].id == u[k].src[s2] && reach[m]) { reach[k] = more = true; break; }
+        }
+        for (int k = 0; k < nu && acIface >= 0; k++) {
+            if (u[k].kind != 0x06 || !reach[k]) continue;
+            const int i = u[k].at, csz = p[i + 5];
+            const int nCtl = csz ? (p[i] - 7) / csz : 0;
+            for (int ch = 0; ch < nCtl && ch < 8; ch++) {
+                if (!(p[i + 6 + ch * csz] & 0x02)) continue;
+                const uint16_t wValue = (uint16_t)((0x02 << 8) | ch);
+                int cur = 0, mx = 0;
+                if (acGet(r, 0x81, u[k].id, acIface, wValue, 2, cur) != 2 || acGet(r, 0x83, u[k].id, acIface, wValue, 2, mx) != 2) {
+                    ESP_LOGW(TAG, "audio to radio: FU%d channel %d: volume not readable", u[k].id, ch);
+                    continue;
+                }
+                if (cur >= mx - 256) {
+                    ESP_LOGI(TAG, "audio to radio: FU%d channel %d volume %.1f dB (maximum %.1f dB)", u[k].id, ch, cur / 256.0f, mx / 256.0f);
+                    continue;
+                }
+                uint8_t d[2] = {(uint8_t)(mx & 0xFF), (uint8_t)((mx >> 8) & 0xFF)};
+                const int w = rawControl(r.c, r.dev, 0x21, 0x01, wValue, (uint16_t)((u[k].id << 8) | acIface), d, 2);
+                int now = cur;
+                acGet(r, 0x81, u[k].id, acIface, wValue, 2, now);
+                ESP_LOGW(TAG, "audio to radio: FU%d channel %d volume was %.1f dB, set to the chip's maximum %.1f dB: %s, now %.1f dB",
+                         u[k].id, ch, cur / 256.0f, mx / 256.0f, w >= 0 ? "ok" : "refused", now / 256.0f);
+            }
+        }
     }
-    uac_host_device_set_mute(h, false);
-    if (uac_host_device_set_volume(h, 100) != ESP_OK) { ESP_LOGI(TAG, "audio to radio: no volume control"); return; }
-    int16_t v100 = 0;
-    if (uac_host_device_get_volume_db(h, &v100) != ESP_OK) { ESP_LOGW(TAG, "audio to radio: volume set to 100 %%, cannot read it back"); return; }
-    ESP_LOGI(TAG, "audio to radio: volume 100 %% = %.1f dB (0x%04X)", v100 / 256.0f, (unsigned)(uint16_t)v100);
-    if (v100 >= -10 * 256) return;
-    int16_t v0 = INT16_MIN;
-    if (uac_host_device_set_volume(h, 0) != ESP_OK || uac_host_device_get_volume_db(h, &v0) != ESP_OK) v0 = INT16_MIN;
-    int16_t best = v100;
-    if (v0 > v100) best = v0; else uac_host_device_set_volume(h, 100);
-    int16_t raw = INT16_MIN;
-    xSemaphoreTake(s_rawMtx, portMAX_DELAY);
-    const bool written = rawSetPlaybackVolume(s_spkAddr, 0, &raw);
-    xSemaphoreGive(s_rawMtx);
-    if (written && raw == INT16_MIN) {
-        ESP_LOGW(TAG, "audio to radio: chip reports a wrong volume range (0 %% = %.1f dB, 100 %% = %.1f dB); 0 dB written "
-                 "directly, could not read it back", v0 / 256.0f, v100 / 256.0f);
-        return;
-    }
-    if (written && raw > best) {
-        ESP_LOGW(TAG, "audio to radio: chip reports a wrong volume range (0 %% = %.1f dB, 100 %% = %.1f dB); 0 dB written "
-                 "directly, reads back %.1f dB (0x%04X)", v0 / 256.0f, v100 / 256.0f, raw / 256.0f, (unsigned)(uint16_t)raw);
-        return;
-    }
-    if (written) {         // the chip kept its own limit: back to the louder of 0 % / 100 %
-        if (best == v0) uac_host_device_set_volume(h, 0); else uac_host_device_set_volume(h, 100);
-    }
-    ESP_LOGW(TAG, "audio to radio: volume stays at %.1f dB (0 %% = %.1f dB, 100 %% = %.1f dB, 0 dB written directly: %s)",
-             best / 256.0f, v0 / 256.0f, v100 / 256.0f, written ? "chip kept its limit" : "not taken");
+    rawClose(r);
 }
 
+static void spkVolume(uac_host_device_handle_t h) {
+    xSemaphoreTake(s_rawMtx, portMAX_DELAY);
+    std::string o;
+    if (s_spkAddr) usbReportDev(o, s_spkAddr);          // the sound chip's controls, for the log (every radio)
+    xSemaphoreGive(s_rawMtx);
+    logLines(o);
+    uac_host_device_set_mute(h, false);                  // not every chip has these controls: errors are ignored
+    uac_host_device_set_volume(h, 100);
+    xSemaphoreTake(s_rawMtx, portMAX_DELAY);
+    playbackToMax(s_spkAddr);
+    xSemaphoreGive(s_rawMtx);
+}
+
+// Both streams are started once and then left running: receive audio is read all the time (and
+// ignored while transmitting), and the transmit stream carries silence while receiving. Stopping
+// and starting them at every transmission cost internal RAM each time (about 2 kB per cycle on the
+// IC-705) until the next start failed and the radio keyed up with no audio.
 // This task also runs the receive DSP (ft8_lib's FFT keeps ~31 kB of work arrays on the stack).
 static void audioTask(void*) {
     static int16_t mono[960], txMono[480];

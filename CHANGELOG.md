@@ -1,5 +1,14 @@
 # Changes
 
+## 1.1.24-beta
+- **FX-4CR transmits.** The radio's USB sound chip (C-Media CM108) was left at -28 dB, the quiet end of its volume
+  range: the USB audio driver read the chip's range wrong, so its "100 %" was not the maximum, and the radio's input
+  level stayed at a few percent. RigDeck now reads every playback volume control's maximum from the chip itself and
+  sets it there when the control is more than 1 dB below (logged). Found with the 1.1.23 USB report; setting the
+  chip's maximum by hand gave Level 100 % on the radio. The workarounds of 1.1.18-1.1.22 (0 % / 0 dB / mixer
+  tries) are gone; the USB report of the sound chip still goes in the log when it connects.
+- FX-4CR setup: radio in DIG-U; Aux-Input-Level (radio menu, Digital settings) set for a Level just above 100 %.
+
 ## 1.1.23-beta
 - **Radio diagnostics** (Settings, under Console logs), kept in every build for bringing up new radios:
   - **Recent log**: the last 128 kB of the console, kept in memory even without a microSD card, to download.
