@@ -36,6 +36,12 @@ static std::atomic<bool> s_off{false};          // no card: stop keeping text
 static std::atomic<bool> s_enabled{true};       // the Settings switch
 static std::atomic<bool> s_pause{false}, s_closed{true};   // card being formatted: file closed
 
+// Recent log: the last 128 kB of console text, always kept in memory (card or not) and overwritten from the oldest
+// end; the web page downloads it from /api/recentlog. For troubleshooting without a microSD card.
+static const size_t RECENT = 128 * 1024;
+static char* s_recent;
+static size_t s_rHead;                         // total bytes ever written (position mod RECENT)
+
 std::atomic<int> g_usbEnumErrors{0};            // "E (...) ENUM: ..." lines: a device on the USB port failed to start
 
 static int teeVprintf(const char* fmt, va_list ap) {
@@ -46,6 +52,13 @@ static int teeVprintf(const char* fmt, va_list ap) {
     int n = vsnprintf(line, sizeof line, fmt, ap2);
     va_end(ap2);
     if (n > 8 && line[0] == 'E' && strstr(line, "ENUM:")) g_usbEnumErrors++;
+    if (n > 0 && s_recent) {
+        int m = n > (int)sizeof line - 1 ? (int)sizeof line - 1 : n;
+        portENTER_CRITICAL_SAFE(&s_mux);
+        for (int i = 0; i < m; i++) s_recent[(s_rHead + i) % RECENT] = line[i];
+        s_rHead += m;
+        portEXIT_CRITICAL_SAFE(&s_mux);
+    }
     if (n > 0 && s_ring && !s_off && s_enabled) {
         if (n > (int)sizeof line - 1) n = sizeof line - 1;
         portENTER_CRITICAL_SAFE(&s_mux);
@@ -63,6 +76,7 @@ void sdlog_capture(void) {
     if (s_ring) return;
     s_ring = (char*)heap_caps_malloc(RING, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!s_ring) return;
+    s_recent = (char*)heap_caps_malloc(RECENT, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);   // may be null: then no recent log
     s_prev = esp_log_set_vprintf(teeVprintf);
 }
 
@@ -232,7 +246,38 @@ static esp_err_t hFile(httpd_req_t* req) {
     return httpd_resp_send_chunk(req, nullptr, 0);
 }
 
+// The recent log (memory), oldest first. Copied in pieces: text written meanwhile may overwrite the oldest part.
+static esp_err_t hRecent(httpd_req_t* req) {
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_set_hdr(req, "Content-Disposition", "attachment");   // the page supplies a dated file name
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    if (!s_recent) return httpd_resp_sendstr(req, "(no recent log: not enough memory at start-up)\n");
+    portENTER_CRITICAL_SAFE(&s_mux);
+    size_t end = s_rHead;
+    portEXIT_CRITICAL_SAFE(&s_mux);
+    size_t pos = end > RECENT ? end - RECENT + 256 : 0;       // a margin: lines written while sending
+    static char buf[1024];                                      // the server runs one request at a time
+    bool first = end > RECENT;
+    while (pos < end) {
+        size_t n = end - pos < sizeof buf ? end - pos : sizeof buf;
+        portENTER_CRITICAL_SAFE(&s_mux);
+        for (size_t i = 0; i < n; i++) buf[i] = s_recent[(pos + i) % RECENT];
+        portEXIT_CRITICAL_SAFE(&s_mux);
+        size_t skip = 0;
+        if (first) {                                            // start at a whole line
+            while (skip < n && buf[skip] != '\n') skip++;
+            if (skip < n) skip++;
+            first = skip >= n;
+        }
+        if (n > skip && httpd_resp_send_chunk(req, buf + skip, n - skip) != ESP_OK) return ESP_FAIL;
+        pos += n;
+    }
+    return httpd_resp_send_chunk(req, nullptr, 0);
+}
+
 void sdlog_register(void* srv) {
+    static const httpd_uri_t r = {"/api/recentlog", HTTP_GET, hRecent, nullptr};
+    httpd_register_uri_handler((httpd_handle_t)srv, &r);
     static const httpd_uri_t l = {"/api/consolelogs", HTTP_GET, hList, nullptr};
     static const httpd_uri_t g = {"/consolelog", HTTP_GET, hFile, nullptr};
     httpd_register_uri_handler((httpd_handle_t)srv, &l);

@@ -200,6 +200,7 @@ void web_start(App& app) {
     wifichip_register(srv);
     ota_register(srv);
     sdlog_register(srv);
+    usbdiag_register(srv);
     mapfile_register(srv);
     k0dog_register(srv);
 #endif

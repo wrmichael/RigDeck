@@ -1,5 +1,15 @@
 # Changes
 
+## 1.1.23-beta
+- **Radio diagnostics** (Settings, under Console logs), kept in every build for bringing up new radios:
+  - **Recent log**: the last 128 kB of the console, kept in memory even without a microSD card, to download.
+  - **CAT trace**: around every transmission the log shows the CAT messages of the 3 s before it and everything
+    sent and received from TX start (4 s) and after TX end (2 s); a button logs all CAT traffic for 2 minutes.
+  - **TX start / end lines**: radio, PTT method, dial frequency, mode, data flag, sound chip.
+  - **USB report**: every USB device with its configuration descriptor, and the radio sound chip's volume, mute and
+    mixer controls (current, minimum, maximum, step). The sound chip's part also goes in the log when it connects.
+  - **Lab**: send one CAT command to the radio and see the answer; read or set any of the sound chip's controls.
+
 ## 1.1.22-beta
 - FX-4CR (no transmit audio, still being worked on): 1.1.21 showed the radio's sound chip mixes the USB audio with
   its mic monitor in a mixer unit before the volume control. RigDeck now reads that mixer's gains, sets the USB

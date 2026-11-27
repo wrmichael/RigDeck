@@ -18,6 +18,10 @@
 #include "clock.h"
 #include <cstdint>
 #include <cstring>
+#include "esp_http_server.h"
+#include <algorithm>
+#include <cstdarg>
+#include <string>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/idf_additions.h"
@@ -70,7 +74,10 @@ static PortKind s_civKind = PK_CP210X;
 static uint16_t s_civVid = 0;
 static SemaphoreHandle_t s_cdcMtx;
 
+static void wireNote(char dir, const uint8_t* d, size_t n);
+
 static bool cdcRx(const uint8_t* data, size_t len, void*) {
+    wireNote('<', data, len);
     s_app->radio.onRx(data, len);
     return true;
 }
@@ -104,6 +111,7 @@ static bool civWrite(const uint8_t* d, size_t n) {
     xSemaphoreTake(s_cdcMtx, portMAX_DELAY);
     if (s_cdc) ok = cdc_acm_host_data_tx_blocking(s_cdc, d, n, 100) == ESP_OK;
     xSemaphoreGive(s_cdcMtx);
+    wireNote(ok ? '>' : 'x', d, n);                  // x: not sent (no port, or it would not take it)
     return ok;
 }
 
@@ -471,6 +479,7 @@ struct AudioEv { uint8_t kind, addr, iface; uac_host_device_handle_t h; };   // 
 static QueueHandle_t s_evq;
 static uac_host_device_handle_t s_mic = nullptr, s_spk = nullptr;
 static uint8_t s_spkAddr = 0;                         // USB address of the radio's sound chip (playback)
+static SemaphoreHandle_t s_rawMtx;                     // one raw USB client at a time (diagnostics, direct volume)
 static uac_host_stream_config_t s_micCfg, s_spkCfg;
 static bool s_micRun = false, s_spkRun = false;
 
@@ -794,11 +803,393 @@ static bool rawSetPlaybackVolume(uint8_t addr, int16_t db, int16_t* readBack) {
     return ok;
 }
 
+// ============================================================================ diagnostics
+// Kept in every build, for bringing up radios: no new firmware needed to look at what goes on.
+//  - CAT trace: the last 96 CAT messages (sent '>', not sent 'x', received '<') stay in memory. At each TX start
+//    those of the last 3 s go to the log, and everything sent or received is logged live from TX start + 4 s and
+//    for 2 s after TX ends (or for as long as the "trace" lab command asks).
+//  - TX start / end lines: radio, PTT method, dial, mode, data flag, sound chip.
+//  - USB report (/api/usbreport, and in the log when the radio's sound chip connects): every USB device, its
+//    configuration descriptor in hex, and the sound chip's audio controls (volume / mute / mixer) with their
+//    current, minimum, maximum and step values.
+//  - Lab (/api/lab, the Console section of the web page): send a raw CAT command and see the answer; read or set
+//    any audio control of the sound chip.
+struct WireEnt { int64_t ms; char dir; char t[72]; };
+static WireEnt s_wire[96];
+static int s_wireN = 0, s_wireNext = 0;
+static portMUX_TYPE s_wireMux = portMUX_INITIALIZER_UNLOCKED;
+static std::atomic<int64_t> s_liveUntilUs{0};
+
+static int64_t nowMs() { return esp_timer_get_time() / 1000; }
+
+static void wireText(const uint8_t* d, size_t n, char* t, size_t cap) {
+    const bool text = s_app && s_app->radio.isText();
+    size_t k = 0;
+    for (size_t i = 0; i < n; i++) {
+        const uint8_t c = d[i];
+        char tmp[6];
+        int w;
+        if (text && c >= 0x20 && c < 0x7F) { tmp[0] = (char)c; tmp[1] = 0; w = 1; }
+        else if (text && (c == '\r' || c == '\n')) continue;
+        else w = snprintf(tmp, sizeof tmp, text ? "<%02X>" : "%02X ", c);
+        if (k + w + 4 >= cap) { memcpy(t + k, "...", 3); k += 3; break; }
+        memcpy(t + k, tmp, w);
+        k += w;
+    }
+    t[k] = 0;
+}
+
+static void wireNote(char dir, const uint8_t* d, size_t n) {
+    if (!n) return;
+    WireEnt e;
+    e.ms = nowMs();
+    e.dir = dir;
+    wireText(d, n, e.t, sizeof e.t);
+    portENTER_CRITICAL_SAFE(&s_wireMux);
+    s_wire[s_wireNext] = e;
+    s_wireNext = (s_wireNext + 1) % 96;
+    if (s_wireN < 96) s_wireN++;
+    portEXIT_CRITICAL_SAFE(&s_wireMux);
+    if (esp_timer_get_time() < s_liveUntilUs.load()) ESP_LOGI(TAG, "cat %c %s", dir, e.t);
+}
+
+// The CAT messages since sinceMs (oldest first), at most max of them.
+static int wireSince(int64_t sinceMs, WireEnt* out, int max) {
+    int n = 0;
+    portENTER_CRITICAL_SAFE(&s_wireMux);
+    for (int k = 0; k < s_wireN; k++) {
+        const WireEnt& e = s_wire[(s_wireNext - s_wireN + k + 96) % 96];
+        if (e.ms >= sinceMs && n < max) out[n++] = e;
+    }
+    portEXIT_CRITICAL_SAFE(&s_wireMux);
+    return n;
+}
+
+static void pttTraceHook(bool on) {
+    static int last = -1;
+    if ((int)on == last) return;
+    last = on;
+    Radio& r = s_app->radio;
+    static const char* pm[] = {"CAT command", "serial RTS", "serial DTR", "VOX"};
+    const int m = r.pttMethod.load();
+    ESP_LOGI(TAG, "TX %s: radio %s (protocol %d), PTT by %s, dial %llu Hz, mode %d, data %d, sound chip %s",
+             on ? "start" : "end", r.modelName(), r.proto.load(), m >= 0 && m < 4 ? pm[m] : "?",
+             (unsigned long long)r.freq.load(), r.mode.load(), r.dataMode.load(), s_spk ? "open" : "none");
+    if (on) {
+        static WireEnt before[40];
+        const int64_t t0 = nowMs();
+        const int n = wireSince(t0 - 3000, before, 40);
+        for (int k = 0; k < n; k++) ESP_LOGI(TAG, "cat before TX %5lld ms %c %s", (long long)(before[k].ms - t0), before[k].dir, before[k].t);
+        s_liveUntilUs = esp_timer_get_time() + 4000000;
+    } else {
+        int64_t until = esp_timer_get_time() + 2000000;
+        if (s_liveUntilUs.load() < until) s_liveUntilUs = until;
+    }
+}
+
+// ---- audio control layout of a USB Audio (class 1) device
+struct AcUnit { uint8_t id, kind, nSrc, src[8], nch; int at; bool usb; };
+static int acUnits(const uint8_t* p, int total, AcUnit* u, int max, int& acIface) {
+    int nu = 0, curIface = -1, curClass = -1, curSub = -1;
+    acIface = -1;
+    for (int i = 0; i + 2 <= total && p[i] >= 2 && i + p[i] <= total; i += p[i]) {
+        const int L = p[i];
+        if (p[i + 1] == 0x04 && L >= 9) { curIface = p[i + 2]; curClass = p[i + 5]; curSub = p[i + 6]; continue; }
+        if (p[i + 1] != 0x24 || curClass != 1 || curSub != 1 || L < 4 || nu >= max) continue;
+        acIface = curIface;
+        AcUnit x = {};
+        x.id = p[i + 3]; x.kind = p[i + 2]; x.at = i;
+        switch (x.kind) {
+            case 0x02: if (L >= 8) { x.usb = (p[i + 4] | (p[i + 5] << 8)) == 0x0101; x.nch = p[i + 7]; } break;
+            case 0x03: if (L >= 8) { x.nSrc = 1; x.src[0] = p[i + 7]; } break;
+            case 0x04: case 0x05:
+                if (L >= 5) {
+                    x.nSrc = p[i + 4] > 8 ? 8 : p[i + 4];
+                    for (int k = 0; k < x.nSrc && 5 + k < L; k++) x.src[k] = p[i + 5 + k];
+                    if (x.kind == 0x04 && 5 + p[i + 4] < L) x.nch = p[i + 5 + p[i + 4]];
+                }
+                break;
+            case 0x06: if (L >= 7) { x.nSrc = 1; x.src[0] = p[i + 4]; } break;
+            case 0x07: case 0x08:
+                if (L >= 7) { x.nSrc = p[i + 6] > 8 ? 8 : p[i + 6]; for (int k = 0; k < x.nSrc && 7 + k < L; k++) x.src[k] = p[i + 7 + k]; }
+                break;
+            default: continue;
+        }
+        u[nu++] = x;
+    }
+    for (int pass = 0; pass < 4; pass++)                // feature / selector units: their source's channels
+        for (int k = 0; k < nu; k++)
+            if (!u[k].nch && (u[k].kind == 0x06 || u[k].kind == 0x05) && u[k].nSrc)
+                for (int m = 0; m < nu; m++) if (u[m].id == u[k].src[0] && u[m].nch) { u[k].nch = u[m].nch; break; }
+    return nu;
+}
+
+struct RawDev { RawCtl c; usb_device_handle_t dev; };
+static bool rawOpen(RawDev& r, uint8_t addr, std::string* err) {
+    r = {};
+    usb_host_client_config_t cc = {};
+    cc.is_synchronous = false;
+    cc.max_num_event_msg = 3;
+    cc.async.client_event_callback = rawClientCb;
+    if (usb_host_client_register(&cc, &r.c.cl) != ESP_OK) { if (err) *err = "no USB client"; return false; }
+    r.c.done = xSemaphoreCreateBinary();
+    if (!r.c.done || usb_host_device_open(r.c.cl, addr, &r.dev) != ESP_OK) {
+        if (err) *err = "cannot open USB address " + std::to_string(addr);
+        if (r.c.done) vSemaphoreDelete(r.c.done);
+        usb_host_client_deregister(r.c.cl);
+        return false;
+    }
+    return true;
+}
+static void rawClose(RawDev& r) {
+    usb_host_device_close(r.c.cl, r.dev);
+    vSemaphoreDelete(r.c.done);
+    usb_host_client_deregister(r.c.cl);
+}
+
+static void appendf(std::string& o, const char* f, ...) __attribute__((format(printf, 2, 3)));
+static void appendf(std::string& o, const char* f, ...) {
+    char b[200];
+    va_list ap;
+    va_start(ap, f);
+    vsnprintf(b, sizeof b, f, ap);
+    va_end(ap);
+    o += b;
+}
+
+// GET of one control: request 0x81 CUR, 0x82 MIN, 0x83 MAX, 0x84 RES. Returns the bytes read, or -1.
+static int acGet(RawDev& r, uint8_t req, uint8_t unit, int acIface, uint16_t wValue, int len, int& v) {
+    uint8_t b[2] = {0, 0};
+    int g = rawControl(r.c, r.dev, 0xA1, req, wValue, (uint16_t)((unit << 8) | acIface), b, (uint16_t)len);
+    v = len == 1 ? (int)b[0] : (int)(int16_t)(b[0] | (b[1] << 8));
+    return g;
+}
+
+static void acValue(std::string& o, RawDev& r, uint8_t unit, int acIface, uint16_t wValue, bool db) {
+    const char* nm[] = {"cur", "min", "max", "res"};
+    for (int q = 0; q < 4; q++) {
+        int v = 0;
+        if (acGet(r, (uint8_t)(0x81 + q), unit, acIface, wValue, db ? 2 : 1, v) < 0) { appendf(o, " %s -", nm[q]); continue; }
+        if (db) appendf(o, " %s %.2f dB (0x%04X)", nm[q], v / 256.0f, (unsigned)(uint16_t)v);
+        else appendf(o, " %s %d", nm[q], v);
+        if (!db) break;                                  // mute: only the current value means anything
+    }
+}
+
+// The report on one USB device (address).
+static void usbReportDev(std::string& o, uint8_t addr) {
+    RawDev r;
+    std::string err;
+    if (!rawOpen(r, addr, &err)) { appendf(o, "USB address %d: %s\n", addr, err.c_str()); return; }
+    const usb_device_desc_t* dd = nullptr;
+    usb_device_info_t info = {};
+    usb_host_get_device_descriptor(r.dev, &dd);
+    usb_host_device_info(r.dev, &info);
+    std::string prod;
+    if (info.str_desc_product)
+        for (int i = 0; i < (info.str_desc_product->bLength - 2) / 2 && i < 40; i++) {
+            uint16_t ch = info.str_desc_product->wData[i];
+            prod += ch >= 0x20 && ch < 0x7F ? (char)ch : '?';
+        }
+    appendf(o, "USB address %d: %04X:%04X class %02X, %s speed, \"%s\"\n", addr, dd ? dd->idVendor : 0, dd ? dd->idProduct : 0,
+            dd ? dd->bDeviceClass : 0, info.speed == USB_SPEED_HIGH ? "high" : info.speed == USB_SPEED_FULL ? "full" : "low", prod.c_str());
+    const usb_config_desc_t* cfg = nullptr;
+    if (usb_host_get_active_config_descriptor(r.dev, &cfg) == ESP_OK && cfg) {
+        const uint8_t* p = (const uint8_t*)cfg;
+        const int total = cfg->wTotalLength;
+        appendf(o, "  configuration descriptor, %d bytes:\n", total);
+        for (int i = 0; i < total; i += 32) {
+            o += "   ";
+            for (int k = i; k < total && k < i + 32; k++) appendf(o, " %02X", p[k]);
+            o += "\n";
+        }
+        AcUnit u[24];
+        int acIface;
+        const int nu = acUnits(p, total, u, 24, acIface);
+        for (int k = 0; k < nu; k++) {
+            const int i = u[k].at;
+            if (u[k].kind == 0x06) {
+                const int csz = p[i + 5], nCtl = csz ? (p[i] - 7) / csz : 0;
+                for (int ch = 0; ch < nCtl && ch < 8; ch++) {
+                    const uint8_t bm = p[i + 6 + ch * csz];
+                    if (!(bm & 0x03)) continue;
+                    appendf(o, "  FU%d (from %d) channel %d, controls %02X:", u[k].id, u[k].src[0], ch, bm);
+                    if (bm & 0x01) { o += " mute"; acValue(o, r, u[k].id, acIface, (uint16_t)((0x01 << 8) | ch), false); }
+                    if (bm & 0x02) { o += "; volume"; acValue(o, r, u[k].id, acIface, (uint16_t)((0x02 << 8) | ch), true); }
+                    o += "\n";
+                }
+            } else if (u[k].kind == 0x04) {
+                const int np = p[i + 4], outN = u[k].nch;
+                appendf(o, "  MU%d: %d input(s), %d output channel(s)\n", u[k].id, np, outN);
+                int inCh = 0;
+                for (int pin = 0; pin < np && pin < 8; pin++) {
+                    int n = 1;
+                    for (int m = 0; m < nu; m++) if (u[m].id == u[k].src[pin] && u[m].nch) n = u[m].nch;
+                    for (int a = 1; a <= n && inCh + a <= 8; a++)
+                        for (int v = 1; v <= outN && v <= 4; v++) {
+                            appendf(o, "   in %d (from %d) -> out %d:", inCh + a, u[k].src[pin], v);
+                            acValue(o, r, u[k].id, acIface, (uint16_t)(((inCh + a) << 8) | v), true);
+                            o += "\n";
+                        }
+                    inCh += n;
+                }
+            }
+        }
+    }
+    rawClose(r);
+}
+
+// All devices on the bus.
+static std::string usbReport() {
+    std::string o;
+    uint8_t addrs[16];
+    int n = 0;
+    if (usb_host_device_addr_list_fill(sizeof addrs, addrs, &n) != ESP_OK) n = 0;
+    appendf(o, "RigDeck USB report: %d device(s); radio sound chip (playback) at address %d\n", n, s_spkAddr);
+    xSemaphoreTake(s_rawMtx, portMAX_DELAY);
+    for (int i = 0; i < n; i++) usbReportDev(o, addrs[i]);
+    xSemaphoreGive(s_rawMtx);
+    return o;
+}
+
+static void logLines(const std::string& o) {
+    size_t a = 0;
+    while (a < o.size()) {
+        size_t b = o.find('\n', a);
+        if (b == std::string::npos) b = o.size();
+        for (size_t c = a; c < b; c += 180) ESP_LOGI(TAG, "%.*s", (int)std::min<size_t>(180, b - c), o.c_str() + c);
+        a = b + 1;
+    }
+}
+
+// ---- web: /api/usbreport (text), /api/lab (form: c=cat&t=… | c=trace&s=… | c=uac&unit=&cs=&ch=[&set=][&addr=])
+static std::string formVal(const std::string& body, const char* key) {
+    const std::string k = std::string(key) + "=";
+    size_t pos = 0;
+    while (pos < body.size()) {
+        size_t e = body.find('&', pos);
+        if (e == std::string::npos) e = body.size();
+        if (body.compare(pos, k.size(), k) == 0) {
+            std::string v;
+            for (size_t i = pos + k.size(); i < e; i++) {
+                if (body[i] == '+') v += ' ';
+                else if (body[i] == '%' && i + 2 < e) { v += (char)strtol(body.substr(i + 1, 2).c_str(), nullptr, 16); i += 2; }
+                else v += body[i];
+            }
+            return v;
+        }
+        pos = e + 1;
+    }
+    return "";
+}
+
+static esp_err_t hUsbReport(httpd_req_t* req) {
+    std::string o = usbReport();
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    return httpd_resp_send(req, o.data(), o.size());
+}
+
+static esp_err_t hLab(httpd_req_t* req) {
+    if (req->content_len > 1024) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "too long");
+    std::string body(req->content_len, 0);
+    for (size_t got = 0; got < body.size();) {
+        int r = httpd_req_recv(req, &body[got], body.size() - got);
+        if (r <= 0) return ESP_FAIL;
+        got += r;
+    }
+    const std::string c = formVal(body, "c");
+    std::string o;
+    if (c == "cat") {
+        std::string t = formVal(body, "t");
+        std::vector<uint8_t> b;
+        if (s_app->radio.isText()) b.assign(t.begin(), t.end());
+        else for (size_t i = 0; i < t.size();) {                        // CI-V: hex bytes, spaces allowed
+            if (t[i] == ' ') { i++; continue; }
+            b.push_back((uint8_t)strtol(t.substr(i, 2).c_str(), nullptr, 16));
+            i += 2;
+        }
+        if (b.empty()) o = "nothing to send\n";
+        else {
+            int64_t until = esp_timer_get_time() + 3000000;
+            if (s_liveUntilUs.load() < until) s_liveUntilUs = until;
+            ESP_LOGI(TAG, "lab: CAT command from the web page");
+            const int64_t t0 = nowMs();
+            civWrite(b.data(), b.size());
+            vTaskDelay(pdMS_TO_TICKS(800));
+            static WireEnt got[40];
+            const int n = wireSince(t0, got, 40);
+            for (int k = 0; k < n; k++) appendf(o, "%+5lld ms %c %s\n", (long long)(got[k].ms - t0), got[k].dir, got[k].t);
+            if (!n) o = "no CAT port\n";
+        }
+    } else if (c == "trace") {
+        int sec = atoi(formVal(body, "s").c_str());
+        if (sec < 0) sec = 0;
+        if (sec > 600) sec = 600;
+        s_liveUntilUs = esp_timer_get_time() + (int64_t)sec * 1000000;
+        ESP_LOGI(TAG, "lab: CAT trace on for %d s", sec);
+        appendf(o, "CAT trace in the log for %d s\n", sec);
+    } else if (c == "uac") {
+        const std::string a = formVal(body, "addr"), sv = formVal(body, "set");
+        const uint8_t addr = a.empty() ? s_spkAddr : (uint8_t)atoi(a.c_str());
+        const uint8_t unit = (uint8_t)atoi(formVal(body, "unit").c_str());
+        const int cs = atoi(formVal(body, "cs").c_str()), ch = atoi(formVal(body, "ch").c_str());
+        xSemaphoreTake(s_rawMtx, portMAX_DELAY);
+        RawDev r;
+        std::string err;
+        if (!addr) o = "no sound chip\n";
+        else if (!rawOpen(r, addr, &err)) o = err + "\n";
+        else {
+            const usb_config_desc_t* cfg = nullptr;
+            int acIface = -1, kind = 0;
+            AcUnit u[24];
+            if (usb_host_get_active_config_descriptor(r.dev, &cfg) == ESP_OK && cfg) {
+                const int nu = acUnits((const uint8_t*)cfg, cfg->wTotalLength, u, 24, acIface);
+                for (int k = 0; k < nu; k++) if (u[k].id == unit) kind = u[k].kind;
+            }
+            if (acIface < 0 || !kind) appendf(o, "unit %d not found on USB address %d\n", unit, addr);
+            else {
+                const bool two = kind == 0x04 || (kind == 0x06 && cs == 2);   // mixer, or feature unit volume: 1/256 dB
+                const uint16_t wValue = (uint16_t)((cs << 8) | ch);
+                if (!sv.empty()) {
+                    const int v = (int)strtol(sv.c_str(), nullptr, 0);
+                    uint8_t d[2] = {(uint8_t)(v & 0xFF), (uint8_t)((v >> 8) & 0xFF)};
+                    const int w = rawControl(r.c, r.dev, 0x21, 0x01, wValue, (uint16_t)((unit << 8) | acIface), d, two ? 2 : 1);
+                    appendf(o, "set unit %d cs %d ch %d to %d (0x%04X): %s\n", unit, cs, ch, v, (unsigned)(v & 0xFFFF), w >= 0 ? "ok" : "refused");
+                    ESP_LOGI(TAG, "lab: sound chip unit %d cs %d ch %d set to %d: %s", unit, cs, ch, v, w >= 0 ? "ok" : "refused");
+                }
+                appendf(o, "unit %d cs %d ch %d:", unit, cs, ch);
+                acValue(o, r, unit, acIface, wValue, two);
+                o += "\n";
+            }
+            rawClose(r);
+        }
+        xSemaphoreGive(s_rawMtx);
+    } else o = "unknown lab command\n";
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    return httpd_resp_send(req, o.data(), o.size());
+}
+
+void usbdiag_register(void* srv) {
+    static const httpd_uri_t a = {"/api/usbreport", HTTP_GET, hUsbReport, nullptr};
+    static const httpd_uri_t b = {"/api/lab", HTTP_POST, hLab, nullptr};
+    httpd_register_uri_handler((httpd_handle_t)srv, &a);
+    httpd_register_uri_handler((httpd_handle_t)srv, &b);
+}
+
 // The radio's playback volume: full scale, then read back what the codec holds. Not every codec has these
 // controls: errors are ignored. When the codec is still more than 10 dB below 0 dB (the FX-4CR's C-Media chip:
 // 100 % read back as -31.8 dB, 0 % as -28.0 dB, 0 dB refused by the driver as out of the reported range),
 // RigDeck writes 0 dB to the chip itself and keeps it if the chip reads back louder.
 static void spkVolume(uac_host_device_handle_t h) {
+    {                                                   // the sound chip's controls, for the log (every radio)
+        xSemaphoreTake(s_rawMtx, portMAX_DELAY);
+        std::string o;
+        if (s_spkAddr) usbReportDev(o, s_spkAddr);
+        xSemaphoreGive(s_rawMtx);
+        logLines(o);
+    }
     uac_host_device_set_mute(h, false);
     if (uac_host_device_set_volume(h, 100) != ESP_OK) { ESP_LOGI(TAG, "audio to radio: no volume control"); return; }
     int16_t v100 = 0;
@@ -810,7 +1201,9 @@ static void spkVolume(uac_host_device_handle_t h) {
     int16_t best = v100;
     if (v0 > v100) best = v0; else uac_host_device_set_volume(h, 100);
     int16_t raw = INT16_MIN;
+    xSemaphoreTake(s_rawMtx, portMAX_DELAY);
     const bool written = rawSetPlaybackVolume(s_spkAddr, 0, &raw);
+    xSemaphoreGive(s_rawMtx);
     if (written && raw == INT16_MIN) {
         ESP_LOGW(TAG, "audio to radio: chip reports a wrong volume range (0 %% = %.1f dB, 100 %% = %.1f dB); 0 dB written "
                  "directly, could not read it back", v0 / 256.0f, v100 / 256.0f);
@@ -932,6 +1325,8 @@ static void usbLibTask(void* arg) {
 void usbradio_start(App& app) {
     s_app = &app;
     s_cdcMtx = xSemaphoreCreateMutex();
+    s_rawMtx = xSemaphoreCreateMutex();
+    s_app->radio.pttTrace = pttTraceHook;
     s_app->radio.pttLine = setPttLine;
     s_evq = xQueueCreate(8, sizeof(AudioEv));
     app.radio.write = civWrite;

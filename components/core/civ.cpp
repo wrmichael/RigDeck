@@ -93,6 +93,7 @@ void Radio::setUsbData() {
 }
 
 void Radio::ptt(bool on) {
+    if (pttTrace) pttTrace(on);
     pttWanted = on;
     int m = pttMethod.load();
     if (m == PTT_RTS || m == PTT_DTR) {                    // a serial port's line keys the radio

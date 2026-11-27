@@ -493,6 +493,12 @@ table.imp th{color:var(--dim);font-weight:500}
     <label><input type="checkbox" id="dvBetaN"> Beta release notice: say "update available" for new Beta releases too, not only Stable ones. Unless you change it, this is on in Beta versions and off in Stable ones.</label>
     <label><input type="checkbox" id="dvConsole"> Copy the console log to the microSD card (RigDeck/logs/console_<i>date</i>_<i>time</i>.txt, a new file each start and each day, kept 7 days). Unless you change it, this is on in Beta versions and off in Stable ones.</label>
     <div id="dvLogs" class="hint"></div>
+    <h4 style="margin:14px 0 4px">Radio diagnostics</h4>
+    <div class="row"><button type="button" id="dgRecent">Download recent log (memory)</button> <button type="button" id="dgUsb">USB report</button> <button type="button" id="dgTrace">Trace CAT for 2 min</button></div>
+    <div class="row" style="margin-top:6px"><input id="dgCat" placeholder="CAT command, e.g. IF; or DA1;" style="width:230px"> <button type="button" id="dgCatB">Send to radio</button></div>
+    <div class="row" style="margin-top:6px"><input id="dgUac" placeholder="sound chip: unit cs ch [value]" style="width:230px"> <button type="button" id="dgUacB">Read / set</button></div>
+    <pre id="dgOut" class="hint" style="white-space:pre-wrap;max-height:300px;overflow:auto;margin:6px 0"></pre>
+    <p class="hint">The recent log is the last 128 kB of the console, kept in memory even without a microSD card. The USB report lists every USB device with its descriptors and the radio sound chip's volume, mute and mixer controls. CAT messages are logged around every transmission; the trace button logs all of them for two minutes. "Send to radio" sends one CAT command (CI-V radios: hex bytes) and shows what came back. The sound chip line reads a control, or sets it when a value is given: unit and channel as in the USB report; cs 1 = mute (0/1), cs 2 = volume in 1/256 dB (0 = 0 dB, -2560 = -10 dB); for a mixer unit (MU), cs = input channel and ch = output channel.</p>
     <h4 style="margin:14px 0 4px">Settings file</h4>
     <div class="row"><button type="button" id="setExp">Export settings</button><label class="btnlike"><input type="file" id="setImp" accept=".txt,text/plain" style="display:none"><span role="button" tabindex="0" id="setImpB">Import settings…</span></label></div>
     <div id="impBox" hidden>
@@ -1242,6 +1248,24 @@ async function loadConsoleLogs(){
     $("dvLogsR").onclick=loadConsoleLogs;
   }catch(e){ $("dvLogs").textContent=""; }
 }
+async function dgPost(body){
+  $("dgOut").textContent="…";
+  try{const r=await fetch("/api/lab",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams(body)});$("dgOut").textContent=await r.text();}
+  catch(e){$("dgOut").textContent="No answer from the board.";}
+}
+$("dgRecent").onclick=async()=>{
+  try{const t=await (await fetch("/api/recentlog",{cache:"no-store"})).text();
+    const d=new Date(),p=n=>String(n).padStart(2,"0");
+    const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:"text/plain"}));
+    a.download=dlName(d.getUTCFullYear()+p(d.getUTCMonth()+1)+p(d.getUTCDate())+"-"+p(d.getUTCHours())+p(d.getUTCMinutes()),"recent","txt");
+    document.body.appendChild(a);a.click();a.remove();
+  }catch(e){$("dgOut").textContent="No answer from the board.";}
+};
+$("dgUsb").onclick=async()=>{$("dgOut").textContent="…";try{$("dgOut").textContent=await (await fetch("/api/usbreport",{cache:"no-store"})).text();}catch(e){$("dgOut").textContent="No answer from the board.";}};
+$("dgTrace").onclick=()=>dgPost({c:"trace",s:"120"});
+$("dgCatB").onclick=()=>{const t=$("dgCat").value.trim();if(t)dgPost({c:"cat",t});};
+$("dgUacB").onclick=()=>{const f=$("dgUac").value.trim().split(/\s+/);if(f.length<3){$("dgOut").textContent="Give: unit cs ch [value], e.g. 9 2 1  or  9 2 1 0";return;}
+  const b={c:"uac",unit:f[0],cs:f[1],ch:f[2]};if(f.length>3)b.set=f[3];dgPost(b);};
 $("sdformat").onclick=async()=>{
   if(prompt("Erase EVERYTHING on the microSD card and format it (FAT32, whole card)?\n\nThis station's log is kept: it waits in the board's memory and goes back on the card. Other stations' logs and the kept deleted/cleared logs on the card are lost. Copy the RigDeck folder to a PC first if you want them.\n\nType FORMAT to go ahead:")!=="FORMAT") return;
   banner("Formatting the card: up to a minute…");

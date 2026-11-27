@@ -59,6 +59,7 @@ public:
     // VOX instead of a CAT command. pttLine is set by the USB code: it drives the line.
     std::atomic<int> pttMethod{PTT_CAT};
     std::function<void(bool)> pttLine;
+    std::function<void(bool)> pttTrace;                // diagnostics: told at every PTT change (before it is sent)
 
     // The radio's own CW keyer sends text (the radio must be in CW mode). Used by the logger macros.
     void sendCw(const std::string& text);
