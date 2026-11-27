@@ -1395,7 +1395,7 @@ async function otaNet(ch){
 }
 $("otaStable").onclick=()=>otaNet("stable");$("otaBeta").onclick=()=>otaNet("beta");
 // "Update available" (baby blue box): releases as the board saw them (S.rel), else as this browser sees them.
-let updLast=0,updRel={stable:"",beta:""};
+let updLast=0,updRel={stable:"",beta:""},updInst={v:"",t:0};
 function vParse(s){const m=/^(\d+)\.(\d+)\.(\d+)(-beta)?$/.exec(s||"");return m?{n:[+m[1],+m[2],+m[3]],beta:!!m[4]}:null;}
 function vCmp(a,b){for(let i=0;i<3;i++)if(a.n[i]!==b.n[i])return a.n[i]<b.n[i]?-1:1;return a.beta===b.beta?0:(a.beta?-1:1);}
 function vOffer(run,st,be,betaOn){       // the same rule as the board's ver::offer
@@ -1415,10 +1415,12 @@ async function updCheck(){
   const rel=S.rel&&(S.rel.stable||S.rel.beta)?S.rel:updRel;
   const o=vOffer(S.ver,rel.stable,rel.beta,!!S.betan),box=$("updBox");
   let seen="";try{seen=localStorage.getItem("rd_updSeen")||"";}catch(e){}
-  if(!o||o.v===seen){box.hidden=true;return;}
+  // Not again while that version is being installed from this page (the box came back on every state poll after
+  // Install, and once more after the download), nor during any update started on the Settings tab.
+  if(!o||o.v===seen||otaBusy||(updInst.v===o.v&&now-updInst.t<15*60e3)){box.hidden=true;return;}
   const ch=o.ch==="beta"?"Beta":"Stable";
   $("updTxt").innerHTML=`<b>Update available: RigDeck ${esc(o.v)}</b> (${ch})<br>You have ${esc(S.ver)}.`;
-  $("updGo").textContent="Install "+ch;$("updGo").onclick=()=>{box.hidden=true;const nb=document.querySelector('nav button[data-tab="set"]');if(nb)nb.click();otaNet(o.ch);};
+  $("updGo").textContent="Install "+ch;$("updGo").onclick=()=>{box.hidden=true;updInst={v:o.v,t:Date.now()};const nb=document.querySelector('nav button[data-tab="set"]');if(nb)nb.click();otaNet(o.ch);};
   $("updLater").onclick=()=>{box.hidden=true;try{localStorage.setItem("rd_updSeen",o.v);}catch(e){}};
   box.hidden=false;
 }

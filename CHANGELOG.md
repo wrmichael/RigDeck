@@ -1,5 +1,9 @@
 # Changes
 
+## 1.1.14-beta
+- The "Update available" box no longer comes back after pressing Install (it reappeared while the update was
+  downloading and being sent).
+
 ## 1.1.13-beta
 - **Fewer internet requests, less memory pressure**: the check for new RigDeck releases ran about every 2 minutes
   instead of every 6 hours, and the K0DOG game check about every 8 minutes instead of daily (a long wait
