@@ -1252,8 +1252,11 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
     maxTxMs_ = (int64_t)(aprsMod_.seconds() * 1000) + 2000;
     aprsLastTx_ = mono;
     aprsClearSince_ = 0;
-    if (np) pktMon("on the air: " + std::to_string(np) + " packet frame(s)" + (na ? " + " + std::to_string(na) + " APRS" : "") +
-                   ", " + std::to_string((int)(aprsMod_.seconds() * 10) / 10.0).substr(0, 3) + " s");
+    if (np) {                                     // (snprintf: std::to_string(double) pulls ~125 kB of float code)
+        char b[80];
+        snprintf(b, sizeof b, "on the air: %d packet frame(s)%s, %.1f s", (int)np, na ? " + APRS" : "", aprsMod_.seconds());
+        pktMon(b);
+    }
     startTx(GEN_APRS);
 }
 

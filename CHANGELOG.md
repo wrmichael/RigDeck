@@ -1,5 +1,8 @@
 # Changes
 
+## 1.1.16-beta
+- Firmware 125 kB smaller again (1.1.15 pulled in a large number-formatting library for one log line).
+
 ## 1.1.15-beta
 - **Packet / BBS over the air with a handheld (tested with QTerm on a BTECH UV-Pro):**
   - Packet TX delay (Settings, APRS; default 600 ms, was 300 ms): the first frame of each transmission was lost,
