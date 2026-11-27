@@ -1,6 +1,11 @@
 # Changes
 
 ## 1.1.14-beta
+- **Web page: transmit controls above the waterfall** (Enable TX, Halt, Tune, Manual / Auto CQ / Auto answer,
+  TX Hz, slot), in one row, so they are in view without scrolling.
+- **All stations page: compact station view** (Compact, on by default): smaller header, buttons and waterfall,
+  shorter band list, no help lines, so a station fits in its tile. A station's page opened with ?compact=1 looks
+  the same.
 - Checks for new RigDeck releases once at start-up and then once a day (was every 6 hours).
 - The "Update available" box no longer comes back after pressing Install (it reappeared while the update was
   downloading and being sent).

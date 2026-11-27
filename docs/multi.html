@@ -53,6 +53,7 @@ textarea{width:100%;min-height:90px;font:13px ui-monospace,Consolas,monospace;co
   <button id="bFind" title="Ask the RigDecks which stations they hear on the home network">Find stations</button>
   <button id="bList">Stations…</button>
   <label>Columns <select id="cols"><option value="0">Auto</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+  <label title="Station pages in compact form: transmit controls, a short waterfall and the band list fit in a tile without scrolling"><input type="checkbox" id="compact"> Compact</label>
   <label>Size <select id="zoom"><option value="1">100 %</option><option value="0.85">85 %</option><option value="0.75">75 %</option><option value="0.67">67 %</option><option value="0.5">50 %</option></select></label>
   <button id="bReload" title="Reload every station">⟳ All</button>
   <div id="stat" title="Green: running, radio connected and clock set. Amber: answering, but something needs a look (hover for what). Red: not answering."></div>
@@ -79,7 +80,7 @@ textarea{width:100%;min-height:90px;font:13px ui-monospace,Consolas,monospace;co
 "use strict";
 const MAX=10, KEY="rd_multi", KEYV="rd_multi_view";
 const $=id=>document.getElementById(id);
-let st=[], view={cols:0,zoom:1,max:-1};
+let st=[], view={cols:0,zoom:1,max:-1,compact:true};
 function load(){
   try{const q=new URLSearchParams(location.search).get("s");
     if(q){st=q.split(",").map(x=>x.trim()).filter(Boolean).slice(0,MAX).map(a=>{const [addr,...n]=a.split("~");return {addr:clean(addr),name:n.join("~")};}).filter(x=>x.addr);}
@@ -87,7 +88,7 @@ function load(){
   try{Object.assign(view,JSON.parse(localStorage.getItem(KEYV)||"{}"));}catch(e){}
   view.max=-1;
 }
-function save(){try{localStorage.setItem(KEY,JSON.stringify(st));localStorage.setItem(KEYV,JSON.stringify({cols:view.cols,zoom:view.zoom}));}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(st));localStorage.setItem(KEYV,JSON.stringify({cols:view.cols,zoom:view.zoom,compact:view.compact}));}catch(e){}}
 function clean(a){a=(a||"").trim().replace(/^https?:\/\//i,"").replace(/\/.*$/,"");return /^[A-Za-z0-9.\-:\[\]]+$/.test(a)?a:"";}
 function url(s){return "http://"+s.addr+"/";}
 function colsFor(n){if(view.cols>0)return view.cols;const w=innerWidth;if(n<=1)return 1;if(n<=2)return w>900?2:1;if(n<=4)return w>900?2:1;if(n<=6)return w>1400?3:2;return w>1600?4:3;}
@@ -102,7 +103,7 @@ function build(){
       <button data-a="left" title="Move left">◀</button><button data-a="right" title="Move right">▶</button>
       <button data-a="reload" title="Reload">⟳</button><button data-a="max" title="Fill the window (Esc to go back)">⤢</button>
       <a href="${esc(url(s))}" target="_blank" rel="noopener"><button title="Open in its own tab">↗</button></a></div>
-      <div class="body"><iframe src="${esc(url(s))}" title="${esc(s.name||s.addr)}" allow="autoplay; clipboard-write" loading="eager"></iframe></div>`;
+      <div class="body"><iframe src="${esc(url(s)+(view.compact!==false?"?compact=1":""))}" title="${esc(s.name||s.addr)}" allow="autoplay; clipboard-write" loading="eager"></iframe></div>`;
     t.querySelector(".bar").addEventListener("click",e=>{const b=e.target.closest("button[data-a]");if(b)act(i,b.dataset.a);});
     t.querySelector(".bar").addEventListener("dblclick",e=>{if(!e.target.closest("button"))act(i,"max");});
     g.appendChild(t);
@@ -173,6 +174,8 @@ setInterval(reprobe,10000);
 
 load();
 $("cols").value=String(view.cols||0);$("zoom").value=String(view.zoom||1);
+$("compact").checked=view.compact!==false;
+$("compact").onchange=()=>{view.compact=$("compact").checked;save();build();};
 if(location.protocol==="https:"){
   $("warn").hidden=false;
   $("warn").innerHTML="Browsers do not show the RigDeck pages (plain http) inside a page loaded over https. Open this page from one of your RigDecks instead: <b>http://&lt;its address&gt;/multi</b>, or save this file to your computer (right-click, Save as) and open it from there.";
