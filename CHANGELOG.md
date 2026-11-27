@@ -3,7 +3,7 @@
 ## 1.1.18-beta
 - FX-4CR (low transmit level, still being worked on): the console log now shows the volume the radio's USB sound chip
   is at after RigDeck sets it to 100 %. If that is more than 10 dB below 0 dB, RigDeck asks the chip for 0 dB and logs
-  the result.
+  the result. After each transmission it also logs how much audio went to the radio and how loud it was.
 
 ## 1.1.17-beta
 - Kenwood TS-480 / TS-590 / TS-990 and the FX-4CR: PTT is now "TX1;" (data send) instead of "TX;". TS-2000 and

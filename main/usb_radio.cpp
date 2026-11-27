@@ -664,7 +664,22 @@ static void audioTask(void*) {
             *o++ = (uint8_t)((uint16_t)txMono[i] >> 8);
         }
         static int writeFails = 0;
-        if (uac_host_device_write(s_spk, out, frames * sch * sbps, 20) == ESP_OK) writeFails = 0;
+        // What went to the radio during a transmission, logged when it ends: blocks written / refused and the
+        // loudest sample (full scale 32767), so a radio that hears nothing can be told from one that gets nothing.
+        static bool wasTx = false;
+        static int txOk = 0, txRefused = 0, txPeak = 0;
+        const bool tx = s_app->txActive();
+        bool ok = uac_host_device_write(s_spk, out, frames * sch * sbps, 20) == ESP_OK;
+        if (tx) {
+            if (!wasTx) txOk = txRefused = txPeak = 0;
+            ok ? txOk++ : txRefused++;
+            for (int i = 0; i < frames; i++) { int a = txMono[i] < 0 ? -txMono[i] : txMono[i]; if (a > txPeak) txPeak = a; }
+        } else if (wasTx) {
+            ESP_LOGI(TAG, "audio to radio during TX: %d blocks of 10 ms written, %d refused, peak %d (%d %% of full scale), %d ch %d-bit",
+                     txOk, txRefused, txPeak, txPeak * 100 / 32767, sch, sbps * 8);
+        }
+        wasTx = tx;
+        if (ok) writeFails = 0;
         else if (++writeFails >= 25) {                   // a quarter second the radio would not take: restart
             writeFails = 0;
             restartStream(s_spk, "transmit buffer stuck");
