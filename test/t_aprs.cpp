@@ -182,6 +182,38 @@ int main() {
         CHECK(app.command("pktview", {}).find("disconnecting") != std::string::npos);
     }
 
+    {   // a program on our own KISS port (QTerm) and our own terminal connect to our own BBS: no radio involved
+        if (system("rm -rf test/out/aprs3 && mkdir -p test/out/aprs3/sd") != 0) fails++;
+        App app;
+        app.begin("test/out/aprs3", "test/out/aprs3/sd");
+        app.usbSerial = true;
+        app.usbAudio = true;
+        app.command("set", {{"call", "AC9HP"}, {"grid", "EM69"}, {"pktCall", "AC9HP-5"}, {"bbsOn", "1"}});
+        app.command("mode", {{"m", "APRS"}});
+        clk::setUtcMs(1795600000000LL, "test");
+        app.kissClients = 1;                                                       // TX stays off: not needed
+        ax25::Frame s;
+        s.dst = "AC9HP-1"; s.src = "AC9HP"; s.command = true; s.ctl = ax25::ctlU(ax25::K_SABM, true); s.pid = -1;
+        app.kissFromHost(ax25::encode(s));
+        app.tick(); app.tick();
+        std::vector<std::vector<uint8_t>> k;
+        app.kissTake(k);
+        bool ua = false, hello = false;
+        for (auto& f : k) {
+            ax25::Frame g;
+            if (!ax25::decode(f.data(), f.size(), g)) continue;
+            if (g.kind() == ax25::K_UA && g.dst == "AC9HP" && g.src == "AC9HP-1") ua = true;
+            if (g.kind() == ax25::K_I && g.info.find("RigDeck BBS AC9HP-1") != std::string::npos) hello = true;
+        }
+        CHECK(ua && hello);
+        CHECK(app.command("pktview", {}).find("not on the air") != std::string::npos);
+        // the RigDeck's own terminal (AC9HP-5) connects to its BBS too
+        CHECK(app.command("pktconn", {{"call", "AC9HP-1"}}).find("\"ok\":true") != std::string::npos);
+        for (int i = 0; i < 4; i++) app.tick();
+        std::string js = app.command("pktview", {});
+        CHECK(js.find("\"state\":\"connected\"") != std::string::npos && js.find("RigDeck BBS AC9HP-1") != std::string::npos);
+    }
+
     printf(fails ? "t_aprs: %d of %d FAILED\n" : "t_aprs: all %d checks passed\n", fails ? fails : checks, checks);
     return fails ? 1 : 0;
 }

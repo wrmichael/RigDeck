@@ -1283,6 +1283,7 @@ void App::pktTick(int64_t mono) {                                    // mtx_ hel
     }
     bool idle = pkt_.state() == ax25::Link::DISCONNECTED;
     for (auto& f : pkt_.takeOut()) {
+        if (bbsLocal(f.dst)) { pktMon("   " + ax25::monitor(f) + "  (to this RigDeck's BBS, not on the air)"); bbsLocalFrame(f, mono); continue; }
         if (idle && !seq.txEnabled) continue;                         // no automatic answers (DM) without Enable TX
         pktOut_.push_back(ax25::encodeFcs(f));
         pktMon("TX " + ax25::monitor(f));
@@ -1292,6 +1293,15 @@ void App::pktTick(int64_t mono) {                                    // mtx_ hel
     for (auto& fr : k) {
         ax25::Frame g;
         if (!ax25::decode(fr.data(), fr.size(), g)) continue;
+        // A program on this RigDeck's KISS port talking to this RigDeck's own BBS: the radio cannot hear its own
+        // transmission, so the frame goes straight to the BBS (and its answers straight back), not on the air.
+        if (bbsLocal(g.dst)) {
+            kissLocal_.insert(upperTrim(g.src));
+            if (kissLocal_.size() > 8) kissLocal_.erase(kissLocal_.begin());
+            pktMon("KISS " + ax25::monitor(g) + "  (to this RigDeck's BBS, not on the air)");
+            bbsLocalFrame(g, mono);
+            continue;
+        }
         if (!seq.txEnabled) {
             if (!kissTxWarned_) { status("KISS: a program on the network wants to transmit: press Enable TX"); logLine("KISS: frame from a program dropped, TX not enabled"); }
             kissTxWarned_ = true;
@@ -1350,11 +1360,34 @@ void App::bbsTick(int64_t mono) {                                     // mtx_ he
     }
     bbs_.tick(mono);
     for (auto& f : bbs_.takeOut()) {
+        std::string to = upperTrim(f.dst);
+        if (to == upperTrim(pktMyCall())) {                           // to this RigDeck's own terminal
+            pktMon("   " + ax25::monitor(f) + "  (BBS to this RigDeck's terminal)");
+            pkt_.onFrame(f, mono);
+            continue;
+        }
+        if (kissLocal_.count(to)) {                                   // to a program on this RigDeck's KISS port
+            pktMon("   " + ax25::monitor(f) + "  (BBS to a program on the KISS port)");
+            std::vector<uint8_t> b = ax25::encode(f);
+            std::lock_guard<std::mutex> lk(kissMtx_);
+            if (kissRx_.size() < 50) kissRx_.push_back(b);
+            continue;
+        }
         if (!seq.txEnabled) continue;
         pktOut_.push_back(ax25::encodeFcs(f));
         pktMon("TX " + ax25::monitor(f) + "  (BBS)");
     }
     for (auto& l : bbs_.takeLog()) { pktMon("BBS: " + l); logLine("BBS: " + l); }
+}
+bool App::bbsLocal(const std::string& dst) const {
+    return bbsActive() && bbsMyCall() != pktMyCall() && upperTrim(dst) == upperTrim(bbsMyCall());
+}
+void App::bbsLocalFrame(const ax25::Frame& f, int64_t mono) {        // mtx_ held; no radio involved, so no Enable TX
+    if (!bbsLoaded_) bbsTick(mono);
+    size_t keep = bbs_.maxUsers;
+    bbs_.maxUsers = 3;
+    bbs_.onFrame(f, mono);
+    bbs_.maxUsers = keep;
 }
 std::string App::bbsJson() {                                          // mtx_ held
     std::string note = !cfg.bbsOn ? "off" : !logOnSd_ ? "needs a microSD card" : bbsMyCall() == pktMyCall() ? "BBS call must differ from the packet call" : "";

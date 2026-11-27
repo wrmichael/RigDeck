@@ -1,6 +1,9 @@
 # Changes
 
 ## 1.1.14-beta
+- **BBS on the same RigDeck**: a program on RigDeck's own KISS port (QTerm, Winlink Express …) or RigDeck's own
+  packet terminal can connect to that RigDeck's BBS. A radio cannot hear its own transmission, so those frames go
+  straight to the BBS and back, not on the air (Enable TX not needed for that).
 - **Clear the band activity list**: a Clear button on the web page (that browser's list), and on the touch screen
   hold the list for a second. New decodes keep coming.
 - **Web page: transmit controls above the waterfall** (Enable TX, Halt, Tune, Manual / Auto CQ / Auto answer,
