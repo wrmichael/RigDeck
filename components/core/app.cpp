@@ -2462,6 +2462,7 @@ void App::gpsRx(const uint8_t* data, size_t n) {
     if (nmea_.hasPos()) { gpsLat_ = nmea_.lat(); gpsLon_ = nmea_.lon(); gpsPosMono_ = mono; gpsSrc_ = "GPS"; }
     if (!cfg.gpsClock || txOn_) return;
     if (cfg.gpsModule && mono - gpsLastMono.load() < 5000 && !strncmp(clk::source(), "gps-", 4)) return;   // the module's PPS is better
+    if (mono - usbGpsMono_ < 5000) return;                     // a USB GPS is plugged in and has the time
     gpsTime(nmea_.utcMs() + cfg.gpsDelayMs + (mono - nmea_.sentenceStartMono()), mono, "gps");
 }
 
@@ -2493,6 +2494,24 @@ void App::gpsModuleRx(const uint8_t* data, size_t n) {
         return;
     }
     gpsTime(nmeaMod_.utcMs() + cfg.gpsDelayMs + (mono - sentence), mono, "gps-nmea");
+}
+
+// A USB GPS receiver on the USB port (on its own, or next to the radio behind a hub). Plugging one in
+// is the opt-in, no setting. No PPS: the arrival of the first time sentence of each second is used,
+// adjusted by cfg.gpsDelayMs, as for a header module without PPS. u-blox receivers send RMC and then
+// GGA for the same second; only the first one counts, the later one would read about 70 ms late.
+void App::usbGpsRx(const uint8_t* data, size_t n) {
+    int64_t mono = clk::monoMs();
+    if (clk::valid()) nmeaUsb_.setDateHint(clk::utcMs());
+    if (!nmeaUsb_.feed(data, n, mono)) return;
+    if (nmeaUsb_.hasPos()) { gpsLat_ = nmeaUsb_.lat(); gpsLon_ = nmeaUsb_.lon(); gpsPosMono_ = mono; gpsSrc_ = "USB GPS"; }
+    if (nmeaUsb_.utcMs() == usbGpsLastUtc_) return;
+    usbGpsLastUtc_ = nmeaUsb_.utcMs();
+    if (txOn_) return;
+    const char* cs = clk::source();                            // a module on the header goes first
+    if (cfg.gpsModule && mono - gpsLastMono.load() < 5000 && (!strcmp(cs, "gps-pps") || !strcmp(cs, "gps-nmea"))) return;
+    usbGpsMono_ = mono;
+    gpsTime(nmeaUsb_.utcMs() + cfg.gpsDelayMs + (mono - nmeaUsb_.sentenceStartMono()), mono, "gps-usb");
 }
 
 void App::gpsTime(int64_t utcNow, int64_t mono, const char* src) {

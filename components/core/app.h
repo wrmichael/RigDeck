@@ -120,6 +120,8 @@ public:
     void gpsModuleRx(const uint8_t* data, size_t n);
     std::atomic<uint32_t> ppsMono32{0};
     std::atomic<uint32_t> ppsCount{0};
+    // A USB GPS receiver (u-blox "G-Mouse" VK172 / VK-162 and similar CDC-ACM receivers) on the USB port.
+    void usbGpsRx(const uint8_t* data, size_t n);
 
     // --- platform status / requests -----------------------------------------------------------
     std::atomic<bool> usbSerial{false}, usbAudio{false};
@@ -341,7 +343,8 @@ private:
     void syncRefill();                                 // mtx_ held: queue the next batch
     std::atomic<int> netOk_{0}, netFail_{0};
 
-    NmeaTime nmea_, nmeaMod_;
+    NmeaTime nmea_, nmeaMod_, nmeaUsb_;
+    int64_t usbGpsMono_ = -1000000, usbGpsLastUtc_ = 0;   // when the USB GPS last set the clock, and the second it named
     float gpsErr_ = 0;
     void gpsTime(int64_t utcNow, int64_t mono, const char* src);
     // automatic TX audio level (ALC)

@@ -2,6 +2,9 @@
 
 ## 1.1.16-beta
 - Firmware 125 kB smaller again (1.1.15 pulled in a large number-formatting library for one log line).
+- **USB GPS receiver** (u-blox "G-Mouse" VK172 / VK-162 and other u-blox USB receivers, ESP32-P4 boards): plug it
+  into the USB port (next to the radio: through a USB hub) and it sets the clock (Clock dot "gps-usb") and the APRS
+  position once it has a fix. No setting needed. It goes ahead of the radio's GPS; a header module goes first.
 
 ## 1.1.15-beta
 - **Packet / BBS over the air with a handheld (tested with QTerm on a BTECH UV-Pro):**
