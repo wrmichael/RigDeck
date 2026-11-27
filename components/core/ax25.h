@@ -93,7 +93,14 @@ private:
     std::vector<Event> ev_;
 
     int unacked() const { return (vs_ - va_ + 8) & 7; }
-    int t1() const { return t1Ms + t1PerDigiMs * (int)path_.size(); }
+    // Wait for an answer: the base time, more per digipeater, plus the air time of the frames still waiting for
+    // their acknowledgement (at 1200 baud a 4-frame burst of help text takes about 5 s, longer than T1 alone, so
+    // the link polled before the other station could even answer).
+    int t1() const {
+        size_t bytes = 0;
+        for (int n = va_; n != top_; n = (n + 1) & 7) bytes += sent_[n].size() + 24;
+        return t1Ms + t1PerDigiMs * (int)path_.size() + (int)(bytes * 8 * 1000 / 1200) * (1 + (int)path_.size());
+    }
     Frame base(bool command) const;
     void put(Kind k, bool command, bool pf);
     void sendI(int ns, bool p);

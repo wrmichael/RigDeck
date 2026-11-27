@@ -1245,10 +1245,15 @@ void App::aprsTick(int64_t mono) {                                 // mtx_ held,
     aprsOut_.erase(aprsOut_.begin(), aprsOut_.begin() + (long)na);
     if (frames.empty()) return;
     aprsSeq_++;
-    aprsMod_.start(frames, 48000, 300);
+    // Packet frames get a longer start (TX delay): the radio takes a moment to switch to transmit over USB and the
+    // other station's receiver to open its squelch, and the first frame of a short start was lost (QTerm on a UV-Pro
+    // never heard a single UA). APRS keeps 300 ms.
+    aprsMod_.start(frames, 48000, np ? std::max(300, cfg.pktTxDelay) : 300);
     maxTxMs_ = (int64_t)(aprsMod_.seconds() * 1000) + 2000;
     aprsLastTx_ = mono;
     aprsClearSince_ = 0;
+    if (np) pktMon("on the air: " + std::to_string(np) + " packet frame(s)" + (na ? " + " + std::to_string(na) + " APRS" : "") +
+                   ", " + std::to_string((int)(aprsMod_.seconds() * 10) / 10.0).substr(0, 3) + " s");
     startTx(GEN_APRS);
 }
 
@@ -1369,7 +1374,9 @@ void App::bbsTick(int64_t mono) {                                     // mtx_ he
     bbs_.tick(mono);
     for (auto& f : bbs_.takeOut()) {
         std::string to = upperTrim(f.dst);
-        if (to == upperTrim(pktMyCall())) {                           // to this RigDeck's own terminal
+        // to this RigDeck's own terminal, but only while that terminal is talking to the BBS: another station may
+        // use the same call (QTerm on a handheld as AC9HP while RigDeck's terminal is AC9HP too)
+        if (to == upperTrim(pktMyCall()) && pkt_.state() != ax25::Link::DISCONNECTED && upperTrim(pkt_.peer()) == upperTrim(bbsMyCall())) {
             pktMon("   " + ax25::monitor(f) + "  (BBS to this RigDeck's terminal)");
             pkt_.onFrame(f, mono);
             continue;

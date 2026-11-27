@@ -48,6 +48,26 @@ static std::vector<Frame> loop(const std::vector<Frame>& in, float noise, float 
 }
 
 int main() {
+    {   // open squelch: noise alone must not keep the channel "busy" (it blocked every transmission), a preamble must
+        AfskDemod nd;
+        std::vector<std::vector<uint8_t>> none;
+        uint32_t r = 99;
+        int busyN = 0, total = 0;
+        float buf[120];
+        for (int blk = 0; blk < 1000; blk++) {                                   // 10 s of noise at 12 kHz
+            for (float& x : buf) { r = r * 1664525u + 1013904223u; x = ((int)(r >> 9) % 20001 - 10000) / 10000.0f; }
+            nd.feed(buf, 120, none);
+            total++; if (nd.busy()) busyN++;
+        }
+        printf("t_aprs: noise reads as busy %d %% of the time\n", busyN * 100 / total);
+        CHECK(busyN * 100 < total * 2);                                          // busy under 2 % of the time
+        AfskMod pm;
+        Frame pf; pf.src = "W9ABC"; pf.dst = "APZRDK"; pf.info = ">x";
+        pm.start({encodeFrame(pf)}, 12000, 300);
+        bool sawBusy = false;
+        while (!pm.done()) { for (float& x : buf) x = 0.5f * (float)pm.next(); nd.feed(buf, 120, none); if (nd.busy()) sawBusy = true; }
+        CHECK(sawBusy);
+    }
     // --- AX.25 ---
     Frame f;
     f.src = "AC9HP-9"; f.dst = "APZRDK"; f.path = {"WIDE1-1", "WIDE2-1"};

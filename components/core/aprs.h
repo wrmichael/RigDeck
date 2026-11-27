@@ -53,6 +53,8 @@ private:
         bool inFrame = false;
         std::vector<uint8_t> bytes;
         uint8_t cur = 0;
+        int sinceFlag = 1000, flagRun = 0;      // bits since the last flag; flags in a row (a real preamble)
+        bool pre = false;                       // this frame followed a real preamble (or a good frame)
         int nbits = 0;
         int good = 0;                           // flags or frames recently: carrier detect
     };

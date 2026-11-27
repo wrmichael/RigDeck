@@ -185,6 +185,7 @@ void AfskDemod::feed(const float* s, size_t n, std::vector<std::vector<uint8_t>>
 }
 
 void AfskDemod::bit(Slicer& s, int b, std::vector<std::vector<uint8_t>>& out) {
+    if (s.sinceFlag < 1000) s.sinceFlag++;
     auto acc = [&](int v) {
         s.cur = (uint8_t)((s.cur >> 1) | (v << 7));
         if (++s.nbits == 8) {
@@ -192,12 +193,12 @@ void AfskDemod::bit(Slicer& s, int b, std::vector<std::vector<uint8_t>>& out) {
             if (s.inFrame) {
                 s.bytes.push_back(s.cur);
                 if (s.bytes.size() > 340) { s.inFrame = false; s.bytes.clear(); }
-                else if (s.bytes.size() > 2) dcd_ = 1200;
+                else if (s.bytes.size() > 2 && s.pre) dcd_ = 1200;   // data after a real preamble: busy
             }
         }
     };
     if (b) {
-        if (++s.ones >= 7) { s.inFrame = false; s.bytes.clear(); s.ones = 7; return; }   // abort / idle
+        if (++s.ones >= 7) { s.inFrame = false; s.bytes.clear(); s.ones = 7; s.pre = false; return; }   // abort / idle
         acc(1);
         return;
     }
@@ -213,6 +214,7 @@ void AfskDemod::bit(Slicer& s, int b, std::vector<std::vector<uint8_t>>& out) {
                     recent_.push_back(s.bytes);
                 }
                 dcd_ = 1200;
+                s.pre = true;                                     // a frame right after this one counts as real
             }
         }
         s.inFrame = true;
@@ -220,7 +222,12 @@ void AfskDemod::bit(Slicer& s, int b, std::vector<std::vector<uint8_t>>& out) {
         s.nbits = 0;
         s.cur = 0;
         s.ones = 0;
-        if (dcd_ < 600) dcd_ = 600;
+        // Busy only after 3 flags in a row (a station's preamble), not on one flag: noise with the squelch open
+        // makes a single flag pattern now and then, and that kept the channel "busy" so nothing was sent.
+        s.flagRun = s.sinceFlag == 8 ? s.flagRun + 1 : 1;
+        s.sinceFlag = 0;
+        if (s.flagRun >= 3) { s.pre = true; if (dcd_ < 600) dcd_ = 600; }
+        else if (s.flagRun == 1 && !s.pre) s.pre = false;
         return;
     }
     if (s.ones == 5) { s.ones = 0; return; }                      // a stuffed 0

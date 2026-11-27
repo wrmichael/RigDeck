@@ -69,6 +69,7 @@ struct Settings {
     std::string pktCall;                 // packet terminal call-SSID (empty = the station callsign)
     long long pktFreq = 145010000;       // packet frequency the terminal tunes to (BBS, nodes)
     int pktAccept = 1;                   // take incoming connections (keyboard to keyboard)
+    int pktTxDelay = 600;                // ms of start-up tones before packet frames (radio and receiver need time to switch)
     int kissPort = 8001;                 // KISS TNC on TCP for PC programs (0 = off)
     int bbsOn = 0;                       // packet BBS (mailbox) on the microSD card, answering on bbsCall
     std::string bbsCall;                 // BBS call-SSID (empty = the packet call with -1)

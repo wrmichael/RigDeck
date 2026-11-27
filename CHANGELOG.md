@@ -1,5 +1,15 @@
 # Changes
 
+## 1.1.15-beta
+- **Packet / BBS over the air with a handheld (tested with QTerm on a BTECH UV-Pro):**
+  - Packet TX delay (Settings, APRS; default 600 ms, was 300 ms): the first frame of each transmission was lost,
+    so a lone UA never arrived and the station kept reconnecting.
+  - The channel no longer counts as busy on noise with the squelch open (it stopped RigDeck from sending at all).
+  - The link waits for an answer long enough for its own burst to go out (a 4-frame answer takes about 5 s at
+    1200 baud), instead of polling every 4 s meanwhile.
+  - The monitor shows when frames actually go on the air ("on the air: 3 packet frame(s), 1.9 s").
+  - A station using the same call as RigDeck's own terminal gets the BBS's answers over the air.
+
 ## 1.1.14-beta
 - Packet: a frame already waiting to go out is not queued a second time (while the channel was busy, repeated
   polls and answers piled up and then went out together).

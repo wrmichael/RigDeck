@@ -427,6 +427,7 @@ table.imp th{color:var(--dim);font-weight:500}
       <label for="s_pktCall">Packet call-SSID (empty = callsign)</label><input id="s_pktCall" maxlength="9" style="text-transform:uppercase" placeholder="AC9HP">
       <label for="s_pktFreq">Packet frequency, MHz</label><input id="s_pktFreq" inputmode="decimal" placeholder="145.010">
       <label for="s_pktAccept">Take incoming packet connections</label><select id="s_pktAccept"><option value="1">Yes (with Enable TX on)</option><option value="0">No</option></select>
+      <label for="s_pktTxDelay">Packet TX delay, ms (start-up tones before packet frames; raise it if the other station misses the first frame)</label><input id="s_pktTxDelay" inputmode="numeric" placeholder="600">
       <label for="s_kissPort">KISS TNC TCP port (0 = off)</label><input id="s_kissPort" inputmode="numeric" placeholder="8001">
       <label for="s_bbsOn">Packet BBS (mailbox on the microSD card)</label><select id="s_bbsOn"><option value="0">Off</option><option value="1">On (answers with Enable TX on)</option></select>
       <label for="s_bbsCall">BBS call-SSID (empty = packet call with -1)</label><input id="s_bbsCall" maxlength="9" style="text-transform:uppercase" placeholder="AC9HP-1">
