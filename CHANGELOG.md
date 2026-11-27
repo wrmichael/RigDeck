@@ -2,6 +2,9 @@
 
 ## 1.1.16-beta
 - Firmware 125 kB smaller again (1.1.15 pulled in a large number-formatting library for one log line).
+- **FX-4CR and Kenwood TS-480 / TS-590 / TS-990: transmit sends RigDeck's audio.** PTT was "TX;", which these radios
+  treat as microphone transmit, so they keyed up with no power out. Now "TX1;" (data send: USB audio). TS-2000 and
+  Elecraft keep "TX;".
 
 ## 1.1.15-beta
 - **Packet / BBS over the air with a handheld (tested with QTerm on a BTECH UV-Pro):**
