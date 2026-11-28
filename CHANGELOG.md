@@ -1,5 +1,13 @@
 # Changes
 
+## 1.1.25-beta
+- **CW decoder** (contributed by dbjones59, from github.com/dbjones59/RigDeck): plain Morse copy of one tone, with
+  pitch tracking (200 Hz either way) and the sender's speed followed by itself. On the SSB/CW logger while the radio
+  is in CW (pitch: Settings, CW decoder pitch, default 700 Hz) and as a strip under the band activity in FT-CW mode
+  (pitch follows the waterfall tap); on the web page on the Operate (FT-CW) and SSB/CW log tabs. Its author tested it
+  with an IC-7100. Integration here: the decoder's readings are copied under the app lock for the screens and the
+  web page.
+
 ## 1.1.24-beta
 - **FX-4CR transmits.** The radio's USB sound chip (C-Media CM108) was left at -28 dB, the quiet end of its volume
   range: the USB audio driver read the chip's range wrong, so its "100 %" was not the maximum, and the radio's input

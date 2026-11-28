@@ -91,6 +91,7 @@ void App::begin(const std::string& dataDir, const std::string& logDir) {
     logDir_ = logOnSd_ ? logDir : dataDir;
     if (logOnSd_) mkdir(logDir_.c_str(), 0777);
     freshSettings = !cfg.load(dir_ + "/settings.txt");
+    cwDecFreq_ = cfg.cwDecFreq;
     alcLoad();
     radio.addr = (uint8_t)cfg.civAddr;
     seq.now = [] { return clk::utcMs(); };
@@ -634,6 +635,25 @@ void App::rxAudio48k(const int16_t* s, size_t n) {
         n -= chunk;
         spec_.feed(buf, n12);
         audioKeep(buf, n12);
+        // The plain CW decoder runs beside the slotted modems: in FT-CW mode (listening on the
+        // tapped tone) and whenever the radio itself is in CW (the SSB/CW logger page).
+        bool cwDecRun = !txOn_.load() && mode_ != DM_PSK31 && mode_ != DM_APRS &&
+                        (mode_ == DM_CW || radio.mode.load() == 3 || radio.mode.load() == 7 ||
+                         (!radio.connected() && cfg.dialMode == 3));
+        if (cwDecRun) {
+            if (cwDecFreqDirty_.exchange(false)) cwDec_.setFreq((float)cwDecFreq_.load());
+            std::string out;
+            cwDec_.process(buf, n12, out);
+            std::lock_guard<std::mutex> lk(mtx_);
+            // the decoder's readings, copied for the screens and the web page (they read under mtx_;
+            // the decoder itself runs here, outside it)
+            cwDecWpm_ = cwDec_.wpm(); cwDecAfc_ = cwDec_.freq(); cwDecQ_ = cwDec_.quality(); cwDecKey_ = cwDec_.keyDown();
+            if (!out.empty()) {
+                cwDecText_ += out;
+                cwDecSeq_ += (uint32_t)out.size();
+                if (cwDecText_.size() > 4000) cwDecText_.erase(0, cwDecText_.size() - 3000);
+            }
+        }
         if (mode_ == DM_PSK31) {
             if (pskFreqDirty_.exchange(false)) pskRx_.setFreq((float)pskFreq_.load());
             std::string out;
@@ -1763,6 +1783,8 @@ void App::netLoop() {
 void App::setMode(int m) {
     if (m < 0 || m > DM_APRS || m == mode_) return;
     if (m == DM_APRS) { aprsTuneReq_ = true; aprsNextBeacon_ = 0; }
+    if (m == DM_CW) { cwDecFreq_ = cfg.txFreq; cwDecFreqDirty_ = true; }   // FT-CW: the decoder follows the tapped tone
+    else if (mode_ == DM_CW) { cwDecFreq_ = cfg.cwDecFreq; cwDecFreqDirty_ = true; }
     logLine(std::string("mode ") + modeName(mode_) + " -> " + modeName(m) + (m == DM_APRS ? ", radio to FM-D " + std::to_string(cfg.aprsFreq) + " Hz" : ""));
     if (txState_ == ST_TX) haltReq_ = true;
     seq.txEnabled = false;
@@ -1943,9 +1965,18 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
     }
     if (c == "txfreq") {
         if (!cfg.set("txFreq", arg(a, "hz"))) return err("200-2900 Hz");
+        if (mode_ == DM_CW) { cwDecFreq_ = cfg.txFreq; cwDecFreqDirty_ = true; }   // decoder listens where you tapped
         saveSoon();                                                  // kept over a restart
         return ok();
     }
+    if (c == "cwdecfreq") {
+        int f = atoi(arg(a, "hz").c_str());
+        if (f < 200 || f > 2900) return err("200-2900 Hz");
+        cwDecFreq_ = f;
+        cwDecFreqDirty_ = true;
+        return ok();
+    }
+    if (c == "cwdecclr") { cwDecText_.clear(); cwDecClr_++; return ok(); }
     if (c == "parity") {
         if (!cfg.set("cqParity", arg(a, "v"))) return err("0 or 1");
         seq.cqParity = seq.txParity = cfg.cqParity;
@@ -2356,6 +2387,7 @@ std::string App::command(const std::string& c, const std::map<std::string, std::
         bool newStation = fileCall(n.call) != station_;
         if (newStation && txState_ == ST_TX) return err("Change the callsign when not transmitting");
         cfg = n;
+        if (mode_ != DM_CW) { cwDecFreq_ = cfg.cwDecFreq; cwDecFreqDirty_ = true; }
         if (newStation) {                                            // each station callsign has its own log files
             logOpen();
             status("Station " + station_ + ": " + std::to_string(logCount_) + " contacts in the current log, " + std::to_string(archiveCount_) + " in the archive");
@@ -2421,6 +2453,11 @@ void App::uiState(UiState& u) {
     u.logSd = logOnSd_; u.sdIn = logOnSd_; u.station = station_; u.sdInfo = sdInfo;
     u.intTotal = intTotal_; u.intUsed = intUsed_; u.sdTotal = sdTotal_; u.sdUsed = sdUsed_; u.left = left_;
     u.bright = cfg.bright; u.contrast = cfg.contrast;
+    // The touch screens show a rolling window of the last 50 characters: the line scrolls
+    // as new copy arrives instead of filling up and clipping. (The web page keeps the
+    // full scrolling transcript.)
+    u.cwDecText = cwDecText_.size() > 50 ? cwDecText_.substr(cwDecText_.size() - 50) : cwDecText_;
+    u.cwDecWpm = cwDecWpm_; u.cwDecFreq = (int)lroundf(cwDecAfc_); u.cwDecKey = cwDecKey_;
 }
 
 bool App::uiWorked(const std::string& call) {
@@ -2599,7 +2636,7 @@ std::string App::healthJson() {
            ",\"txen\":" + jbool(seq.txEnabled) + ",\"freq\":" + jnum((long long)f) + ",\"band\":" + jstr(bandName(f)) + "}";
 }
 
-std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg) {
+std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg, uint32_t sinceCwDec) {
     std::lock_guard<std::mutex> lk(mtx_);                          // polling is not operator activity (TX watchdog)
     int64_t now = clk::utcMs(), L = slotLen();
     uint64_t f = radio.freq.load();
@@ -2640,6 +2677,10 @@ std::string App::stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg
     uint32_t fresh = pskSeq_ - sincePsk;
     if (sincePsk > pskSeq_ || fresh > pskText_.size()) fresh = (uint32_t)pskText_.size();
     o += jstr(pskText_.substr(pskText_.size() - fresh)) + "}";
+    o += ",\"cwdec\":{\"seq\":" + jnum(cwDecSeq_) + ",\"clr\":" + jnum(cwDecClr_) + ",\"f\":" + jnum(cwDecFreq_.load()) + ",\"afc\":" + jnum((long long)lroundf(cwDecAfc_)) + ",\"wpm\":" + jnum(cwDecWpm_) + ",\"q\":" + jnum((long long)(cwDecQ_ * 100)) + ",\"key\":" + jbool(cwDecKey_) + ",\"text\":";
+    uint32_t cfresh = cwDecSeq_ - sinceCwDec;
+    if (sinceCwDec > cwDecSeq_ || cfresh > cwDecText_.size()) cfresh = (uint32_t)cwDecText_.size();
+    o += jstr(cwDecText_.substr(cwDecText_.size() - cfresh)) + "}";
     o += ",\"log\":{\"n\":" + jnum(logCount_) + ",\"all\":" + jnum(archiveCount_) + std::string(",\"behind\":") + jbool(archiveBehind_) + ",\"ok\":" + jnum(netOk_.load()) + ",\"fail\":" + jnum(netFail_.load()) + ",\"unsent\":" + jnum(unsent_.load()) + ",\"fwd\":" + [this] { std::lock_guard<std::mutex> nl(netMtx_); return jstr(netLast_) + ",\"fwdT\":" + jnum((long long)netLastMs_); }() + ",\"last\":[";
     first = true;
     for (auto& q : recent_) {

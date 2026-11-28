@@ -103,6 +103,7 @@ bool Settings::set(const std::string& k, const std::string& v) {
     if (k == "logProto") return toInt(v, 0, 3, logProto);
     if (k == "logPort") return toInt(v, 1, 65535, logPort);
     if (k == "cwWpm") return toInt(v, 20, 50, cwWpm);
+    if (k == "cwDecFreq") return toInt(v, 200, 2900, cwDecFreq);
     if (k == "tuneRadio") return toInt(v, 0, 1, tuneRadio);
     if (k == "usbFullSpeed") return toInt(v, 0, 1, usbFullSpeed);
     if (k == "gpsClock") return toInt(v, 0, 1, gpsClock);
@@ -199,7 +200,7 @@ std::string Settings::serialize(bool secrets) const {
     I("civAddr", civAddr); I("civBaud", civBaud); I("txFreq", txFreq); I("autoAlc", autoAlc); I("txLevel", txLevel);
     I("opMode", opMode); I("cqParity", cqParity); I("useRR73", useRR73); I("maxRetries", maxRetries);
     I("watchdogMin", watchdogMin); I("rfPower", rfPower); I("logProto", logProto); I("logPort", logPort);
-    I("cwWpm", cwWpm); I("usbFullSpeed", usbFullSpeed); I("tuneRadio", tuneRadio); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);
+    I("cwWpm", cwWpm); I("cwDecFreq", cwDecFreq); I("usbFullSpeed", usbFullSpeed); I("tuneRadio", tuneRadio); I("gpsClock", gpsClock); I("gpsBaud", gpsBaud); I("gpsDelayMs", gpsDelayMs);
     I("gpsModule", gpsModule); I("gpsModBaud", gpsModBaud); I("gpsRxPin", gpsRxPin); I("gpsPpsPin", gpsPpsPin);
     I("bright", bright); I("contrast", contrast); I("consoleLog", consoleLog); I("betaNotice", betaNotice); S("updSeen", updSeen); I("confirmQso", confirmQso); I("deadman", deadman); S("dnw", dnw); I("prioOn", prioOn); S("prio", prio); I("dxKm", dxKm);
     S("pktCall", pktCall); s += "pktFreq=" + std::to_string(pktFreq) + "\n"; I("pktAccept", pktAccept); I("pktTxDelay", pktTxDelay); I("kissPort", kissPort); I("bbsOn", bbsOn); S("bbsCall", bbsCall);

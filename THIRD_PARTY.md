@@ -9,6 +9,7 @@
 | ESP-IDF, USB host, UAC, CDC-ACM, esp_wifi_remote | fetched at build time | Apache-2.0 | Espressif component registry |
 | LVGL 9.5 | fetched at build time | MIT | |
 | Waveshare ESP32-P4-WIFI6-Touch-LCD-7B BSP | fetched at build time | Apache-2.0 | |
+| CW decoder (cwdec) by dbjones59 | `components/cwdec` | MIT | contributed from github.com/dbjones59/RigDeck; integration adapted |
 | PSK31 varicode table | `components/core/varicode.inc` | public alphabet by G3PLX | |
 
 `wifi_chip/` builds the Wi-Fi chip (ESP32-C6) firmware from the same ESP-Hosted copy, using

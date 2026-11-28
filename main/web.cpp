@@ -113,7 +113,8 @@ static esp_err_t hState(httpd_req_t* req) {
     // A hidden tab, minimised window or locked phone sends act=0 and lets the watchdog count down.
     if (a["act"] == "1") s_app->activity();
     return sendJson(req, s_app->stateJson((uint32_t)strtoul(a["since"].c_str(), nullptr, 10),
-                                           (uint32_t)strtoul(a["psk"].c_str(), nullptr, 10), a["cfg"] == "1"));
+                                           (uint32_t)strtoul(a["psk"].c_str(), nullptr, 10), a["cfg"] == "1",
+                                           (uint32_t)strtoul(a["cwd"].c_str(), nullptr, 10)));
 }
 
 static esp_err_t hSpec(httpd_req_t* req) { WebBusy wb("spectrum"); return sendJson(req, s_app->spectrumJson()); }

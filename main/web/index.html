@@ -87,7 +87,8 @@ canvas{display:block;width:100%;height:110px;background:#000;border-radius:6px;c
 #act td.n{text-align:right;color:var(--dim)}
 .msgs button{display:block;width:100%;text-align:left;font:13px var(--mono);margin-bottom:4px}
 .msgs button span{color:var(--dim);margin-right:8px}
-#pskrx{height:30vh;min-height:160px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:14px/1.5 var(--mono);background:#0b1014;border-radius:6px;padding:8px}
+#pskrx,#cwrx,#cwrx2{height:30vh;min-height:160px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:14px/1.5 var(--mono);background:#0b1014;border-radius:6px;padding:8px}
+#cwrx2{height:18vh;min-height:110px}
 table.log{border-collapse:collapse;width:100%;font:13px var(--mono)}
 table.log td,table.log th{padding:3px 8px;text-align:left;border-bottom:1px solid var(--line)}
 table.log th{color:var(--dim);font-weight:500}
@@ -194,6 +195,12 @@ table.imp th{color:var(--dim);font-weight:500}
         <div class="row"><button data-mac="cq">CQ</button><button data-mac="call">Answer</button><button data-mac="rst">Report</button><button data-mac="73">73</button><button id="pskclr">Clear screen</button></div>
         <div class="row"><label>Their call</label><input id="pskcall" size="9"><label>RST sent</label><input id="pskrs" size="4" value="599"><label>rcvd</label><input id="pskrr" size="4" value="599"><button id="psklog">Log QSO</button></div>
       </div>
+      <div class="pan hide" id="cwPane" style="margin-top:12px">
+        <h3>CW decoder <span id="cwinfo" style="text-transform:none;letter-spacing:0"></span></h3>
+        <div id="cwrx"></div>
+        <div class="row" style="margin-top:8px"><label>Pitch Hz</label><input id="cwdF" size="6" inputmode="numeric"><button id="cwdClr">Clear screen</button></div>
+        <div class="hint" style="margin-top:6px">Plain Morse copy of the tone at the pitch above (tap the waterfall to move it). It follows the sender's speed by itself.</div>
+      </div>
     </div>
     <div>
       <div class="pan" id="qsoPane">
@@ -214,6 +221,12 @@ table.imp th{color:var(--dim);font-weight:500}
       <label>Keyer</label><button data-wpm="-1">&minus;</button><span id="qlWpm" style="min-width:64px;text-align:center">-- wpm</span><button data-wpm="1">+</button>
       <button id="qlStop" class="danger">Stop CW</button>
     </div>
+  </div>
+  <div class="pan" style="margin-bottom:12px">
+    <h3>CW decoder <span id="cwinfo2" style="text-transform:none;letter-spacing:0"></span></h3>
+    <div id="cwrx2"></div>
+    <div class="row" style="margin-top:8px"><label>Pitch Hz</label><input id="cwdF2" size="6" inputmode="numeric"><button id="cwdClr2">Clear screen</button></div>
+    <p class="hint">Plain Morse copy while the radio is in CW, at the pitch above (your radio's CW pitch, set in Settings). It follows the sender's speed by itself.</p>
   </div>
   <div class="pan" style="margin-bottom:12px">
     <h3>Contact</h3>
@@ -438,6 +451,7 @@ table.imp th{color:var(--dim);font-weight:500}
       <label for="s_pttMethod">PTT</label><select id="s_pttMethod"><option value="0">CAT command</option><option value="1">Serial port RTS (Digirig)</option><option value="2">Serial port DTR</option><option value="3">VOX (the sound card keys the radio)</option></select>
       <label for="s_catBaud">CAT rate tried first (4800, 9600, 19200, 38400, 115200 are tried too)</label><select id="s_catBaud"><option>4800</option><option>9600</option><option>19200</option><option>38400</option><option>115200</option></select>
       <label for="s_keyWpm">Keyer speed for the logger, wpm (0 = leave the radio's)</label><input id="s_keyWpm" inputmode="numeric">
+      <label for="s_cwDecFreq">CW decoder pitch, Hz (the radio's CW pitch)</label><input id="s_cwDecFreq" inputmode="numeric" placeholder="700">
       <label for="s_macro1">CW macro 1 (Label|text)</label><input id="s_macro1" maxlength="90">
       <label for="s_macro2">CW macro 2</label><input id="s_macro2" maxlength="90">
       <label for="s_macro3">CW macro 3</label><input id="s_macro3" maxlength="90">
@@ -523,7 +537,7 @@ const BANDS={FT8:{"160":1.84,"80":3.573,"60":5.357,"40":7.074,"30":10.136,"20":1
  CW:{"160":1.835,"80":3.565,"40":7.065,"30":10.125,"20":14.065,"17":18.095,"15":21.065,"12":24.91,"10":28.065,"6":50.095,"2":144.065},
  APRS:{"2":144.39},
  PSK31:{"80":3.58,"40":7.07,"30":10.142,"20":14.07,"17":18.1,"15":21.07,"12":24.92,"10":28.12}};
-let rigName="", S=null, since=0, pskSince=0, cfgLoaded=false, lastTx="", lastRtt=60, specSeq=-1, lastSlot=-1, busy=false;
+let rigName="", S=null, since=0, pskSince=0, cwdSince=0, cwdClrSeen=0, cfgLoaded=false, lastTx="", lastRtt=60, specSeq=-1, lastSlot=-1, busy=false;
 
 async function cmd(c,args){
   if(demo) return {ok:true};
@@ -623,6 +637,16 @@ function render(){
   if(S.psk.text){const p=$("pskrx");const stick=p.scrollTop+p.clientHeight>=p.scrollHeight-30;p.textContent+=S.psk.text;if(p.textContent.length>20000)p.textContent=p.textContent.slice(-15000);if(stick)p.scrollTop=p.scrollHeight;}
   pskSince=S.psk.seq;
   $("pskinfo").textContent=`RX ${S.psk.f} Hz (tracking ${S.psk.afc} Hz), signal quality ${S.psk.q}%`;
+  // CW decoder
+  const cwd=S.cwdec||{seq:0,clr:0,f:700,afc:700,wpm:0,q:0,key:false,text:""};
+  if(cwd.clr!==cwdClrSeen){cwdClrSeen=cwd.clr;$("cwrx").textContent="";$("cwrx2").textContent="";}
+  if(cwd.text){for(const id of ["cwrx","cwrx2"]){const p=$(id);const stick=p.scrollTop+p.clientHeight>=p.scrollHeight-30;p.textContent+=cwd.text;if(p.textContent.length>20000)p.textContent=p.textContent.slice(-15000);if(stick)p.scrollTop=p.scrollHeight;}}
+  cwdSince=cwd.seq;
+  const cwi=`RX ${cwd.f} Hz (tracking ${cwd.afc} Hz), ${cwd.wpm?cwd.wpm+" wpm":"-- wpm"}, signal quality ${cwd.q}%${cwd.key?"  KEY":""}`;
+  $("cwinfo").textContent=cwi;$("cwinfo2").textContent=cwi;
+  $("cwPane").classList.toggle("hide",S.mode!=="CW");
+  if(document.activeElement!==$("cwdF"))$("cwdF").value=cwd.f;
+  if(document.activeElement!==$("cwdF2"))$("cwdF2").value=cwd.f;
   // log
   $("logn").textContent=(S.stor?S.stor.station+": ":"")+S.log.n+" contacts in the current log, "+S.log.all+" in the archive"+(S.stor&&S.stor.sd?" (on the microSD card)":"")+(S.log.behind?" (some are not in the archive yet: clearing the current log copies them there first)":"");
   const stamp=new Date(S.utc).toISOString().slice(0,16).replace(/[-:]/g,"").replace("T","-");
@@ -711,7 +735,7 @@ async function poll(){
     else{
       const t0=performance.now();
       const ac=new AbortController(), to=setTimeout(()=>ac.abort(),3000);
-      const r=await fetch(`/api/state?since=${since}&psk=${pskSince}&cfg=${cfgLoaded&&render.call!==undefined?0:1}&act=${document.visibilityState==="visible"?1:0}`,{signal:ac.signal});
+      const r=await fetch(`/api/state?since=${since}&psk=${pskSince}&cwd=${cwdSince}&cfg=${cfgLoaded&&render.call!==undefined?0:1}&act=${document.visibilityState==="visible"?1:0}`,{signal:ac.signal});
       clearTimeout(to);
       S=await r.json();
       lastRtt=performance.now()-t0;
@@ -798,6 +822,10 @@ $("setdial").onclick=()=>{const m=parseFloat($("dial").value);if(m>0)cmd("freq",
 $("psksend").onclick=()=>{const t=$("psktxt").value;if(t)cmd("psktx",{text:t+"\n"}).then(j=>{if(j.ok)$("psktxt").value="";});};
 $("psktxt").onkeydown=e=>{if(e.key==="Enter")$("psksend").click();};
 $("pskclr").onclick=()=>$("pskrx").textContent="";
+$("cwdClr").onclick=()=>{$("cwrx").textContent="";$("cwrx2").textContent="";cmd("cwdecclr");};
+$("cwdClr2").onclick=()=>{$("cwrx").textContent="";$("cwrx2").textContent="";cmd("cwdecclr");};
+$("cwdF").onchange=()=>cmd("cwdecfreq",{hz:$("cwdF").value});
+$("cwdF2").onchange=()=>cmd("cwdecfreq",{hz:$("cwdF2").value});
 $("psklog").onclick=()=>cmd("logqso",{call:$("pskcall").value,rs:$("pskrs").value,rr:$("pskrr").value}).then(j=>{if(j.ok)banner("Logged "+$("pskcall").value.toUpperCase());});
 $("actClr").onclick=()=>{document.querySelector("#act tbody").innerHTML="";};
 $("clrlog").onclick=()=>{if(confirm("Clear the current log? Its contacts stay in the archive."))cmd("clearlog",{confirm:"yes"});};
@@ -1486,7 +1514,7 @@ function demoState(){
   return {utc:now,clk:{ok:true,src:"demo",age:1},mode:dm,aprs,op:1,radio:{ser:true,aud:true,civ:true,model:"IC-7100",freq:14074000,band:"20m",rmode:1,data:1,ptt:false,s:95,po:0,swr:0,alc:0,wpm:22},
     slot:{len:15000,t,par:slot&1},tx:{en:false,on:false,msg:6,par:0,text:"",last:"",freq:1500,lvl:50,tune:false,wd:false,wdLeft:-1,wdMin:6},
     qso:{dx:"",grid:"",rs:-99,rr:-99,try:0,m:["","","","","","CQ W9XYZ EN37",""]},lvl:-22,dec:d,decId:demoState.id,decMs:640,
-    psk:{seq:0,f:1000,afc:1000,q:20,text:""},log:{n:0,all:0,behind:false,ok:0,fail:0,last:[]},msg:"",net:"Preview mode: open this page from the device to control the radio",cfg:{rigName:"Shack",call:"W9XYZ",grid:"EN37",dnw:"EA3BB",prioOn:"1",prio:"pota,sota,dx,ses,-weak,strong",dxKm:"2500",txLevel:"50",macro1:"CQ|CQ CQ DE {MYCALL} {MYCALL} K",macro2:"His call|{CALL}",macro3:"Report|{CALL} UR {RST} {RST} BK",macro4:"TU 73|TU 73 DE {MYCALL} E E",macro5:"My call|{MYCALL}",macro6:"AGN?|AGN?"}};
+    psk:{seq:0,f:1000,afc:1000,q:20,text:""},cwdec:{seq:0,clr:0,f:700,afc:700,wpm:0,q:0,key:false,text:""},log:{n:0,all:0,behind:false,ok:0,fail:0,last:[]},msg:"",net:"Preview mode: open this page from the device to control the radio",cfg:{rigName:"Shack",call:"W9XYZ",grid:"EN37",dnw:"EA3BB",prioOn:"1",prio:"pota,sota,dx,ses,-weak,strong",dxKm:"2500",txLevel:"50",macro1:"CQ|CQ CQ DE {MYCALL} {MYCALL} K",macro2:"His call|{CALL}",macro3:"Report|{CALL} UR {RST} {RST} BK",macro4:"TU 73|TU 73 DE {MYCALL} E E",macro5:"My call|{MYCALL}",macro6:"AGN?|AGN?"}};
 }
 demoState.id=0;
 poll(); setInterval(poll,700); setInterval(pollSpec,300); setTimeout(syncTime,1500); setInterval(syncTime,20000);

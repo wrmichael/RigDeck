@@ -40,6 +40,7 @@ struct Settings {
     std::string logHost;
     int logPort = 2237;
     int cwWpm = 40;                      // FT-CW speed; both stations must use the same value
+    int cwDecFreq = 700;                 // CW decoder pitch, Hz (the radio's CW pitch; FT-CW follows the waterfall tap)
     int keyWpm = 0;                      // logger: keyer speed sent to the radio when it connects (0 = leave it alone)
     std::string macro[6] = {             // logger CW macros, "Label|text". {MYCALL} {CALL} {RST} {GRID} {REF} are filled in
         "CQ|CQ CQ DE {MYCALL} {MYCALL} K",

@@ -61,6 +61,9 @@ const char* kOpMap[] = {"Manual", "Auto CQ", "Auto hunt", ""};   // hunt = answe
 lv_obj_t *bCq, *lCq;
 lv_obj_t *lRig, *lFreq, *lSub, *barS, *lS, *barLvl, *lLvl, *lDot[4], *lClock, *lCall, *barSlot, *canvas, *marker, *lTx, *lStatus;
 lv_obj_t *table, *bTxEn, *lTxEn, *bTune, *lTune, *mxOp, *mxMode, *mxBand, *lQso, *lMeters, *bPar, *lPar, *lLogBtn, *lPsk;
+lv_obj_t *cwStrip, *lCwDec, *lCwDecInfo;              // CW decoder strip under the band activity (FT-CW mode)
+bool shownCwStrip = false;
+std::string shownCwDec;
 lv_obj_t *scrMain, *scrLog, *scrLogger, *logTable, *lLogCounts, *lLogInfo;        // second screen: logbook
 void onOpenRadio(lv_event_t*);
 void onOpenAprs(lv_event_t*);
@@ -213,6 +216,7 @@ void onTune(lv_event_t*) {
 bool gWaitNext = false;
 void onCq(lv_event_t*) { cmd(gWaitNext ? "nextqso" : "cq"); }   // POTA mode: the CQ button becomes Next QSO
 void onClear(lv_event_t*) { cmd("clear"); }
+void onCwDecClear(lv_event_t*) { cmd("cwdecclr"); }
 void onLogDx(lv_event_t*) { cmd("logdx"); }
 void onParity(lv_event_t*) {
     App::UiState s;
@@ -826,6 +830,8 @@ void refreshRadioScreen(const App::UiState& s) {
 // The keyboard is a custom layout (callsign characters, no shift), the macros go out through the
 // radio's own keyer, and the contact is written with whatever frequency and mode the radio reports.
 lv_obj_t *gInfo, *gSsb, *gCw, *gWpm, *gStatus, *gRecent, *gDupe, *gKb, *gMacroLbl[6];
+lv_obj_t *gDec, *gDecInfo;                            // CW decoder copy, shown instead of recent contacts in CW
+std::string gShownDec;
 lv_obj_t *gField[6];                                  // call, sent, rcvd, name, note, frequency
 // Frequency and mode follow the radio until the operator types a frequency or taps SSB / CW; what
 // they chose is kept until the contact is logged.
@@ -1019,6 +1025,17 @@ void buildLoggerScreen() {
     gRecent = label(scrLogger, 14, 226, f20, TXT);
     lv_obj_set_style_text_line_space(gRecent, 4, 0);
 
+    // CW decoder: replaces the recent-contacts lines while CW is the logger mode. Tap to clear.
+    gDecInfo = label(scrLogger, 14, 226, f16, DIM, "");
+    gDec = label(scrLogger, 14, 248, f20, TXT, "");
+    lv_obj_set_width(gDec, W - 28);
+    lv_obj_set_height(gDec, 56);
+    lv_label_set_long_mode(gDec, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_add_flag(gDec, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(gDec, onCwDecClear, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_flag(gDec, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(gDecInfo, LV_OBJ_FLAG_HIDDEN);
+
     // keyboard
     gKb = lv_keyboard_create(scrLogger);
     lv_keyboard_set_map(gKb, LV_KEYBOARD_MODE_USER_1, kLogKeys, kLogKeyCtrl);
@@ -1086,6 +1103,27 @@ void refreshLogger(const App::UiState& s) {
         snprintf(b, sizeof b, "%d in the current log", s.logN);
         setText(gRecent, t + b);
     }
+    bool cwActive = gLogMode ? gLogMode == 'C' : (s.rmode == 3 || s.rmode == 7);
+    if (cwActive == lv_obj_has_flag(gDec, LV_OBJ_FLAG_HIDDEN)) {
+        if (cwActive) {
+            lv_obj_remove_flag(gDec, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(gDecInfo, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(gRecent, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(gDec, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(gDecInfo, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_remove_flag(gRecent, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    if (cwActive) {
+        snprintf(b, sizeof b, "CW decoder: %d Hz, %d wpm%s  (tap the text to clear)", s.cwDecFreq, s.cwDecWpm, s.cwDecKey ? "  KEY" : "");
+        setText(gDecInfo, b);
+        setTextColor(gDecInfo, s.cwDecKey ? AMB : DIM);
+        if (s.cwDecText != gShownDec) {
+            gShownDec = s.cwDecText;
+            setText(gDec, gShownDec.size() > 200 ? gShownDec.substr(gShownDec.size() - 200) : gShownDec);
+        }
+    }
 }
 
 // ---- settings screen: everything on the web page's Settings tab ----------------------------------
@@ -1120,6 +1158,7 @@ const SField kSet[] = {
     {"civAddr", "CI-V address (hex)", 2, SK_HEX, 4, nullptr, nullptr, "88 7100 A4 705 94 7300 A2 9700"},
     {"civBaud", "CI-V baud", 2, SK_DROP, 0, "4800\n9600\n19200\n38400\n57600\n115200", "4800|9600|19200|38400|57600|115200", nullptr},
     {"keyWpm", "Keyer speed for logger, wpm", 3, SK_NUM, 2, nullptr, nullptr, "0 = leave the radio's"},
+    {"cwDecFreq", "CW decoder pitch, Hz", 3, SK_NUM, 4, nullptr, nullptr, "200 - 2900, the radio's CW pitch"},
     {"macro1", "Macro 1", 3, SK_MACRO, 80, nullptr, nullptr, "text to send"},
     {"macro2", "Macro 2", 3, SK_MACRO, 80, nullptr, nullptr, "text to send"},
     {"macro3", "Macro 3", 3, SK_MACRO, 80, nullptr, nullptr, "text to send"},
@@ -2177,6 +2216,24 @@ void refresh(lv_timer_t*) {
         else lv_obj_add_flag(lPsk, LV_OBJ_FLAG_HIDDEN);
     }
 
+    // CW decoder strip (FT-CW mode)
+    bool cwMode = s.mode == DM_CW;
+    if (cwMode != shownCwStrip) {
+        shownCwStrip = cwMode;
+        lv_obj_set_height(table, cwMode ? MAIN_H - 84 : MAIN_H);
+        if (cwMode) lv_obj_remove_flag(cwStrip, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(cwStrip, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (cwMode) {
+        snprintf(b, sizeof b, "CW decoder   %d Hz   %d wpm%s", s.cwDecFreq, s.cwDecWpm, s.cwDecKey ? "   KEY" : "");
+        setText(lCwDecInfo, b);
+        setTextColor(lCwDecInfo, s.cwDecKey ? AMB : DIM);
+        if (s.cwDecText != shownCwDec) {
+            shownCwDec = s.cwDecText;
+            setText(lCwDec, shownCwDec.size() > 120 ? shownCwDec.substr(shownCwDec.size() - 120) : shownCwDec);
+        }
+    }
+
     // transmit-frequency marker on the waterfall
     int mx = s.txFreq * W / 3000, mw = (s.mode == DM_FT4 ? 83 : 50) * W / 3000;
     if (lv_obj_get_x(marker) != mx || lv_obj_get_width(marker) != mw) { lv_obj_set_x(marker, mx); lv_obj_set_width(marker, mw); }
@@ -2506,6 +2563,18 @@ extern "C" void ui_create(void) {
     lv_obj_add_flag(lPsk, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(lPsk, [](lv_event_t* e) { if (g_app && g_app->mode() == DM_APRS) onOpenAprs(e); }, LV_EVENT_CLICKED, nullptr);
     lv_obj_add_flag(lPsk, LV_OBJ_FLAG_HIDDEN);
+
+    // CW decoder strip: in FT-CW mode the band activity gives up its bottom rows to the plain
+    // Morse copy of the tapped tone. Tap the strip to clear it.
+    cwStrip = box(scr, 0, MAIN_Y + MAIN_H - 84, TABLE_W, 84, PAN);
+    lCwDecInfo = label(cwStrip, 10, 4, f16, DIM, "CW decoder");
+    lCwDec = label(cwStrip, 10, 26, f20, TXT, "");
+    lv_obj_set_width(lCwDec, TABLE_W - 20);
+    lv_obj_set_height(lCwDec, 56);
+    lv_label_set_long_mode(lCwDec, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_add_flag(cwStrip, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(cwStrip, onCwDecClear, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_flag(cwStrip, LV_OBJ_FLAG_HIDDEN);
 
     // control panel
     const int PW = W - PANEL_X - 10;

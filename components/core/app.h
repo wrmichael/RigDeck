@@ -19,6 +19,7 @@
 #include "adif.h"
 #include "nmea.h"
 #include "cwx.h"
+#include "cwdec.h"
 #include "aprs.h"
 #include "ax25.h"
 #include "bbs.h"
@@ -55,7 +56,7 @@ public:
     void tick();
 
     // --- web API ------------------------------------------------------------------------------
-    std::string stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg);
+    std::string stateJson(uint32_t sinceDecode, uint32_t sincePsk, bool withCfg, uint32_t sinceCwDec = 0);
     // Small status for the all-stations page (/api/health, open to other pages): version, name, the four status
     // lights, TX, watchdog, and "ok" when all is well; "why" names what is not.
     std::string healthJson();
@@ -99,6 +100,9 @@ public:
         int bright = 100, contrast = 100;
         bool waitNext = false;                         // POTA mode: a QSO ended, Next QSO starts the next
         int staRssi = 0, txLvl = 0;
+        std::string cwDecText;                         // CW decoder: last decoded text, speed, pitch, key lamp
+        int cwDecWpm = 0, cwDecFreq = 0;
+        bool cwDecKey = false;
     };
     struct UiDecode { uint32_t id; int64_t slotMs; int snr; float dt; int freq; std::string text; bool cq, toMe; };
     void uiState(UiState& s);
@@ -218,6 +222,14 @@ private:
     uint32_t pskSeq_ = 0;
     std::atomic<int> pskFreq_{1000};
     std::atomic<bool> pskFreqDirty_{true};
+    CwDecRx cwDec_;                                   // plain CW decoder (CW page / FT-CW mode)
+    std::string cwDecText_;
+    uint32_t cwDecSeq_ = 0, cwDecClr_ = 0;
+    int cwDecWpm_ = 0;                               // the decoder's readings, under mtx_ (see feed)
+    float cwDecAfc_ = 700, cwDecQ_ = 0;
+    bool cwDecKey_ = false;
+    std::atomic<int> cwDecFreq_{700};
+    std::atomic<bool> cwDecFreqDirty_{true};
 
     // decode hand-off
     std::mutex jobMtx_;

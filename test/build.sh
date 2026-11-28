@@ -9,10 +9,10 @@ if [ ! -f test/out/libft8.a ]; then
   done
   ar rcs test/out/libft8.a test/out/*.o
 fi
-CORE="$(ls components/core/*.cpp)"
-for t in ${TESTS:-t_codec t_units t_qso t_psk t_cw t_cwpath t_cat t_aprs t_map t_ax25 t_bbs}; do
+CORE="$(ls components/core/*.cpp) components/cwdec/cwdec.cpp"
+for t in ${TESTS:-t_codec t_units t_qso t_psk t_cw t_cwpath t_cwdec t_cat t_aprs t_map t_ax25 t_bbs}; do
   [ -f test/$t.cpp ] || continue
-  g++ -std=c++17 -O2 -Wall -Wextra -Icomponents/ft8_lib -Icomponents/core test/$t.cpp $CORE test/out/libft8.a -lm -lpthread -o test/out/$t
+  g++ -std=c++17 -O2 -Wall -Wextra -Icomponents/ft8_lib -Icomponents/core -Icomponents/cwdec/include test/$t.cpp $CORE test/out/libft8.a -lm -lpthread -o test/out/$t
   ./test/out/$t
 done
 if command -v node >/dev/null 2>&1 && [ -f test/out/state_ft8.json ]; then

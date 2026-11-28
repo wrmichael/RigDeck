@@ -297,6 +297,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 <ul>
   <li>The frequency follows the radio until you type one; SSB / CW choose the logged mode until the contact is logged.</li>
   <li>Type the call, reports, name and a note, and press <b>LOG</b>. Empty reports are logged as 59 or 599. A call already worked on this band is flagged in red.</li>
+  <li><b>CW decoder</b> <span class="pill">BETA</span>: with the radio in CW, the logger shows plain Morse copy of the signal at the radio's CW pitch (Settings, <b>CW decoder pitch</b>, default 700 Hz; the web page has a pitch box too). It tracks the tone up to 200 Hz either way and follows the sender's speed by itself. Tap the text to clear it. Prosigns print in angle brackets, an unknown pattern as <code>#</code>. Farnsworth spacing can add extra spaces, and at the slowest speeds the first word may garble while it finds the speed.</li>
   <li>Six <b>CW macro</b> buttons send through the radio's keyer (radio in CW). Edit them in Settings as <code>Label|text</code>; <code>{CALL}</code>, <code>{RST}</code>, <code>{MYCALL}</code>, <code>{GRID}</code> and <code>{REF}</code> are filled in.</li>
 </ul>
 
@@ -306,7 +307,7 @@ footer{margin-top:56px;color:var(--dim);font-size:14px}
 
 <h2 id="modes">FT-CW and PSK31</h2>
 <ul>
-  <li><b>FT-CW</b> (CW on the touch screen) is RigDeck's own mode: FT8-style contacts sent as machine-timed Morse. It needs two RigDecks, both at the same speed (Settings, FT-CW speed, default 40 wpm). It needs signals about 15 dB stronger than FT8. Contacts are logged as CW.</li>
+  <li><b>FT-CW</b> (CW on the touch screen) is RigDeck's own mode: FT8-style contacts sent as machine-timed Morse. It needs two RigDecks, both at the same speed (Settings, FT-CW speed, default 40 wpm). It needs signals about 15 dB stronger than FT8. Contacts are logged as CW. A <b>CW decoder</b> strip under the band activity shows plain Morse copy of the tone you tapped on the waterfall; tap the strip to clear it.</li>
   <li><b>PSK31</b> (web page): click a signal on the waterfall, read the text, type and send, and log with the form.</li>
 </ul>
 
