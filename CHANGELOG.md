@@ -7,6 +7,8 @@
   (pitch follows the waterfall tap); on the web page on the Operate (FT-CW) and SSB/CW log tabs. Its author tested it
   with an IC-7100. Integration here: the decoder's readings are copied under the app lock for the screens and the
   web page.
+- Reports from the air (2026-11-28): FX-4CR works (CAT, FT8); Xiegu X5105 with a Digirig works (CAT, FT8); FTX-1
+  works with FT8 and the CW macros; SSB/CW logging works. README and guide radio tables updated.
 
 ## 1.1.24-beta
 - **FX-4CR transmits.** The radio's USB sound chip (C-Media CM108) was left at -28 dB, the quiet end of its volume

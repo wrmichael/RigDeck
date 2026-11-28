@@ -24,9 +24,9 @@ ESP32-P4-NANO is in Beta). Plug it into your radio's USB port with one cable and
 - creates its own **Wi-Fi hotspot** with a web page that mirrors everything, so a phone or laptop
   can run it too.
 
-Radios tested on the air: Icom **IC-7100** and **IC-705**, QRP Labs **QMX / QMX+**, and an Elecraft
-**K2** with no CAT control (through a SignaLink sound card). Yaesu **FTX-1** and the other radios below are
-tested against simulated radios so far; reports welcome.
+Radios tested on the air: Icom **IC-7100** and **IC-705**, QRP Labs **QMX / QMX+**, Yaesu **FTX-1**,
+**FX-4CR**, **Xiegu X5105** (with a Digirig), and an Elecraft **K2** with no CAT control (through a SignaLink
+sound card). The other radios below are tested against simulated radios so far; reports welcome.
 
 > RigDeck started life as "IC7100-FT8". A controller upgraded from that firmware keeps its saved hotspot
 > name until you change it in Settings; new installs use **RigDeck**.
@@ -221,11 +221,12 @@ Radios and interfaces:
 | Radio / interface | How it connects | Status |
 |---|---|---|
 | IC-7100, IC-705, QMX / QMX+ | one USB cable | tested on the air |
-| FTX-1 | one USB cable | works (CAT, FT8 transmit, switching radios on the fly) |
+| FTX-1 | one USB cable | tested on the air (CAT, FT8, CW macros, switching radios on the fly) |
 | IC-7300, IC-7610, IC-9700, IC-905 | one USB cable (CI-V + sound card) | should work, untested |
 | FTDX10, FT-991A, FT-710, FTDX101 | one USB cable (CAT at the radio's rate + sound card) | should work, untested |
 | TS-2000, TS-480, TS-590, K2, K3 | Digirig with the radio's CAT cable (or a CP2102 / CH340 USB-RS232 cable + sound card on a hub) | should work, untested |
-| FX-4CR | one USB cable (CH340 serial + USB audio); Settings, Radio "FX-4CR"; radio in DIG-U, Aux-Input-Level set for Level 100 % (see the user guide) | transmit audio reaches Level 100 % (1.1.24-beta); first contacts still to come |
+| FX-4CR | one USB cable (CH340 serial + USB audio); Settings, Radio "FX-4CR"; radio in DIG-U, Aux-Input-Level set for Level 100 % (see the user guide) | tested on the air (CAT, FT8; 1.1.24-beta) |
+| Xiegu X5105 | Digirig (CAT and audio) | tested on the air (CAT, FT8) |
 | Elecraft KX2, KX3 | Digirig with the Elecraft (ACC1, 3.5 mm) CAT cable; audio to the mic and phones jacks; PTT "CAT command" | should work, untested |
 | SignaLink USB (any radio) | Radio "No CAT": the SignaLink keys the radio on its own | tested on the air (K2) |
 | Digirig without a CAT cable | Radio "No CAT", PTT "Serial RTS" | should work, untested |
